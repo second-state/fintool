@@ -32,3 +32,8 @@ testnet = false
 # NewsAPI key — stock news (optional, not currently used)
 # Free at https://newsapi.org/
 # newsapi_key = "..."
+
+# Binance API credentials — enables spot/perp/options trading on Binance
+# Sign up at https://www.binance.com/
+# binance_api_key = "..."
+# binance_api_secret = "..."

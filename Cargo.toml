@@ -26,3 +26,5 @@ ethers = { version = "2", default-features = false, features = ["rustls", "eip71
 urlencoding = "2"
 regex = "1"
 openssl = { version = "0.10", features = ["vendored"] }
+hmac = "0.12"
+sha2 = "0.10"

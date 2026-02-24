@@ -44,6 +44,10 @@ pub struct ApiKeysConfig {
     pub openai_api_key: Option<String>,
     /// OpenAI model for quote analysis (default: gpt-4.1-mini)
     pub openai_model: Option<String>,
+    /// Binance API key for spot/futures/options trading
+    pub binance_api_key: Option<String>,
+    /// Binance API secret for signing requests
+    pub binance_api_secret: Option<String>,
 }
 
 /// Resolved runtime config
@@ -187,4 +191,13 @@ pub fn openai_model() -> String {
         .ok()
         .and_then(|c| c.api_keys.openai_model)
         .unwrap_or_else(|| "gpt-4.1-mini".to_string())
+}
+
+/// Get Binance API credentials (key, secret)
+pub fn binance_credentials() -> Option<(String, String)> {
+    let cfg = load_config_file().ok()?;
+    Some((
+        cfg.api_keys.binance_api_key?,
+        cfg.api_keys.binance_api_secret?,
+    ))
 }

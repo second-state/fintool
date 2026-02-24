@@ -12,6 +12,10 @@ pub struct Cli {
     /// Human-friendly colored output (default is JSON)
     #[arg(long, global = true)]
     pub human: bool,
+
+    /// Exchange to use: hyperliquid, binance, or auto (default: auto)
+    #[arg(long, global = true, default_value = "auto")]
+    pub exchange: String,
 }
 
 #[derive(Subcommand)]

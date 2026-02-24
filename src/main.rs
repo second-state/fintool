@@ -1,3 +1,4 @@
+mod binance;
 mod cli;
 mod commands;
 mod config;
@@ -28,29 +29,33 @@ async fn main() -> Result<()> {
                 symbol,
                 amount_usdc,
                 max_price,
-            } => commands::order::buy(&symbol, &amount_usdc, &max_price, json).await,
+            } => commands::order::buy(&symbol, &amount_usdc, &max_price, &cli.exchange, json).await,
             OrderCmd::Sell {
                 symbol,
                 amount,
                 min_price,
-            } => commands::order::sell(&symbol, &amount, &min_price, json).await,
+            } => commands::order::sell(&symbol, &amount, &min_price, &cli.exchange, json).await,
         },
-        Commands::Orders { symbol } => commands::orders::run(symbol.as_deref(), json).await,
-        Commands::Cancel { order_id } => commands::cancel::run(&order_id, json).await,
-        Commands::Balance => commands::balance::run(json).await,
-        Commands::Positions => commands::positions::run(json).await,
+        Commands::Orders { symbol } => {
+            commands::orders::run(symbol.as_deref(), &cli.exchange, json).await
+        }
+        Commands::Cancel { order_id } => {
+            commands::cancel::run(&order_id, &cli.exchange, json).await
+        }
+        Commands::Balance => commands::balance::run(&cli.exchange, json).await,
+        Commands::Positions => commands::positions::run(&cli.exchange, json).await,
         Commands::Perp(cmd) => match cmd {
             PerpCmd::Quote { symbol } => commands::quote::run_perp(&symbol, json).await,
             PerpCmd::Buy {
                 symbol,
                 amount_usdc,
                 price,
-            } => commands::perp::buy(&symbol, &amount_usdc, &price, json).await,
+            } => commands::perp::buy(&symbol, &amount_usdc, &price, &cli.exchange, json).await,
             PerpCmd::Sell {
                 symbol,
                 amount,
                 price,
-            } => commands::perp::sell(&symbol, &amount, &price, json).await,
+            } => commands::perp::sell(&symbol, &amount, &price, &cli.exchange, json).await,
         },
         Commands::Options(cmd) => match cmd {
             OptionsCmd::Buy {
@@ -59,7 +64,18 @@ async fn main() -> Result<()> {
                 strike,
                 expiry,
                 size,
-            } => commands::options::buy(&symbol, &option_type, &strike, &expiry, &size, json).await,
+            } => {
+                commands::options::buy(
+                    &symbol,
+                    &option_type,
+                    &strike,
+                    &expiry,
+                    &size,
+                    &cli.exchange,
+                    json,
+                )
+                .await
+            }
             OptionsCmd::Sell {
                 symbol,
                 option_type,
@@ -67,7 +83,16 @@ async fn main() -> Result<()> {
                 expiry,
                 size,
             } => {
-                commands::options::sell(&symbol, &option_type, &strike, &expiry, &size, json).await
+                commands::options::sell(
+                    &symbol,
+                    &option_type,
+                    &strike,
+                    &expiry,
+                    &size,
+                    &cli.exchange,
+                    json,
+                )
+                .await
             }
         },
         Commands::Predict(cmd) => match cmd {

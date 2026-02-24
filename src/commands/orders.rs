@@ -1,9 +1,9 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use serde_json::{json, Value};
 use tabled::{settings::Style, Table, Tabled};
 
-use crate::config;
+use crate::{binance, config};
 
 #[derive(Tabled)]
 struct OrderRow {
@@ -21,7 +21,151 @@ struct OrderRow {
     order_type: String,
 }
 
-pub async fn run(symbol: Option<&str>, json_output: bool) -> Result<()> {
+/// Resolve which exchange to use
+fn resolve_exchange(exchange: &str) -> Result<String> {
+    match exchange {
+        "hyperliquid" | "binance" => Ok(exchange.to_string()),
+        "auto" => {
+            let has_hl = config::load_hl_config().is_ok();
+            let has_binance = config::binance_credentials().is_some();
+
+            if has_hl && !has_binance {
+                Ok("hyperliquid".to_string())
+            } else if has_binance && !has_hl {
+                Ok("binance".to_string())
+            } else if has_hl && has_binance {
+                // Default to Hyperliquid
+                Ok("hyperliquid".to_string())
+            } else {
+                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+            }
+        }
+        _ => bail!(
+            "Invalid exchange: {}. Use hyperliquid, binance, or auto",
+            exchange
+        ),
+    }
+}
+
+pub async fn run(symbol: Option<&str>, exchange: &str, json_output: bool) -> Result<()> {
+    let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "binance" {
+        let (api_key, api_secret) = config::binance_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Binance API credentials not configured"))?;
+
+        let client = reqwest::Client::new();
+
+        // Get spot and futures orders
+        let spot_symbol = symbol.map(|s| format!("{}USDT", s.to_uppercase()));
+        let spot_orders =
+            binance::get_spot_open_orders(&client, &api_key, &api_secret, spot_symbol.as_deref())
+                .await?;
+
+        let futures_orders = binance::get_futures_open_orders(
+            &client,
+            &api_key,
+            &api_secret,
+            spot_symbol.as_deref(),
+        )
+        .await?;
+
+        if json_output {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "exchange": "binance",
+                    "spot": spot_orders,
+                    "futures": futures_orders,
+                }))?
+            );
+            return Ok(());
+        }
+
+        let mut all_rows = Vec::new();
+
+        // Process spot orders
+        if let Some(orders) = spot_orders.as_array() {
+            for order in orders {
+                let symbol = order.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+                let order_id = order.get("orderId").and_then(|v| v.as_u64()).unwrap_or(0);
+                all_rows.push(OrderRow {
+                    oid: format!("binance_spot:{}:{}", symbol, order_id),
+                    symbol: symbol.to_string(),
+                    side: if order.get("side").and_then(|v| v.as_str()) == Some("BUY") {
+                        "BUY".green().to_string()
+                    } else {
+                        "SELL".red().to_string()
+                    },
+                    size: order
+                        .get("origQty")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0")
+                        .to_string(),
+                    price: format!(
+                        "${}",
+                        order.get("price").and_then(|v| v.as_str()).unwrap_or("0")
+                    ),
+                    order_type: format!(
+                        "Spot {}",
+                        order
+                            .get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("LIMIT")
+                    ),
+                });
+            }
+        }
+
+        // Process futures orders
+        if let Some(orders) = futures_orders.as_array() {
+            for order in orders {
+                let symbol = order.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+                let order_id = order.get("orderId").and_then(|v| v.as_u64()).unwrap_or(0);
+                all_rows.push(OrderRow {
+                    oid: format!("binance_futures:{}:{}", symbol, order_id),
+                    symbol: symbol.to_string(),
+                    side: if order.get("side").and_then(|v| v.as_str()) == Some("BUY") {
+                        "BUY".green().to_string()
+                    } else {
+                        "SELL".red().to_string()
+                    },
+                    size: order
+                        .get("origQty")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0")
+                        .to_string(),
+                    price: format!(
+                        "${}",
+                        order.get("price").and_then(|v| v.as_str()).unwrap_or("0")
+                    ),
+                    order_type: format!(
+                        "Futures {}",
+                        order
+                            .get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("LIMIT")
+                    ),
+                });
+            }
+        }
+
+        if all_rows.is_empty() {
+            println!("\n  No open Binance orders.\n");
+            return Ok(());
+        }
+
+        println!("\n  📋 Binance Open Orders\n");
+        let table = Table::new(all_rows).with(Style::rounded()).to_string();
+        for line in table.lines() {
+            println!("  {}", line);
+        }
+        println!();
+
+        return Ok(());
+    }
+
+    // Hyperliquid logic
     let cfg = config::load_hl_config()?;
     let client = reqwest::Client::new();
     let url = config::info_url();
