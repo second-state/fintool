@@ -9,11 +9,11 @@ use serde_json::json;
 use crate::config;
 use crate::unit;
 
-pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
+pub async fn run(asset: &str, json_out: bool) -> Result<()> {
     let asset_lower = asset.to_lowercase();
 
     if asset_lower == "usdc" {
-        return deposit_usdc(amount, json_out).await;
+        return deposit_usdc(json_out).await;
     }
 
     if !unit::is_supported(&asset_lower) {
@@ -39,15 +39,13 @@ pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
         let mut out = json!({
             "action": "deposit",
             "asset": asset.to_uppercase(),
-            "amount": amount,
             "source_chain": chain,
             "destination": "hyperliquid",
             "hl_address": cfg.address,
             "deposit_address": resp.address,
             "minimum": min,
             "instructions": format!(
-                "Send {} {} on {} to {}",
-                amount,
+                "Send {} on {} to {} (any amount above minimum, reusable address)",
                 asset.to_uppercase(),
                 chain,
                 resp.address
@@ -62,9 +60,8 @@ pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
     } else {
         println!("{}", "━".repeat(50).dimmed());
         println!(
-            "  {} {} {} → Hyperliquid",
+            "  {} {} → Hyperliquid",
             "Deposit".green().bold(),
-            amount,
             asset.to_uppercase().cyan()
         );
         println!("{}", "━".repeat(50).dimmed());
@@ -86,9 +83,8 @@ pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
         );
         println!();
         println!(
-            "  {} Send {} {} on {} to:",
+            "  {} Send {} on {} to:",
             "→".green().bold(),
-            amount,
             asset.to_uppercase(),
             chain
         );
@@ -119,7 +115,7 @@ pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
         }
         println!();
         println!(
-            "  {} This address is permanent for your HL wallet.",
+            "  {} This address is permanent — send any amount, any time.",
             "ℹ".blue()
         );
         println!(
@@ -132,31 +128,27 @@ pub async fn run(amount: &str, asset: &str, json_out: bool) -> Result<()> {
     Ok(())
 }
 
-async fn deposit_usdc(amount: &str, json_out: bool) -> Result<()> {
+async fn deposit_usdc(json_out: bool) -> Result<()> {
     let cfg = config::load_hl_config()?;
 
     if json_out {
         let out = json!({
             "action": "deposit",
             "asset": "USDC",
-            "amount": amount,
             "source_chain": "arbitrum",
             "destination": "hyperliquid",
             "hl_address": cfg.address,
-            "instructions": format!(
-                "Send {} USDC on Arbitrum to the Hyperliquid bridge contract. \
+            "instructions": "Send USDC on Arbitrum to the Hyperliquid bridge contract. \
                  Use the Hyperliquid web UI at https://app.hyperliquid.xyz or \
                  the HL SDK's deposit method.",
-            amount),
             "note": "USDC deposits use Hyperliquid's native Arbitrum bridge, not Unit.",
         });
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         println!("{}", "━".repeat(50).dimmed());
         println!(
-            "  {} {} {} → Hyperliquid",
+            "  {} {} → Hyperliquid",
             "Deposit".green().bold(),
-            amount,
             "USDC".cyan()
         );
         println!("{}", "━".repeat(50).dimmed());

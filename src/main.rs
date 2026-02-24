@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
                 min_price,
             } => commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await,
         },
-        Commands::Deposit { amount, asset } => commands::deposit::run(&amount, &asset, json).await,
+        Commands::Deposit { asset } => commands::deposit::run(&asset, json).await,
         Commands::Withdraw { amount, asset, to } => {
             commands::withdraw::run(&amount, &asset, to.as_deref(), json).await
         }
