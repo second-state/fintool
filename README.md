@@ -225,6 +225,13 @@ coinbase_api_secret = "..."
 | `positions` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `options buy/sell` | No | Yes (Binance) | No | No | Binance only |
 | `predict buy/sell` | Yes (HL) | No | No | No | Polymarket/Kalshi |
+| `deposit` (HL) | Yes | No | No | No | Hyperliquid |
+| `deposit` (Binance) | No | Yes | No | No | Binance |
+| `deposit` (Coinbase) | No | No | Yes | No | Coinbase |
+| `withdraw` (HL) | Yes | No | No | No | Hyperliquid |
+| `withdraw` (Binance) | No | Yes | No | No | Binance |
+| `withdraw` (Coinbase) | No | No | Yes | No | Coinbase |
+| `bridge-status` | Yes | No | No | No | Hyperliquid |
 
 ---
 
@@ -688,6 +695,199 @@ fintool options buy BTC call 70000 260328 0.1 --exchange binance
 
 ---
 
+### `fintool deposit <ASSET>`
+
+Deposit assets to an exchange. The behavior depends on the asset and exchange.
+
+#### Hyperliquid (default)
+
+**ETH, BTC, SOL** — Generates a permanent deposit address via the [HyperUnit](https://docs.hyperunit.xyz) bridge. Send any amount, any number of times.
+
+```bash
+fintool deposit ETH              # get your ETH deposit address
+fintool deposit BTC              # get your BTC deposit address
+fintool deposit SOL              # get your SOL deposit address
+```
+
+Minimums: 0.007 ETH, 0.0003 BTC, 0.12 SOL. Estimated time: ~3 min (ETH), ~20 min (BTC), ~1 min (SOL).
+
+**USDC** — Bridges USDC from Ethereum or Base to Hyperliquid via [Across Protocol](https://across.to) → Arbitrum → HL Bridge2. Executes automatically.
+
+```bash
+fintool deposit USDC --amount 100 --from ethereum    # ETH mainnet → HL
+fintool deposit USDC --amount 500 --from base         # Base → HL
+fintool deposit USDC --amount 100 --from ethereum --dry-run   # quote only
+```
+
+The USDC bridge executes 3 transactions with your configured private key:
+1. Approve USDC spend on source chain (if needed)
+2. Bridge via Across SpokePool (source → Arbitrum, ~2-10s)
+3. Transfer USDC to HL Bridge2 on Arbitrum (auto-credited to your HL account)
+
+#### Binance
+
+Fetches your Binance deposit address via API. Use `--from` to specify the network.
+
+```bash
+fintool deposit ETH --exchange binance                    # default network
+fintool deposit USDC --exchange binance --from ethereum   # USDC on Ethereum
+fintool deposit USDC --exchange binance --from base       # USDC on Base
+fintool deposit BTC --exchange binance --from bitcoin     # BTC on Bitcoin
+```
+
+#### Coinbase
+
+Creates a Coinbase deposit address via API.
+
+```bash
+fintool deposit ETH --exchange coinbase
+fintool deposit USDC --exchange coinbase
+fintool deposit BTC --exchange coinbase
+```
+
+#### JSON Schema (Hyperliquid ETH/BTC/SOL)
+
+```json
+{
+  "action": "deposit",
+  "exchange": "hyperliquid",
+  "asset": "ETH",
+  "source_chain": "ethereum",
+  "destination": "hyperliquid",
+  "hl_address": "0x...",
+  "deposit_address": "0x...",
+  "minimum": "0.007 ETH",
+  "estimated_fees": { ... }
+}
+```
+
+#### JSON Schema (USDC bridge)
+
+```json
+{
+  "action": "deposit_usdc",
+  "exchange": "hyperliquid",
+  "status": "completed",
+  "source_chain": "ethereum",
+  "amount_in": "100 USDC",
+  "amount_deposited": "99.98 USDC",
+  "hl_address": "0x...",
+  "bridge_tx": "0x...",
+  "hl_deposit_tx": "0x..."
+}
+```
+
+---
+
+### `fintool withdraw <AMOUNT> <ASSET>`
+
+Withdraw assets from an exchange to an external address. Executes by default; use `--dry-run` for quote-only.
+
+#### Hyperliquid (default)
+
+**USDC** — Withdraws via HL Bridge2. Default destination is Arbitrum; use `--network` for Ethereum or Base (chained via Across).
+
+```bash
+# USDC → Arbitrum (direct, ~3-4 min)
+fintool withdraw 100 USDC
+fintool withdraw 100 USDC --to 0xOtherAddress
+
+# USDC → Ethereum mainnet (HL → Arbitrum → Ethereum, ~5-7 min)
+fintool withdraw 100 USDC --network ethereum
+
+# USDC → Base (HL → Arbitrum → Base, ~5-6 min)
+fintool withdraw 100 USDC --network base
+
+# Quote only
+fintool withdraw 100 USDC --network ethereum --dry-run
+```
+
+For `--network ethereum` or `--network base`, the chained withdrawal:
+1. Withdraws USDC from HL to your Arbitrum address (~4 min)
+2. Bridges USDC from Arbitrum to destination via Across (~2-10s)
+
+**ETH, BTC, SOL** — Withdraws via [HyperUnit](https://docs.hyperunit.xyz) bridge. Transfers the tokenized asset (uETH/uBTC/uSOL) on Hyperliquid to a Unit withdrawal address, which releases native asset on the destination chain.
+
+```bash
+# ETH → Ethereum (defaults to your wallet address)
+fintool withdraw 0.5 ETH
+
+# SOL → Solana
+fintool withdraw 1 SOL --to SomeSolanaAddress
+
+# BTC → Bitcoin (--to required)
+fintool withdraw 0.01 BTC --to bc1q...
+```
+
+#### Binance
+
+Withdraws via Binance API. Requires `--to` and optionally `--network`.
+
+```bash
+fintool withdraw 100 USDC --to 0x... --exchange binance --network ethereum
+fintool withdraw 0.5 ETH --to 0x... --exchange binance --network arbitrum
+fintool withdraw 0.01 BTC --to bc1q... --exchange binance
+```
+
+Network name mapping: `ethereum`→ETH, `base`→BASE, `arbitrum`→ARBITRUM, `solana`→SOL, `bitcoin`→BTC, `bsc`→BSC, `polygon`→MATIC, `optimism`→OPTIMISM, `avalanche`→AVAXC.
+
+#### Coinbase
+
+Withdraws (sends) via Coinbase API. Requires `--to`.
+
+```bash
+fintool withdraw 100 USDC --to 0x... --exchange coinbase
+fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
+```
+
+#### JSON Schema
+
+```json
+{
+  "action": "withdraw",
+  "exchange": "hyperliquid",
+  "status": "submitted",
+  "asset": "USDC",
+  "amount": "100",
+  "destination_chain": "arbitrum",
+  "destination_address": "0x...",
+  "result": "Ok(...)"
+}
+```
+
+---
+
+### `fintool bridge-status`
+
+Show all HyperUnit bridge operations (deposits and withdrawals) for your configured wallet.
+
+```bash
+fintool bridge-status
+fintool bridge-status --human
+```
+
+#### JSON Schema
+
+```json
+{
+  "address": "0x...",
+  "operations": [
+    {
+      "id": "0xabc...",
+      "asset": "eth",
+      "source_chain": "ethereum",
+      "destination_chain": "hyperliquid",
+      "amount": "0.500000 ETH",
+      "state": "done",
+      "source_tx": "0x...",
+      "destination_tx": "0x..."
+    }
+  ]
+}
+```
+
+---
+
 ### `fintool predict list [--platform <PLATFORM>] [--limit <N>]`
 
 List trending prediction markets from Polymarket and/or Kalshi.
@@ -756,6 +956,9 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | `fintool predict list` | List prediction markets | Polymarket, Kalshi |
 | `fintool predict search <Q>` | Search prediction markets | Polymarket, Kalshi |
 | `fintool predict quote <ID>` | Quote prediction market | Polymarket, Kalshi |
+| `fintool deposit <ASSET>` | Deposit to exchange | Hyperliquid, Binance, Coinbase |
+| `fintool withdraw <AMT> <ASSET>` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
+| `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
 | `fintool predict buy/sell <ID> ...` | Trade predictions (stub) | Polymarket, Kalshi |
 
 ## Data Sources
@@ -779,6 +982,11 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | Prediction markets (quotes) | Kalshi REST API | No | |
 | Prediction markets (trading) | Polymarket CLOB | Wallet private key | |
 | Prediction markets (trading) | Kalshi REST API | API key + secret | |
+| Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
+| Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
+| Deposit/Withdraw — HL USDC | Hyperliquid Bridge2 | Wallet private key | Arbitrum ↔ Hyperliquid |
+| Deposit/Withdraw — Binance | Binance SAPI | API key + secret | `/sapi/v1/capital/` endpoints |
+| Deposit/Withdraw — Coinbase | Coinbase v2 API | API key + secret | `/v2/accounts/` endpoints |
 
 ## Architecture
 
@@ -789,8 +997,11 @@ fintool/
 │   ├── cli.rs           # Clap CLI definitions (global --exchange flag)
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
 │   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
-│   ├── binance.rs       # Binance API client (spot/futures/options, HMAC-SHA256 signing)
-│   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, HMAC-SHA256 signing)
+│   ├── binance.rs       # Binance API client (spot/futures/options, deposit/withdraw, HMAC-SHA256)
+│   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, deposit/withdraw, HMAC-SHA256)
+│   ├── bridge.rs        # Across Protocol cross-chain USDC bridge (Ethereum/Base ↔ Arbitrum)
+│   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw, fee estimation)
+│   ├── polymarket.rs    # Polymarket CLOB client
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
@@ -802,8 +1013,11 @@ fintool/
 │       ├── cancel.rs    # Cancel orders (supports all three exchange formats)
 │       ├── balance.rs   # Account balance
 │       ├── positions.rs # Open positions
-│       ├── options.rs   # Options trading (Binance only, real implementation)
-│       └── predict.rs   # Prediction markets (Polymarket + Kalshi)
+│       ├── options.rs   # Options trading (Binance only)
+│       ├── predict.rs   # Prediction markets (Polymarket + Kalshi)
+│       ├── deposit.rs   # Multi-exchange deposit (Unit, Across, Binance, Coinbase)
+│       ├── withdraw.rs  # Multi-exchange withdraw (Bridge2, Unit, Across, Binance, Coinbase)
+│       └── bridge_status.rs # HyperUnit bridge operation tracker
 ├── config.toml.default  # Config template
 ├── Cargo.toml
 └── README.md
