@@ -74,19 +74,25 @@ jobs:
           # For Windows GNU, link statically
           RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-gnu' && '-C target-feature=+crt-static' || '' }}
 
-      - name: Package binary
+      - name: Package zip
         run: |
+          dir="${{ matrix.artifact }}"
+          mkdir -p "$dir"
           src="target/${{ matrix.target }}/release/fintool"
           if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            src="${src}.exe"
+            cp "${src}.exe" "$dir/fintool.exe"
+          else
+            cp "$src" "$dir/fintool"
+            chmod +x "$dir/fintool"
           fi
-          cp "$src" "${{ matrix.artifact }}"
+          cp config.toml.default "$dir/"
+          zip -r "${{ matrix.artifact }}.zip" "$dir"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
 
   release:
     needs: build
@@ -103,7 +109,7 @@ jobs:
         run: |
           cd artifacts
           for dir in */; do
-            for file in "$dir"*; do
+            for file in "$dir"*.zip; do
               sha256sum "$file" >> ../checksums.txt
             done
           done
@@ -114,8 +120,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/fintool-linux-x86_64/fintool-linux-x86_64
-            artifacts/fintool-linux-aarch64/fintool-linux-aarch64
-            artifacts/fintool-macos-aarch64/fintool-macos-aarch64
-            artifacts/fintool-windows-x86_64.exe/fintool-windows-x86_64.exe
+            artifacts/fintool-linux-x86_64/fintool-linux-x86_64.zip
+            artifacts/fintool-linux-aarch64/fintool-linux-aarch64.zip
+            artifacts/fintool-macos-aarch64/fintool-macos-aarch64.zip
+            artifacts/fintool-windows-x86_64.exe/fintool-windows-x86_64.exe.zip
             checksums.txt
