@@ -4,6 +4,7 @@ mod coinbase;
 mod commands;
 mod config;
 mod format;
+mod polymarket;
 mod signing;
 
 use anyhow::Result;

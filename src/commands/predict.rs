@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use colored::Colorize;
+use ethers::signers::Signer;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use crate::{config, polymarket};
 
 const POLYMARKET_BASE: &str = "https://gamma-api.polymarket.com";
 const KALSHI_BASE: &str = "https://api.elections.kalshi.com/trade-api/v2";
@@ -520,33 +523,40 @@ pub async fn buy(
     max_price: Option<&str>,
     json_output: bool,
 ) -> Result<()> {
-    let (platform, _) = market
+    let (platform, slug) = market
         .split_once(':')
         .ok_or_else(|| anyhow::anyhow!("Format: polymarket:<slug> or kalshi:<TICKER>"))?;
 
-    if json_output {
-        println!(
-            "{}",
-            json!({
-                "action": "predict_buy", "market": market, "side": side,
-                "amount": amount, "maxPrice": max_price,
-                "status": "not_implemented",
-                "note": format!("Trading on {} requires additional configuration.", platform)
-            })
-        );
-    } else {
-        println!();
-        println!("  🔮 Prediction Buy (Preview)");
-        println!("  Market:    {}", market.cyan());
-        println!("  Side:      {}", side);
-        println!("  Amount:    {}", amount);
-        if let Some(mp) = max_price {
-            println!("  Max Price: {}¢", mp);
+    match platform {
+        "polymarket" => polymarket_buy(slug, side, amount, max_price, json_output).await,
+        "kalshi" => {
+            // Kalshi trading still stubbed
+            if json_output {
+                println!(
+                    "{}",
+                    json!({
+                        "action": "predict_buy", "market": market, "side": side,
+                        "amount": amount, "maxPrice": max_price,
+                        "status": "not_implemented",
+                        "note": "Kalshi trading requires additional configuration."
+                    })
+                );
+            } else {
+                println!();
+                println!("  🔮 Prediction Buy (Preview)");
+                println!("  Market:    {}", market.cyan());
+                println!("  Side:      {}", side);
+                println!("  Amount:    {}", amount);
+                if let Some(mp) = max_price {
+                    println!("  Max Price: {}¢", mp);
+                }
+                println!();
+                print_trading_config_hint(platform);
+            }
+            Ok(())
         }
-        println!();
-        print_trading_config_hint(platform);
+        _ => bail!("Unknown platform '{}'", platform),
     }
-    Ok(())
 }
 
 pub async fn sell(
@@ -556,32 +566,312 @@ pub async fn sell(
     min_price: Option<&str>,
     json_output: bool,
 ) -> Result<()> {
-    let (platform, _) = market
+    let (platform, slug) = market
         .split_once(':')
         .ok_or_else(|| anyhow::anyhow!("Format: polymarket:<slug> or kalshi:<TICKER>"))?;
+
+    match platform {
+        "polymarket" => polymarket_sell(slug, side, amount, min_price, json_output).await,
+        "kalshi" => {
+            // Kalshi trading still stubbed
+            if json_output {
+                println!(
+                    "{}",
+                    json!({
+                        "action": "predict_sell", "market": market, "side": side,
+                        "amount": amount, "minPrice": min_price,
+                        "status": "not_implemented",
+                        "note": "Kalshi trading requires additional configuration."
+                    })
+                );
+            } else {
+                println!();
+                println!("  🔮 Prediction Sell (Preview)");
+                println!("  Market:    {}", market.cyan());
+                println!("  Side:      {}", side);
+                println!("  Amount:    {}", amount);
+                if let Some(mp) = min_price {
+                    println!("  Min Price: {}¢", mp);
+                }
+                println!();
+                print_trading_config_hint(platform);
+            }
+            Ok(())
+        }
+        _ => bail!("Unknown platform '{}'", platform),
+    }
+}
+
+// --- Polymarket Trading Helpers ---
+
+async fn polymarket_buy(
+    slug: &str,
+    side: &str,
+    amount_str: &str,
+    max_price_str: Option<&str>,
+    json_output: bool,
+) -> Result<()> {
+    // Load wallet
+    let cfg = config::load_config_file()?;
+    let private_key = cfg
+        .wallet
+        .private_key
+        .as_ref()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No private_key configured. Set in ~/.fintool/config.toml under [wallet]"
+            )
+        })?
+        .strip_prefix("0x")
+        .unwrap_or(cfg.wallet.private_key.as_ref().unwrap())
+        .to_string();
+
+    let wallet: ethers::signers::LocalWallet = private_key.parse()?;
+    let address = format!("{:?}", wallet.address());
+
+    let client = reqwest::Client::new();
+
+    // Derive API credentials
+    let (api_key, secret, passphrase) =
+        polymarket::derive_api_credentials(&client, &private_key).await?;
+
+    // Fetch market info
+    let (token_ids, neg_risk) = polymarket::get_market_info(&client, slug).await?;
+
+    // Determine which token to buy: YES = index 0, NO = index 1
+    let token_idx = match side.to_lowercase().as_str() {
+        "yes" => 0,
+        "no" => 1,
+        _ => bail!("Side must be 'yes' or 'no'"),
+    };
+    let token_id = token_ids
+        .get(token_idx)
+        .ok_or_else(|| anyhow::anyhow!("Token ID not found for side {}", side))?;
+
+    // Get tick size
+    let tick_size = polymarket::get_tick_size(&client, token_id).await?;
+
+    // Parse amount (USDC to spend) and max_price (0-1 range, like 0.50)
+    let amount_usdc: f64 = amount_str.parse()?;
+    let max_price: f64 = max_price_str.map(|s| s.parse()).transpose()?.unwrap_or(1.0);
+
+    // Round price to tick
+    let limit_price = polymarket::round_to_tick(max_price, tick_size);
+
+    // Calculate sizes in token decimals (6 decimals for both USDC and conditional tokens)
+    // For a BUY order:
+    // - makerAmount = USDC to spend (in 6 decimals)
+    // - takerAmount = outcome tokens to receive (in 6 decimals)
+    // - takerAmount = makerAmount / price
+    let maker_amount_raw = (amount_usdc * 1_000_000.0).round() as u64;
+    let taker_amount_raw = if limit_price > 0.0 {
+        (amount_usdc / limit_price * 1_000_000.0).round() as u64
+    } else {
+        bail!("Price must be > 0");
+    };
+
+    // Build order
+    let salt = uuid::Uuid::new_v4().as_u128().to_string();
+    let order = polymarket::OrderData {
+        salt,
+        maker: address.clone(),
+        signer: address.clone(),
+        taker: "0x0000000000000000000000000000000000000000".to_string(),
+        token_id: token_id.clone(),
+        maker_amount: maker_amount_raw.to_string(),
+        taker_amount: taker_amount_raw.to_string(),
+        expiration: "0".to_string(),
+        nonce: "0".to_string(),
+        fee_rate_bps: "0".to_string(),
+        side: 0, // BUY
+        signature_type: 0,
+    };
+
+    // Sign order
+    let signature = polymarket::sign_order(&private_key, &order, neg_risk).await?;
+
+    // Submit order
+    let result = polymarket::post_order(
+        &client,
+        &api_key,
+        &secret,
+        &passphrase,
+        &address,
+        &order,
+        &signature,
+    )
+    .await?;
 
     if json_output {
         println!(
             "{}",
             json!({
-                "action": "predict_sell", "market": market, "side": side,
-                "amount": amount, "minPrice": min_price,
-                "status": "not_implemented",
-                "note": format!("Trading on {} requires additional configuration.", platform)
+                "action": "predict_buy",
+                "market": format!("polymarket:{}", slug),
+                "side": side,
+                "amount": amount_str,
+                "maxPrice": limit_price,
+                "orderId": result.order_id,
+                "success": result.success,
+                "error": result.error
             })
         );
     } else {
         println!();
-        println!("  🔮 Prediction Sell (Preview)");
-        println!("  Market:    {}", market.cyan());
-        println!("  Side:      {}", side);
-        println!("  Amount:    {}", amount);
-        if let Some(mp) = min_price {
-            println!("  Min Price: {}¢", mp);
+        println!("  🔮 Polymarket Buy Order");
+        println!("  Market:     polymarket:{}", slug.cyan());
+        println!("  Side:       {}", side);
+        println!("  Amount:     ${}", amount_str);
+        println!("  Limit:      {:.4}", limit_price);
+        println!("  Token ID:   {}", token_id.dimmed());
+        println!();
+        if let Some(true) = result.success {
+            println!("  {} Order submitted!", "✓".green().bold());
+            if let Some(ref oid) = result.order_id {
+                println!("  Order ID:   {}", oid);
+            }
+        } else {
+            println!("  {} Order failed", "✗".red().bold());
+            if let Some(ref err) = result.error {
+                println!("  Error:      {}", err);
+            }
         }
         println!();
-        print_trading_config_hint(platform);
     }
+
+    Ok(())
+}
+
+async fn polymarket_sell(
+    slug: &str,
+    side: &str,
+    amount_str: &str,
+    min_price_str: Option<&str>,
+    json_output: bool,
+) -> Result<()> {
+    // Load wallet
+    let cfg = config::load_config_file()?;
+    let private_key = cfg
+        .wallet
+        .private_key
+        .as_ref()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No private_key configured. Set in ~/.fintool/config.toml under [wallet]"
+            )
+        })?
+        .strip_prefix("0x")
+        .unwrap_or(cfg.wallet.private_key.as_ref().unwrap())
+        .to_string();
+
+    let wallet: ethers::signers::LocalWallet = private_key.parse()?;
+    let address = format!("{:?}", wallet.address());
+
+    let client = reqwest::Client::new();
+
+    // Derive API credentials
+    let (api_key, secret, passphrase) =
+        polymarket::derive_api_credentials(&client, &private_key).await?;
+
+    // Fetch market info
+    let (token_ids, neg_risk) = polymarket::get_market_info(&client, slug).await?;
+
+    // Determine which token to sell
+    let token_idx = match side.to_lowercase().as_str() {
+        "yes" => 0,
+        "no" => 1,
+        _ => bail!("Side must be 'yes' or 'no'"),
+    };
+    let token_id = token_ids
+        .get(token_idx)
+        .ok_or_else(|| anyhow::anyhow!("Token ID not found for side {}", side))?;
+
+    // Get tick size
+    let tick_size = polymarket::get_tick_size(&client, token_id).await?;
+
+    // Parse amount (outcome tokens to sell) and min_price
+    let amount_tokens: f64 = amount_str.parse()?;
+    let min_price: f64 = min_price_str.map(|s| s.parse()).transpose()?.unwrap_or(0.0);
+
+    // Round price to tick
+    let limit_price = polymarket::round_to_tick(min_price, tick_size);
+
+    // For a SELL order:
+    // - makerAmount = outcome tokens to sell (in 6 decimals)
+    // - takerAmount = USDC to receive (in 6 decimals)
+    // - takerAmount = makerAmount * price
+    let maker_amount_raw = (amount_tokens * 1_000_000.0).round() as u64;
+    let taker_amount_raw = (amount_tokens * limit_price * 1_000_000.0).round() as u64;
+
+    // Build order
+    let salt = uuid::Uuid::new_v4().as_u128().to_string();
+    let order = polymarket::OrderData {
+        salt,
+        maker: address.clone(),
+        signer: address.clone(),
+        taker: "0x0000000000000000000000000000000000000000".to_string(),
+        token_id: token_id.clone(),
+        maker_amount: maker_amount_raw.to_string(),
+        taker_amount: taker_amount_raw.to_string(),
+        expiration: "0".to_string(),
+        nonce: "0".to_string(),
+        fee_rate_bps: "0".to_string(),
+        side: 1, // SELL
+        signature_type: 0,
+    };
+
+    // Sign order
+    let signature = polymarket::sign_order(&private_key, &order, neg_risk).await?;
+
+    // Submit order
+    let result = polymarket::post_order(
+        &client,
+        &api_key,
+        &secret,
+        &passphrase,
+        &address,
+        &order,
+        &signature,
+    )
+    .await?;
+
+    if json_output {
+        println!(
+            "{}",
+            json!({
+                "action": "predict_sell",
+                "market": format!("polymarket:{}", slug),
+                "side": side,
+                "amount": amount_str,
+                "minPrice": limit_price,
+                "orderId": result.order_id,
+                "success": result.success,
+                "error": result.error
+            })
+        );
+    } else {
+        println!();
+        println!("  🔮 Polymarket Sell Order");
+        println!("  Market:     polymarket:{}", slug.cyan());
+        println!("  Side:       {}", side);
+        println!("  Amount:     {} tokens", amount_str);
+        println!("  Limit:      {:.4}", limit_price);
+        println!("  Token ID:   {}", token_id.dimmed());
+        println!();
+        if let Some(true) = result.success {
+            println!("  {} Order submitted!", "✓".green().bold());
+            if let Some(ref oid) = result.order_id {
+                println!("  Order ID:   {}", oid);
+            }
+        } else {
+            println!("  {} Order failed", "✗".red().bold());
+            if let Some(ref err) = result.error {
+                println!("  Error:      {}", err);
+            }
+        }
+        println!();
+    }
+
     Ok(())
 }
 
