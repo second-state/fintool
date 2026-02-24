@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid** and **Binance**, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
+A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
 
 ## Installation
 
@@ -44,9 +44,13 @@ fintool report list TSLA
 fintool predict list
 fintool predict search "election"
 
-# Spot trading (Hyperliquid or Binance)
+# Spot trading (auto-selects exchange)
 fintool order buy TSLA 100 410
 fintool order sell TSLA 1 420
+
+# Force specific exchange
+fintool order buy BTC 100 65000 --exchange coinbase
+fintool order buy BTC 100 65000 --exchange binance
 
 # Perp trading
 fintool perp buy BTC 100 65000
@@ -78,7 +82,17 @@ The `--human` flag is global and works with any subcommand.
 
 ## Exchange Support
 
-`fintool` supports multiple exchanges with automatic routing:
+`fintool` supports three exchanges with automatic routing: **Hyperliquid**, **Binance**, and **Coinbase**.
+
+### Exchange Capability Matrix
+
+| Feature | Hyperliquid | Binance | Coinbase |
+|---------|-------------|---------|----------|
+| Spot Trading | ✅ | ✅ | ✅ |
+| Perpetual Futures | ✅ | ✅ | ❌ |
+| Options | ❌ | ✅ | ❌ |
+| Balance/Positions | ✅ | ✅ | ✅ |
+| Orders/Cancellation | ✅ | ✅ | ✅ |
 
 ### Global Exchange Flag
 
@@ -89,19 +103,31 @@ All trading commands support `--exchange <EXCHANGE>`:
 | `auto` (default) | Auto-select based on configured exchanges and command type |
 | `hyperliquid` | Force Hyperliquid (requires wallet config) |
 | `binance` | Force Binance (requires API keys) |
+| `coinbase` | Force Coinbase (requires API keys) |
 
 ### Auto Mode Routing
 
 When `--exchange auto` (default):
 
-1. **Options commands** → Always Binance (Hyperliquid doesn't support options)
-2. **If only one exchange configured** → Use that one
-3. **If both configured** → Hyperliquid for spot/perp, Binance for options
+1. **Options commands** → Always Binance (only exchange that supports options)
+2. **Perpetual futures** → Hyperliquid > Binance (Coinbase doesn't support perps)
+3. **Spot trading** → Hyperliquid > Coinbase > Binance (priority order)
+4. **If only one exchange configured** → Use that one
+
+### Symbol Formats by Exchange
+
+| Exchange | Spot Format | Perp Format | Notes |
+|----------|-------------|-------------|-------|
+| Hyperliquid | `BTC`, `TSLA` | `BTC`, `ETH` | Symbol only, no pair suffix |
+| Binance | `BTCUSDT` | `BTCUSDT` | Auto-appends USDT in code |
+| Coinbase | `BTC-USD` | N/A | Dash-separated, USD quote |
+
+**Note:** `fintool` handles format conversion automatically. Just use the base symbol (e.g., `BTC`) and it will convert to the right format for each exchange.
 
 ### Examples
 
 ```bash
-# Auto routing (uses configured exchange)
+# Auto routing (uses configured exchange with priority)
 fintool order buy BTC 100 65000
 
 # Force Hyperliquid
@@ -110,8 +136,11 @@ fintool order buy BTC 100 65000 --exchange hyperliquid
 # Force Binance
 fintool order buy BTC 100 65000 --exchange binance
 
+# Force Coinbase (uses BTC-USD internally)
+fintool order buy BTC 100 65000 --exchange coinbase
+
 # Options require Binance
-fintool options buy BTC call 70000 260328 0.1
+fintool options buy BTC call 70000 260328 0.1 --exchange binance
 ```
 
 ---
@@ -121,6 +150,8 @@ fintool options buy BTC call 70000 260328 0.1
 Config file: `~/.fintool/config.toml`
 
 Run `fintool init` to generate a template, or copy `config.toml.default` from the release zip.
+
+### Example Configuration (All Three Exchanges)
 
 ```toml
 [wallet]
@@ -143,6 +174,10 @@ openai_model = "gpt-4.1-mini"
 binance_api_key = "..."
 binance_api_secret = "..."
 
+# Coinbase Advanced Trade — enables spot trading
+coinbase_api_key = "..."
+coinbase_api_secret = "..."
+
 # Kalshi — prediction market trading
 # kalshi_api_key = "..."
 # kalshi_api_secret = "..."
@@ -160,26 +195,28 @@ binance_api_secret = "..."
 | `api_keys` | `openai_model` | string | `gpt-4.1-mini` | OpenAI model for quote analysis. Any chat completions model works. |
 | `api_keys` | `binance_api_key` | string | — | Binance API key for spot/futures/options trading. |
 | `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
+| `api_keys` | `coinbase_api_key` | string | — | Coinbase Advanced Trade API key. |
+| `api_keys` | `coinbase_api_secret` | string | — | Coinbase Advanced Trade API secret (HMAC-SHA256 signing). |
 | `api_keys` | `kalshi_api_key` | string | — | Kalshi API key (for prediction market trading). |
 | `api_keys` | `kalshi_api_secret` | string | — | Kalshi API secret. |
 
 ### What Needs Configuration
 
-| Command | Hyperliquid Wallet | Binance Keys | OpenAI Key | Exchange Support |
-|---------|-------------------|--------------|------------|------------------|
-| `quote` | No | No | Optional (enriches) | N/A (read-only) |
-| `perp quote` | No | No | No | N/A (read-only) |
-| `news`, `init` | No | No | No | N/A |
-| `report` | No | No | No | N/A |
-| `predict list/search/quote` | No | No | No | N/A |
-| `order buy/sell` | Yes (HL) | Yes (Binance) | No | Both |
-| `perp buy/sell` | Yes (HL) | Yes (Binance) | No | Both |
-| `orders` | Yes (HL) | Yes (Binance) | No | Both |
-| `cancel` | Yes (HL) | Yes (Binance) | No | Both |
-| `balance` | Yes (HL) | Yes (Binance) | No | Both |
-| `positions` | Yes (HL) | Yes (Binance) | No | Both |
-| `options buy/sell` | No | Yes (Binance) | No | Binance only |
-| `predict buy/sell` | Yes (HL) | No | No | Polymarket/Kalshi |
+| Command | Hyperliquid Wallet | Binance Keys | Coinbase Keys | OpenAI Key | Exchange Support |
+|---------|-------------------|--------------|---------------|------------|------------------|
+| `quote` | No | No | No | Optional (enriches) | N/A (read-only) |
+| `perp quote` | No | No | No | No | N/A (read-only) |
+| `news`, `init` | No | No | No | No | N/A |
+| `report` | No | No | No | No | N/A |
+| `predict list/search/quote` | No | No | No | No | N/A |
+| `order buy/sell` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `perp buy/sell` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
+| `orders` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `cancel` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `balance` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `positions` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `options buy/sell` | No | Yes (Binance) | No | No | Binance only |
+| `predict buy/sell` | Yes (HL) | No | No | No | Polymarket/Kalshi |
 
 ---
 
@@ -436,11 +473,12 @@ fintool report get AAPL 0000320193-24-000123
 
 Place a **spot** limit buy order. The price is the **maximum price** you're willing to pay per unit. Size is calculated as `AMOUNT_USDC / MAX_PRICE`.
 
-**Exchanges:** Hyperliquid (native), Binance (via `/api/v3/order`)
+**Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
 
 The symbol is auto-resolved:
 - **Hyperliquid:** `TSLA` → `TSLA/USDC` spot pair
 - **Binance:** `TSLA` → `TSLAUSDT` spot pair
+- **Coinbase:** `BTC` → `BTC-USD` product ID
 
 #### Examples
 
@@ -449,8 +487,9 @@ fintool order buy TSLA 1 410      # buy $1 of TSLA at max $410
 fintool order buy HYPE 100 25     # buy $100 of HYPE at max $25
 fintool order buy BTC 50 66000    # buy $50 of BTC spot at max $66,000
 
-# Force Binance
+# Force specific exchange
 fintool order buy BTC 100 65000 --exchange binance
+fintool order buy BTC 100 65000 --exchange coinbase
 ```
 
 #### JSON Schema
@@ -473,7 +512,7 @@ fintool order buy BTC 100 65000 --exchange binance
 
 Place a **spot** limit sell order. The price is the **minimum price** you'll accept per unit.
 
-**Exchanges:** Hyperliquid (native), Binance (via `/api/v3/order`)
+**Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
 
 #### Examples
 
@@ -481,8 +520,9 @@ Place a **spot** limit sell order. The price is the **minimum price** you'll acc
 fintool order sell TSLA 1 420     # sell 1 TSLA at minimum $420
 fintool order sell HYPE 10 30     # sell 10 HYPE at minimum $30
 
-# Force Binance
+# Force specific exchange
 fintool order sell BTC 0.01 67000 --exchange binance
+fintool order sell BTC 0.01 67000 --exchange coinbase
 ```
 
 #### JSON Schema
@@ -504,7 +544,7 @@ fintool order sell BTC 0.01 67000 --exchange binance
 
 Place a **perpetual futures** limit buy (long) order.
 
-**Exchanges:** Hyperliquid (native), Binance (via `/fapi/v1/order`)
+**Exchanges:** Hyperliquid, Binance (Coinbase doesn't support perps)
 
 #### Examples
 
@@ -522,7 +562,7 @@ fintool perp buy BTC 100 65000 --exchange binance
 
 Place a **perpetual futures** limit sell (short) order.
 
-**Exchanges:** Hyperliquid (native), Binance (via `/fapi/v1/order`)
+**Exchanges:** Hyperliquid, Binance (Coinbase doesn't support perps)
 
 #### Examples
 
@@ -540,13 +580,14 @@ fintool perp sell BTC 0.01 70000 --exchange binance
 
 List open orders (both spot and perp). Optionally filter by symbol.
 
-**Exchanges:** Both Hyperliquid and Binance supported
+**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
 
 ```bash
 fintool orders
 fintool orders BTC
 fintool orders --human
 fintool orders --exchange binance
+fintool orders --exchange coinbase
 ```
 
 ---
@@ -562,6 +603,9 @@ Cancel an open order.
 | Hyperliquid | `SYMBOL:OID` | `BTC:91490942` |
 | Binance spot | `binance_spot:SYMBOL:ORDERID` | `binance_spot:BTCUSDT:12345678` |
 | Binance futures | `binance_futures:SYMBOL:ORDERID` | `binance_futures:BTCUSDT:87654321` |
+| Coinbase | `coinbase:UUID` | `coinbase:abc123-def456-...` |
+
+**Note:** Use `fintool orders` to get the correct order ID format for each exchange.
 
 #### Examples
 
@@ -574,6 +618,9 @@ fintool cancel binance_spot:BTCUSDT:12345678
 
 # Binance futures
 fintool cancel binance_futures:BTCUSDT:87654321
+
+# Coinbase
+fintool cancel coinbase:abc123-def456-ghi789
 ```
 
 ---
@@ -582,12 +629,13 @@ fintool cancel binance_futures:BTCUSDT:87654321
 
 Show account balances and margin summary.
 
-**Exchanges:** Both Hyperliquid and Binance supported
+**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
 
 ```bash
 fintool balance
 fintool balance --human
 fintool balance --exchange binance
+fintool balance --exchange coinbase
 ```
 
 ---
@@ -596,19 +644,20 @@ fintool balance --exchange binance
 
 Show open positions with PnL.
 
-**Exchanges:** Both Hyperliquid and Binance supported
+**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
 
 ```bash
 fintool positions
 fintool positions --human
 fintool positions --exchange binance
+fintool positions --exchange coinbase
 ```
 
 ---
 
 ### `fintool options buy/sell <SYMBOL> <TYPE> <STRIKE> <EXPIRY> <SIZE>`
 
-Place an options order. **Binance only** — Hyperliquid doesn't support options yet (pending HIP-4).
+Place an options order. **Binance only** — Hyperliquid and Coinbase don't support options.
 
 **Binance options symbol format:** `BTC-260328-80000-C`
 - Format: `BASE-YYMMDD-STRIKE-C/P`
@@ -627,7 +676,7 @@ fintool options sell BTC put 60000 260328 0.1
 fintool options buy BTC call 70000 260328 0.1 --exchange binance
 ```
 
-**Note:** Hyperliquid will return an error: *"Options trading requires Binance"*
+**Note:** Hyperliquid and Coinbase will return an error: *"Options trading requires Binance"*
 
 ---
 
@@ -687,14 +736,14 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
 | `fintool report list <SYM>` | List recent SEC filings | N/A |
 | `fintool report get <SYM> <ACC>` | Fetch specific filing | N/A |
-| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance |
-| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance |
+| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance, Coinbase |
+| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance, Coinbase |
 | `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long | Hyperliquid, Binance |
 | `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short | Hyperliquid, Binance |
-| `fintool orders [SYM]` | List open orders | Hyperliquid, Binance |
-| `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance |
-| `fintool balance` | Account balances | Hyperliquid, Binance |
-| `fintool positions` | Open positions + PnL | Hyperliquid, Binance |
+| `fintool orders [SYM]` | List open orders | Hyperliquid, Binance, Coinbase |
+| `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance, Coinbase |
+| `fintool balance` | Account balances | Hyperliquid, Binance, Coinbase |
+| `fintool positions` | Open positions + PnL | Hyperliquid, Binance, Coinbase |
 | `fintool options buy/sell ...` | Options trading | Binance only |
 | `fintool predict list` | List prediction markets | Polymarket, Kalshi |
 | `fintool predict search <Q>` | Search prediction markets | Polymarket, Kalshi |
@@ -717,6 +766,7 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | Trading — Binance spot | Binance Spot API `/api/v3/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance options | Binance Options API `/eapi/v1/order` | API key + secret | HMAC-SHA256 signing |
+| Trading — Coinbase spot | Coinbase Advanced Trade API `/api/v3/brokerage/orders` | API key + secret | HMAC-SHA256 signing |
 | Prediction markets (quotes) | Polymarket Gamma API | No | |
 | Prediction markets (quotes) | Kalshi REST API | No | |
 | Prediction markets (trading) | Polymarket CLOB | Wallet private key | |
@@ -732,6 +782,7 @@ fintool/
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
 │   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
 │   ├── binance.rs       # Binance API client (spot/futures/options, HMAC-SHA256 signing)
+│   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, HMAC-SHA256 signing)
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
@@ -740,7 +791,7 @@ fintool/
 │       ├── order.rs     # Spot limit buy/sell with exchange routing
 │       ├── perp.rs      # Perp limit buy/sell with exchange routing
 │       ├── orders.rs    # List open orders
-│       ├── cancel.rs    # Cancel orders (supports Binance format)
+│       ├── cancel.rs    # Cancel orders (supports all three exchange formats)
 │       ├── balance.rs   # Account balance
 │       ├── positions.rs # Open positions
 │       ├── options.rs   # Options trading (Binance only, real implementation)
@@ -759,9 +810,17 @@ fintool/
 - Options orders: `/eapi/v1/order`
 - Account balances, positions, open orders, cancellation
 
+**`coinbase.rs`** — Coinbase Advanced Trade integration:
+- HMAC-SHA256 request signing (timestamp + method + path + body)
+- Spot orders: `/api/v3/brokerage/orders`
+- Product ID format: `BTC-USD` (not `BTCUSDT`)
+- Account balances, open orders, cancellation
+- **No perp or options support** (Coinbase doesn't offer these products)
+
 **Exchange Routing** — Commands with `--exchange` flag:
 - `resolve_exchange()` in each command module
-- Auto mode logic: check configured exchanges, default to Hyperliquid for spot/perp
+- Auto mode logic: check configured exchanges, priority = Hyperliquid > Coinbase > Binance for spot
+- Perps: Hyperliquid > Binance (Coinbase excluded)
 - Options always require Binance
 
 ## Key Dependencies
@@ -771,7 +830,7 @@ fintool/
 | `hyperliquid_rust_sdk` | Hyperliquid exchange client with EIP-712 signing |
 | `ethers` | Ethereum wallet and signing primitives |
 | `reqwest` | HTTP client (rustls TLS — no OpenSSL) |
-| `hmac`, `sha2`, `hex` | HMAC-SHA256 signing for Binance API |
+| `hmac`, `sha2`, `hex` | HMAC-SHA256 signing for Binance and Coinbase APIs |
 | `clap` | CLI argument parsing |
 | `serde` / `serde_json` | JSON serialization |
 | `colored` | Terminal colors (`--human` mode) |
