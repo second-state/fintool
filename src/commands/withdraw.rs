@@ -15,6 +15,7 @@ use colored::Colorize;
 use serde_json::json;
 
 use crate::binance;
+use crate::bridge::{self, DestChain};
 use crate::coinbase;
 use crate::config;
 use crate::unit;
@@ -34,7 +35,7 @@ pub async fn run(
         "hyperliquid" | "auto" => {
             let asset_lower = asset.to_lowercase();
             if asset_lower == "usdc" {
-                withdraw_usdc_hl(amount, to, dry_run, json_out).await
+                withdraw_usdc_hl(amount, to, network, dry_run, json_out).await
             } else {
                 withdraw_unit(amount, asset, to, dry_run, json_out).await
             }
@@ -51,12 +52,27 @@ pub async fn run(
 async fn withdraw_usdc_hl(
     amount: &str,
     to: Option<&str>,
+    network: Option<&str>,
     dry_run: bool,
     json_out: bool,
 ) -> Result<()> {
     let cfg = config::load_hl_config()?;
-    let destination = to.unwrap_or(&cfg.address);
+    let destination = to.unwrap_or(&cfg.address).to_string();
 
+    // If network is ethereum or base, chain: HL → Arbitrum → target via Across
+    let dest_chain: Option<DestChain> = match network {
+        Some(n) => match n.to_lowercase().as_str() {
+            "arbitrum" | "arb" | "" => None, // default, no extra bridge
+            other => Some(other.parse()?),
+        },
+        None => None,
+    };
+
+    if let Some(dest) = dest_chain {
+        return withdraw_usdc_hl_bridged(amount, &destination, dest, dry_run, json_out).await;
+    }
+
+    // Simple case: HL → Arbitrum only
     if dry_run {
         if json_out {
             let out = json!({
@@ -87,17 +103,12 @@ async fn withdraw_usdc_hl(
         return Ok(());
     }
 
-    // Execute withdrawal via HL SDK
-    eprintln!("Withdrawing {} USDC from Hyperliquid to {}...", amount, destination);
+    eprintln!("Withdrawing {} USDC from Hyperliquid to Arbitrum...", amount);
 
     use ethers::signers::LocalWallet;
     use hyperliquid_rust_sdk::{BaseUrl, ExchangeClient};
 
-    let wallet: LocalWallet = cfg
-        .private_key
-        .parse()
-        .context("Invalid private key")?;
-
+    let wallet: LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
     let base_url = if cfg.testnet {
         BaseUrl::Testnet
     } else {
@@ -105,9 +116,8 @@ async fn withdraw_usdc_hl(
     };
 
     let exchange_client = ExchangeClient::new(None, wallet, Some(base_url), None, None).await?;
-
     let result = exchange_client
-        .withdraw_from_bridge(amount, destination, None)
+        .withdraw_from_bridge(amount, &destination, None)
         .await
         .context("Failed to withdraw from Hyperliquid")?;
 
@@ -126,16 +136,233 @@ async fn withdraw_usdc_hl(
     } else {
         println!();
         println!("{}", "━".repeat(50).dimmed());
-        println!(
-            "  {} {} USDC withdrawal submitted",
-            "✅".green(),
-            amount
-        );
+        println!("  {} {} USDC withdrawal submitted", "✅".green(), amount);
         println!("{}", "━".repeat(50).dimmed());
         println!();
         println!("  {} {}", "Destination:".dimmed(), destination.cyan());
         println!("  {} Arbitrum", "Chain:      ".dimmed());
         println!("  {} ~3-4 minutes", "Est. time:  ".dimmed());
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Chained withdrawal: HL → Arbitrum (Bridge2) → Ethereum/Base (Across)
+async fn withdraw_usdc_hl_bridged(
+    amount: &str,
+    destination: &str,
+    dest_chain: DestChain,
+    dry_run: bool,
+    json_out: bool,
+) -> Result<()> {
+    use ethers::prelude::*;
+
+    let cfg = config::load_hl_config()?;
+
+    // Get Across quote for the Arbitrum → destination leg
+    eprintln!("Fetching Across bridge quote (Arbitrum → {})...", dest_chain.name());
+    let quote = bridge::get_across_quote_reverse(dest_chain, amount, &cfg.address).await?;
+
+    let output_amount = quote
+        .expected_output_amount
+        .as_deref()
+        .unwrap_or(&quote.input_amount);
+    let fill_time = quote.expected_fill_time.unwrap_or(0);
+    let needs_approval = quote
+        .approval_txns
+        .as_ref()
+        .is_some_and(|a| !a.is_empty());
+
+    if dry_run {
+        if json_out {
+            let mut out = json!({
+                "action": "withdraw_quote",
+                "exchange": "hyperliquid",
+                "asset": "USDC",
+                "amount": amount,
+                "route": format!("hyperliquid → arbitrum → {}", dest_chain.name()),
+                "destination_chain": dest_chain.name(),
+                "destination_address": destination,
+                "amount_out": bridge::format_usdc(output_amount),
+                "estimated_fill_time_seconds": fill_time,
+                "needs_approval": needs_approval,
+            });
+            if let Some(ref fees) = quote.fees {
+                out["across_fees"] = fees.clone();
+            }
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        } else {
+            println!("{}", "━".repeat(55).dimmed());
+            println!(
+                "  {} {} USDC → {}  {}",
+                "Withdraw".red().bold(),
+                amount,
+                dest_chain.name().yellow(),
+                "(dry run)".dimmed()
+            );
+            println!("{}", "━".repeat(55).dimmed());
+            println!();
+            println!(
+                "  {} HL → Arbitrum → {}",
+                "Route:      ".dimmed(),
+                dest_chain.name()
+            );
+            println!("  {} {}", "Amount in:  ".dimmed(), amount);
+            println!(
+                "  {} {}",
+                "Amount out: ".dimmed(),
+                bridge::format_usdc(output_amount).green()
+            );
+            println!("  {} ~{}s (Across leg)", "Fill time:  ".dimmed(), fill_time);
+            println!("  {} {}", "Destination:".dimmed(), destination.cyan());
+            println!();
+        }
+        return Ok(());
+    }
+
+    // Step 1: Withdraw USDC from HL to Arbitrum
+    eprintln!("Step 1: Withdrawing {} USDC from HL to Arbitrum...", amount);
+
+    let wallet: ethers::signers::LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let base_url = if cfg.testnet {
+        hyperliquid_rust_sdk::BaseUrl::Testnet
+    } else {
+        hyperliquid_rust_sdk::BaseUrl::Mainnet
+    };
+
+    let exchange_client =
+        hyperliquid_rust_sdk::ExchangeClient::new(None, wallet, Some(base_url), None, None).await?;
+    exchange_client
+        .withdraw_from_bridge(amount, &cfg.address, None)
+        .await
+        .context("Failed to withdraw from Hyperliquid")?;
+
+    eprintln!("  ✅ HL withdrawal submitted. Waiting for USDC on Arbitrum (~4 min)...");
+
+    // Step 2: Wait for USDC to arrive on Arbitrum
+    // HL Bridge2 takes ~3-4 minutes
+    tokio::time::sleep(tokio::time::Duration::from_secs(240)).await;
+    eprintln!("  Checking Arbitrum balance...");
+
+    // Small extra wait for safety
+    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+
+    // Step 3: Bridge USDC from Arbitrum → destination via Across
+    eprintln!(
+        "Step 2: Bridging USDC from Arbitrum → {} via Across...",
+        dest_chain.name()
+    );
+
+    let arb_provider =
+        Provider::<Http>::try_from(bridge::RPC_ARBITRUM).context("Failed to connect to Arbitrum RPC")?;
+    let arb_wallet: LocalWallet = cfg
+        .private_key
+        .parse::<LocalWallet>()
+        .context("Invalid private key")?
+        .with_chain_id(bridge::ARBITRUM_CHAIN_ID);
+    let arb_client = std::sync::Arc::new(SignerMiddleware::new(arb_provider, arb_wallet));
+
+    // Approval txns (if needed)
+    if let Some(ref approval_txns) = quote.approval_txns {
+        for (i, atx) in approval_txns.iter().enumerate() {
+            eprintln!("  Sending approval tx {}/{}...", i + 1, approval_txns.len());
+            let tx = TransactionRequest::new()
+                .to(atx.to.parse::<Address>().context("Invalid address")?)
+                .data(
+                    hex::decode(atx.data.strip_prefix("0x").unwrap_or(&atx.data))
+                        .context("Invalid data")?,
+                )
+                .chain_id(bridge::ARBITRUM_CHAIN_ID);
+
+            let pending = arb_client
+                .send_transaction(tx, None)
+                .await
+                .context("Failed to send approval tx")?;
+            let receipt = pending
+                .await
+                .context("Approval tx failed")?
+                .ok_or_else(|| anyhow::anyhow!("Approval tx dropped"))?;
+            eprintln!("  ✅ Approval confirmed: {:?}", receipt.transaction_hash);
+        }
+    }
+
+    // Bridge tx
+    eprintln!("  Sending Across bridge tx...");
+    let bridge_value = quote
+        .swap_tx
+        .value
+        .as_ref()
+        .and_then(|v| U256::from_dec_str(v).ok())
+        .unwrap_or_default();
+
+    let bridge_tx = TransactionRequest::new()
+        .to(quote
+            .swap_tx
+            .to
+            .parse::<Address>()
+            .context("Invalid bridge address")?)
+        .data(
+            hex::decode(
+                quote
+                    .swap_tx
+                    .data
+                    .strip_prefix("0x")
+                    .unwrap_or(&quote.swap_tx.data),
+            )
+            .context("Invalid bridge data")?,
+        )
+        .value(bridge_value)
+        .chain_id(bridge::ARBITRUM_CHAIN_ID);
+
+    let pending = arb_client
+        .send_transaction(bridge_tx, None)
+        .await
+        .context("Failed to send bridge tx")?;
+    let bridge_receipt = pending
+        .await
+        .context("Bridge tx failed")?
+        .ok_or_else(|| anyhow::anyhow!("Bridge tx dropped"))?;
+
+    let bridge_tx_hash = format!("{:?}", bridge_receipt.transaction_hash);
+    eprintln!("  ✅ Bridge tx confirmed: {}", bridge_tx_hash);
+
+    if json_out {
+        let out = json!({
+            "action": "withdraw",
+            "exchange": "hyperliquid",
+            "status": "completed",
+            "asset": "USDC",
+            "amount": amount,
+            "amount_out": bridge::format_usdc(output_amount),
+            "route": format!("hyperliquid → arbitrum → {}", dest_chain.name()),
+            "destination_chain": dest_chain.name(),
+            "destination_address": destination,
+            "bridge_tx": bridge_tx_hash,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!();
+        println!("{}", "━".repeat(55).dimmed());
+        println!(
+            "  {} {} USDC → {}",
+            "✅".green(),
+            bridge::format_usdc(output_amount).green().bold(),
+            dest_chain.name()
+        );
+        println!("{}", "━".repeat(55).dimmed());
+        println!();
+        println!(
+            "  {} HL → Arbitrum → {}",
+            "Route:      ".dimmed(),
+            dest_chain.name()
+        );
+        println!(
+            "  {} {}",
+            "Destination:".dimmed(),
+            destination.cyan()
+        );
+        println!("  {} {}", "Bridge TX:  ".dimmed(), bridge_tx_hash.cyan());
         println!();
     }
 

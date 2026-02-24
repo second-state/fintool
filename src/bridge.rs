@@ -165,6 +165,81 @@ pub async fn get_across_quote(
     serde_json::from_str(&body).context("Failed to parse Across response")
 }
 
+/// Destination chain for Across bridge (Arbitrum → Ethereum/Base)
+#[derive(Debug, Clone, Copy)]
+pub enum DestChain {
+    Ethereum,
+    Base,
+}
+
+impl DestChain {
+    pub fn chain_id(&self) -> u64 {
+        match self {
+            Self::Ethereum => ETHEREUM_CHAIN_ID,
+            Self::Base => BASE_CHAIN_ID,
+        }
+    }
+
+    pub fn usdc_address(&self) -> &'static str {
+        match self {
+            Self::Ethereum => USDC_ETHEREUM,
+            Self::Base => USDC_BASE,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Ethereum => "ethereum",
+            Self::Base => "base",
+        }
+    }
+}
+
+impl std::str::FromStr for DestChain {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "ethereum" | "eth" | "mainnet" => Ok(Self::Ethereum),
+            "base" => Ok(Self::Base),
+            _ => bail!("Unsupported destination chain '{}'. Use: ethereum, base", s),
+        }
+    }
+}
+
+/// Get Across bridge quote for Arbitrum → destination chain (reverse bridge)
+pub async fn get_across_quote_reverse(
+    dest: DestChain,
+    amount_usdc: &str,
+    depositor: &str,
+) -> Result<AcrossSwapResponse> {
+    let amount_raw = parse_usdc_amount(amount_usdc)?;
+
+    let url = format!("{}/swap/approval", ACROSS_API);
+    let resp = client()?
+        .get(&url)
+        .query(&[
+            ("tradeType", "exactInput"),
+            ("amount", &amount_raw),
+            ("inputToken", USDC_ARBITRUM),
+            ("originChainId", &ARBITRUM_CHAIN_ID.to_string()),
+            ("outputToken", dest.usdc_address()),
+            ("destinationChainId", &dest.chain_id().to_string()),
+            ("depositor", depositor),
+        ])
+        .send()
+        .await
+        .context("Failed to call Across API")?;
+
+    let status = resp.status();
+    let body = resp.text().await?;
+
+    if !status.is_success() {
+        bail!("Across API error ({}): {}", status, body);
+    }
+
+    serde_json::from_str(&body).context("Failed to parse Across response")
+}
+
 /// Parse a human-readable USDC amount (e.g. "100" or "100.50") to raw units (6 decimals)
 fn parse_usdc_amount(amount: &str) -> Result<String> {
     let parts: Vec<&str> = amount.split('.').collect();
