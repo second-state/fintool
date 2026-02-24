@@ -85,10 +85,10 @@ pub fn load_config_file() -> Result<ConfigFile> {
 }
 
 /// Create a default config file with comments if it doesn't exist
-pub fn init_config() -> Result<PathBuf> {
+pub fn init_config() -> Result<(PathBuf, bool)> {
     let path = config_path();
     if path.exists() {
-        return Ok(path);
+        return Ok((path, false));
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -96,7 +96,7 @@ pub fn init_config() -> Result<PathBuf> {
     // Try to read config.toml.default from the project directory, fall back to embedded template
     let template = include_str!("../config.toml.default");
     std::fs::write(&path, template)?;
-    Ok(path)
+    Ok((path, true))
 }
 
 /// Load wallet config from config file

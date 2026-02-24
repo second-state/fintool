@@ -16,9 +16,14 @@ async fn main() -> Result<()> {
 
     let result = match cli.command {
         Commands::Init => match config::init_config() {
-            Ok(path) => {
-                println!("Config file created at: {}", path.display());
-                println!("Edit it to add your wallet and API keys.");
+            Ok((path, created)) => {
+                if created {
+                    println!("Config file created at: {}", path.display());
+                    println!("Edit it to add your wallet and API keys.");
+                } else {
+                    println!("Config file already exists at: {}", path.display());
+                    println!("Not overwriting. Edit it directly to make changes.");
+                }
                 Ok(())
             }
             Err(e) => Err(e),
