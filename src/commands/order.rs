@@ -2,29 +2,30 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
-use crate::{binance, config, signing};
+use crate::{binance, coinbase, config, signing};
 
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
-        "hyperliquid" | "binance" => Ok(exchange.to_string()),
+        "hyperliquid" | "binance" | "coinbase" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
+            let has_coinbase = config::coinbase_credentials().is_some();
             let has_binance = config::binance_credentials().is_some();
 
-            if has_hl && !has_binance {
+            // Priority for spot/perp: Hyperliquid > Coinbase > Binance
+            if has_hl {
                 Ok("hyperliquid".to_string())
-            } else if has_binance && !has_hl {
+            } else if has_coinbase {
+                Ok("coinbase".to_string())
+            } else if has_binance {
                 Ok("binance".to_string())
-            } else if has_hl && has_binance {
-                // Default to Hyperliquid for spot/perp when both configured
-                Ok("hyperliquid".to_string())
             } else {
-                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+                bail!("No exchange configured. Set up Hyperliquid wallet, Coinbase API keys, or Binance API keys in ~/.fintool/config.toml")
             }
         }
         _ => bail!(
-            "Invalid exchange: {}. Use hyperliquid, binance, or auto",
+            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, or auto",
             exchange
         ),
     }
@@ -39,6 +40,28 @@ pub async fn buy(
     json_output: bool,
 ) -> Result<()> {
     let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "coinbase" {
+        let (api_key, api_secret) = config::coinbase_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured. Add coinbase_api_key and coinbase_api_secret to ~/.fintool/config.toml"))?;
+
+        let price_f: f64 = max_price.parse().context("Invalid max price")?;
+        let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
+        let size = amount_f / price_f;
+
+        let client = reqwest::Client::new();
+        return coinbase::spot_order(
+            &client,
+            &api_key,
+            &api_secret,
+            symbol,
+            "BUY",
+            size,
+            price_f,
+            json_output,
+        )
+        .await;
+    }
 
     if exchange == "binance" {
         let (api_key, api_secret) = config::binance_credentials()
@@ -123,6 +146,27 @@ pub async fn sell(
     json_output: bool,
 ) -> Result<()> {
     let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "coinbase" {
+        let (api_key, api_secret) = config::coinbase_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured. Add coinbase_api_key and coinbase_api_secret to ~/.fintool/config.toml"))?;
+
+        let size: f64 = amount.parse().context("Invalid amount")?;
+        let price_f: f64 = min_price.parse().context("Invalid min price")?;
+
+        let client = reqwest::Client::new();
+        return coinbase::spot_order(
+            &client,
+            &api_key,
+            &api_secret,
+            symbol,
+            "SELL",
+            size,
+            price_f,
+            json_output,
+        )
+        .await;
+    }
 
     if exchange == "binance" {
         let (api_key, api_secret) = config::binance_credentials()

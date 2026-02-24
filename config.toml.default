@@ -37,3 +37,8 @@ testnet = false
 # Sign up at https://www.binance.com/
 # binance_api_key = "..."
 # binance_api_secret = "..."
+
+# Coinbase Advanced Trade API credentials — enables spot trading on Coinbase
+# Sign up at https://www.coinbase.com/
+# coinbase_api_key = "..."
+# coinbase_api_secret = "..."

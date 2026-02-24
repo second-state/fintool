@@ -28,3 +28,4 @@ regex = "1"
 openssl = { version = "0.10", features = ["vendored"] }
 hmac = "0.12"
 sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }

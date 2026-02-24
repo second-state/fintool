@@ -3,7 +3,7 @@ use colored::Colorize;
 use serde_json::{json, Value};
 use tabled::{settings::Style, Table, Tabled};
 
-use crate::{binance, config};
+use crate::{binance, coinbase, config};
 
 #[derive(Tabled)]
 struct OrderRow {
@@ -24,24 +24,25 @@ struct OrderRow {
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
-        "hyperliquid" | "binance" => Ok(exchange.to_string()),
+        "hyperliquid" | "binance" | "coinbase" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
+            let has_coinbase = config::coinbase_credentials().is_some();
             let has_binance = config::binance_credentials().is_some();
 
-            if has_hl && !has_binance {
+            // Priority: Hyperliquid > Coinbase > Binance
+            if has_hl {
                 Ok("hyperliquid".to_string())
-            } else if has_binance && !has_hl {
+            } else if has_coinbase {
+                Ok("coinbase".to_string())
+            } else if has_binance {
                 Ok("binance".to_string())
-            } else if has_hl && has_binance {
-                // Default to Hyperliquid
-                Ok("hyperliquid".to_string())
             } else {
-                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+                bail!("No exchange configured. Set up Hyperliquid wallet, Coinbase API keys, or Binance API keys in ~/.fintool/config.toml")
             }
         }
         _ => bail!(
-            "Invalid exchange: {}. Use hyperliquid, binance, or auto",
+            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, or auto",
             exchange
         ),
     }
@@ -49,6 +50,90 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
 
 pub async fn run(symbol: Option<&str>, exchange: &str, json_output: bool) -> Result<()> {
     let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "coinbase" {
+        let (api_key, api_secret) = config::coinbase_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured"))?;
+
+        let client = reqwest::Client::new();
+        let orders =
+            coinbase::get_orders(&client, &api_key, &api_secret, symbol, json_output).await?;
+
+        if json_output {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "exchange": "coinbase",
+                    "orders": orders,
+                }))?
+            );
+            return Ok(());
+        }
+
+        let empty_vec = vec![];
+        let order_list = orders
+            .get("orders")
+            .and_then(|v| v.as_array())
+            .unwrap_or(&empty_vec);
+
+        if order_list.is_empty() {
+            println!("\n  No open Coinbase orders.\n");
+            return Ok(());
+        }
+
+        let mut rows = Vec::new();
+        for order in order_list {
+            let product_id = order
+                .get("product_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let order_id = order.get("order_id").and_then(|v| v.as_str()).unwrap_or("");
+            let side = order.get("side").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Extract size and price from order_configuration
+            let mut size = String::from("0");
+            let mut price = String::from("$0");
+
+            if let Some(config) = order.get("order_configuration") {
+                if let Some(limit) = config.get("limit_limit_gtc") {
+                    size = limit
+                        .get("base_size")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0")
+                        .to_string();
+                    price = format!(
+                        "${}",
+                        limit
+                            .get("limit_price")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("0")
+                    );
+                }
+            }
+
+            rows.push(OrderRow {
+                oid: format!("coinbase:{}", order_id),
+                symbol: product_id.to_string(),
+                side: if side == "BUY" {
+                    "BUY".green().to_string()
+                } else {
+                    "SELL".red().to_string()
+                },
+                size,
+                price,
+                order_type: "Spot Limit".to_string(),
+            });
+        }
+
+        println!("\n  📋 Coinbase Open Orders\n");
+        let table = Table::new(rows).with(Style::rounded()).to_string();
+        for line in table.lines() {
+            println!("  {}", line);
+        }
+        println!();
+
+        return Ok(());
+    }
 
     if exchange == "binance" {
         let (api_key, api_secret) = config::binance_credentials()

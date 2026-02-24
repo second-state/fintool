@@ -26,20 +26,19 @@ struct PositionRow {
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
+        "coinbase" => bail!("Positions not supported on Coinbase (spot-only exchange). Use --exchange hyperliquid or --exchange binance for perpetual futures positions."),
         "hyperliquid" | "binance" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
             let has_binance = config::binance_credentials().is_some();
 
-            if has_hl && !has_binance {
+            // Priority for positions: Hyperliquid > Binance (Coinbase is spot-only)
+            if has_hl {
                 Ok("hyperliquid".to_string())
-            } else if has_binance && !has_hl {
+            } else if has_binance {
                 Ok("binance".to_string())
-            } else if has_hl && has_binance {
-                // Default to Hyperliquid
-                Ok("hyperliquid".to_string())
             } else {
-                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+                bail!("No exchange configured for positions. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
             }
         }
         _ => bail!(

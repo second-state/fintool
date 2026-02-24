@@ -48,6 +48,10 @@ pub struct ApiKeysConfig {
     pub binance_api_key: Option<String>,
     /// Binance API secret for signing requests
     pub binance_api_secret: Option<String>,
+    /// Coinbase Advanced Trade API key
+    pub coinbase_api_key: Option<String>,
+    /// Coinbase Advanced Trade API secret
+    pub coinbase_api_secret: Option<String>,
 }
 
 /// Resolved runtime config
@@ -199,5 +203,14 @@ pub fn binance_credentials() -> Option<(String, String)> {
     Some((
         cfg.api_keys.binance_api_key?,
         cfg.api_keys.binance_api_secret?,
+    ))
+}
+
+/// Get Coinbase Advanced Trade API credentials (key, secret)
+pub fn coinbase_credentials() -> Option<(String, String)> {
+    let cfg = load_config_file().ok()?;
+    Some((
+        cfg.api_keys.coinbase_api_key?,
+        cfg.api_keys.coinbase_api_secret?,
     ))
 }

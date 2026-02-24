@@ -3,7 +3,7 @@ use colored::Colorize;
 use serde_json::{json, Value};
 use tabled::{settings::Style, Table, Tabled};
 
-use crate::{binance, config};
+use crate::{binance, coinbase, config};
 
 #[derive(Tabled)]
 struct BalanceRow {
@@ -20,24 +20,25 @@ struct BalanceRow {
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
-        "hyperliquid" | "binance" => Ok(exchange.to_string()),
+        "hyperliquid" | "binance" | "coinbase" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
+            let has_coinbase = config::coinbase_credentials().is_some();
             let has_binance = config::binance_credentials().is_some();
 
-            if has_hl && !has_binance {
+            // Priority: Hyperliquid > Coinbase > Binance
+            if has_hl {
                 Ok("hyperliquid".to_string())
-            } else if has_binance && !has_hl {
+            } else if has_coinbase {
+                Ok("coinbase".to_string())
+            } else if has_binance {
                 Ok("binance".to_string())
-            } else if has_hl && has_binance {
-                // Default to Hyperliquid
-                Ok("hyperliquid".to_string())
             } else {
-                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+                bail!("No exchange configured. Set up Hyperliquid wallet, Coinbase API keys, or Binance API keys in ~/.fintool/config.toml")
             }
         }
         _ => bail!(
-            "Invalid exchange: {}. Use hyperliquid, binance, or auto",
+            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, or auto",
             exchange
         ),
     }
@@ -45,6 +46,14 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
 
 pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "coinbase" {
+        let (api_key, api_secret) = config::coinbase_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured"))?;
+
+        let client = reqwest::Client::new();
+        return coinbase::get_accounts(&client, &api_key, &api_secret, json_output).await;
+    }
 
     if exchange == "binance" {
         let (api_key, api_secret) = config::binance_credentials()

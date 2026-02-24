@@ -7,6 +7,7 @@ use crate::{binance, config};
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
         "binance" => Ok("binance".to_string()),
+        "coinbase" => bail!("Options not supported on Coinbase. Use --exchange binance or configure Binance API keys."),
         "hyperliquid" => bail!("Options not supported on Hyperliquid. Use --exchange binance or configure Binance API keys."),
         "auto" => {
             let has_binance = config::binance_credentials().is_some();

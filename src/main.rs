@@ -1,5 +1,6 @@
 mod binance;
 mod cli;
+mod coinbase;
 mod commands;
 mod config;
 mod format;

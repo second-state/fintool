@@ -2,29 +2,30 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
-use crate::{binance, config, signing};
+use crate::{binance, coinbase, config, signing};
 
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
-        "hyperliquid" | "binance" => Ok(exchange.to_string()),
+        "hyperliquid" | "binance" | "coinbase" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
+            let has_coinbase = config::coinbase_credentials().is_some();
             let has_binance = config::binance_credentials().is_some();
 
-            if has_hl && !has_binance {
+            // Priority: Hyperliquid > Coinbase > Binance
+            if has_hl {
                 Ok("hyperliquid".to_string())
-            } else if has_binance && !has_hl {
+            } else if has_coinbase {
+                Ok("coinbase".to_string())
+            } else if has_binance {
                 Ok("binance".to_string())
-            } else if has_hl && has_binance {
-                // Default to Hyperliquid
-                Ok("hyperliquid".to_string())
             } else {
-                bail!("No exchange configured. Set up Hyperliquid wallet or Binance API keys in ~/.fintool/config.toml")
+                bail!("No exchange configured. Set up Hyperliquid wallet, Coinbase API keys, or Binance API keys in ~/.fintool/config.toml")
             }
         }
         _ => bail!(
-            "Invalid exchange: {}. Use hyperliquid, binance, or auto",
+            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, or auto",
             exchange
         ),
     }
@@ -32,6 +33,21 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
 
 pub async fn run(order_id: &str, exchange: &str, json_output: bool) -> Result<()> {
     // Check if order ID is prefixed with exchange identifier
+    if order_id.starts_with("coinbase:") {
+        let (api_key, api_secret) = config::coinbase_credentials()
+            .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured"))?;
+
+        let parts: Vec<&str> = order_id.split(':').collect();
+        if parts.len() < 2 {
+            bail!("Invalid Coinbase order ID format");
+        }
+
+        let oid = parts[1];
+        let client = reqwest::Client::new();
+
+        return coinbase::cancel_order(&client, &api_key, &api_secret, oid, json_output).await;
+    }
+
     if order_id.starts_with("binance_spot:") || order_id.starts_with("binance_futures:") {
         let (api_key, api_secret) = config::binance_credentials()
             .ok_or_else(|| anyhow::anyhow!("Binance API credentials not configured"))?;
