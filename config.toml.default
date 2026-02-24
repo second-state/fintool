@@ -1,0 +1,33 @@
+# fintool configuration
+# Copy to ~/.fintool/config.toml and fill in your values
+# Run `fintool init` to generate this automatically
+
+[wallet]
+# Hex private key (with or without 0x prefix). Required for trading.
+# private_key = "0x..."
+
+# Alternative: encrypted keystore file + passcode
+# wallet_json = "/path/to/wallet.json"
+# wallet_passcode = "your-passcode"
+
+[network]
+# Use Hyperliquid testnet (default: false)
+testnet = false
+
+[api_keys]
+# OpenAI API key — enables LLM-enriched quotes with trend/momentum analysis
+# Get one at https://platform.openai.com/api-keys
+# openai_api_key = "sk-..."
+
+# Kalshi API credentials — enables prediction market trading
+# Sign up at https://kalshi.com
+# kalshi_api_key = "..."
+# kalshi_api_secret = "..."
+
+# CryptoPanic token — crypto news (optional, not currently used)
+# Free at https://cryptopanic.com/developers/api/
+# cryptopanic_token = "..."
+
+# NewsAPI key — stock news (optional, not currently used)
+# Free at https://newsapi.org/
+# newsapi_key = "..."

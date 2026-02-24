@@ -1,0 +1,9 @@
+/target
+Cargo.lock
+*.swp
+*.swo
+*~
+
+# Never commit secrets
+config.toml
+.env
