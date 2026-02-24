@@ -42,6 +42,8 @@ pub struct ApiKeysConfig {
     pub kalshi_api_secret: Option<String>,
     /// OpenAI API key for enriched quote analysis
     pub openai_api_key: Option<String>,
+    /// OpenAI model for quote analysis (default: gpt-4.1-mini)
+    pub openai_model: Option<String>,
 }
 
 /// Resolved runtime config
@@ -189,4 +191,11 @@ pub fn newsapi_key() -> Option<String> {
 /// Get the OpenAI API key
 pub fn openai_api_key() -> Option<String> {
     load_config_file().ok()?.api_keys.openai_api_key
+}
+
+pub fn openai_model() -> String {
+    load_config_file()
+        .ok()
+        .and_then(|c| c.api_keys.openai_model)
+        .unwrap_or_else(|| "gpt-4.1-mini".to_string())
 }

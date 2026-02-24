@@ -18,6 +18,7 @@ testnet = false
 # OpenAI API key — enables LLM-enriched quotes with trend/momentum analysis
 # Get one at https://platform.openai.com/api-keys
 # openai_api_key = "sk-..."
+# openai_model = "gpt-4.1-mini"
 
 # Kalshi API credentials — enables prediction market trading
 # Sign up at https://kalshi.com

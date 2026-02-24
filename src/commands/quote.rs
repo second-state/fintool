@@ -522,8 +522,9 @@ Raw source data:
         serde_json::to_string_pretty(&sources_json)?
     );
 
+    let model = config::openai_model();
     let request_body = json!({
-        "model": "gpt-4o-mini",
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}

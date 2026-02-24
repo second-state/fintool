@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI for financial trading — spot and perpetual futures on Hyperliquid, stock quotes via Yahoo Finance, and news via Google News.
+A Rust CLI for financial trading and market intelligence — spot and perpetual futures on Hyperliquid, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
 
 ## Installation
 
@@ -10,33 +10,47 @@ cargo build --release
 # Binary at ./target/release/fintool
 ```
 
+Or download a pre-built binary from [Releases](https://github.com/second-state/fintool/releases).
+
 ## Quick Start
 
 ```bash
 # Create config file
 fintool init
 
-# Edit config with your wallet key
+# Edit config with your keys
 vim ~/.fintool/config.toml
 
-# Spot quotes
+# Get an enriched quote with trend analysis
 fintool quote BTC
-fintool quote TSLA
-fintool quote AAPL
+fintool quote AAPL --human
 
-# Perp quotes
+# Index and commodity aliases
+fintool quote SP500
+fintool quote GOLD
+fintool quote VIX
+
+# Perp quotes with funding/OI
 fintool perp quote BTC
 
 # News
 fintool news ETH
 
+# SEC filings
+fintool report annual AAPL
+fintool report list TSLA
+
+# Prediction markets
+fintool predict list
+fintool predict search "election"
+
 # Spot trading (requires wallet config)
-fintool order buy TSLA 100 410    # buy $100 of TSLA, max price $410
-fintool order sell TSLA 1 420     # sell 1 TSLA, min price $420
+fintool order buy TSLA 100 410
+fintool order sell TSLA 1 420
 
 # Perp trading
-fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
-fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
+fintool perp buy BTC 100 65000
+fintool perp sell BTC 0.01 70000
 ```
 
 ## Output Modes
@@ -63,12 +77,11 @@ The `--human` flag is global and works with any subcommand.
 
 Config file: `~/.fintool/config.toml`
 
-Run `fintool init` to generate a template.
+Run `fintool init` to generate a template, or copy `config.toml.default` from the release zip.
 
 ```toml
 [wallet]
 # Private key (hex, with or without 0x prefix)
-# Takes priority over wallet_json + wallet_passcode
 private_key = "0xabcdef1234567890..."
 
 # Alternative: encrypted keystore file
@@ -76,12 +89,16 @@ private_key = "0xabcdef1234567890..."
 # wallet_passcode = "your-passcode"
 
 [network]
-# Use Hyperliquid testnet (default: false)
 testnet = false
 
 [api_keys]
-# Reserved for future use
-# newsapi_key = "..."
+# OpenAI — enables LLM-enriched quote analysis (trend, momentum, summary)
+openai_api_key = "sk-..."
+openai_model = "gpt-4.1-mini"
+
+# Kalshi — prediction market trading
+# kalshi_api_key = "..."
+# kalshi_api_secret = "..."
 ```
 
 ### Config Options
@@ -91,20 +108,25 @@ testnet = false
 | `wallet` | `private_key` | string | — | Hex private key (with or without `0x`). **Takes priority** over keystore. |
 | `wallet` | `wallet_json` | string | — | Path to encrypted Ethereum keystore JSON file. Supports `~` expansion. |
 | `wallet` | `wallet_passcode` | string | — | Passcode to decrypt the keystore file. |
-| `network` | `testnet` | bool | `false` | Use Hyperliquid testnet (`api.hyperliquid-testnet.xyz`). |
-| `api_keys` | `newsapi_key` | string | — | NewsAPI key (reserved for future use). |
+| `network` | `testnet` | bool | `false` | Use Hyperliquid testnet. |
+| `api_keys` | `openai_api_key` | string | — | OpenAI API key. Enables LLM-enriched quotes with trend/momentum analysis. |
+| `api_keys` | `openai_model` | string | `gpt-4.1-mini` | OpenAI model for quote analysis. Any chat completions model works. |
 | `api_keys` | `kalshi_api_key` | string | — | Kalshi API key (for prediction market trading). |
 | `api_keys` | `kalshi_api_secret` | string | — | Kalshi API secret. |
 
 ### What Needs a Wallet
 
-| Command | Wallet Required |
-|---------|----------------|
-| `quote`, `news`, `init` | No |
-| `perp quote` | No |
-| `order buy/sell`, `perp buy/sell` | Yes |
-| `orders`, `cancel`, `balance`, `positions` | Yes |
-| `options`, `predict` | Yes (stubs) |
+| Command | Wallet Required | OpenAI Key |
+|---------|----------------|------------|
+| `quote` | No | Optional (enriches output) |
+| `perp quote` | No | No |
+| `news`, `init` | No | No |
+| `report` | No | No |
+| `predict list/search/quote` | No | No |
+| `order buy/sell`, `perp buy/sell` | Yes | No |
+| `orders`, `cancel`, `balance`, `positions` | Yes | No |
+| `predict buy/sell` | Yes | No |
+| `options` | — | — (stub) |
 
 ---
 
@@ -122,60 +144,125 @@ fintool init
 
 ### `fintool quote <SYMBOL>`
 
-Get the current **spot** price for a crypto asset or stock.
+Get the current price with multi-source aggregation and optional LLM analysis.
 
-**Resolution order:**
-1. Hyperliquid spot (TSLA, HYPE, BTC, ETH, etc. — tokenized assets)
-2. Yahoo Finance fallback (AAPL, GOOGL, MSFT, etc.)
+**Data sources** (fetched in parallel):
+1. **Hyperliquid spot** — tokenized stocks and crypto
+2. **Yahoo Finance** — traditional stocks, indices, commodities
+3. **CoinGecko** — crypto prices with 7d/30d trends, market cap
+
+**With OpenAI key configured:** All raw data is sent to the LLM to produce merged analysis with trend direction, momentum, volume context, and a market summary.
+
+**Without OpenAI key:** Returns merged data from the best available source.
+
+#### Symbol Aliases
+
+Common indices, commodities, and treasuries are aliased for convenience:
+
+| Alias | Resolves To | Description |
+|-------|-------------|-------------|
+| `SP500`, `SPX` | `^GSPC` | S&P 500 |
+| `NASDAQ`, `NDX` | `^IXIC`, `^NDX` | Nasdaq Composite / 100 |
+| `DOW`, `DJI`, `DJIA` | `^DJI` | Dow Jones |
+| `RUSSELL`, `RUT` | `^RUT` | Russell 2000 |
+| `VIX` | `^VIX` | CBOE Volatility Index |
+| `NIKKEI` | `^N225` | Nikkei 225 |
+| `FTSE` | `^FTSE` | FTSE 100 |
+| `DAX` | `^GDAXI` | DAX |
+| `HSI`, `HANGSENG` | `^HSI` | Hang Seng |
+| `GOLD` | `GC=F` | Gold Futures |
+| `SILVER` | `SI=F` | Silver Futures |
+| `OIL`, `CRUDE` | `CL=F` | Crude Oil Futures |
+| `NATGAS` | `NG=F` | Natural Gas Futures |
+| `10Y`, `TNX` | `^TNX` | 10-Year Treasury Yield |
+| `30Y`, `TYX` | `^TYX` | 30-Year Treasury Yield |
 
 #### Examples
 
 ```bash
-fintool quote TSLA       # tokenized stock on HL spot
-fintool quote BTC        # crypto on HL spot
-fintool quote AAPL       # stock via Yahoo Finance
-fintool quote ETH --human
+fintool quote BTC          # crypto — Hyperliquid + CoinGecko + Yahoo
+fintool quote AAPL         # stock — Yahoo Finance
+fintool quote SP500        # index alias
+fintool quote GOLD         # commodity alias
+fintool quote USD1         # stablecoin
+fintool quote ETH --human  # colored terminal output
 ```
 
-#### JSON Schema — Hyperliquid Spot
+#### JSON Schema — Enriched (with OpenAI)
 
 ```json
 {
-  "symbol": "TSLA",
-  "price": "407.28",
-  "change24h": "0.00",
-  "volume24h": "48.8736",
-  "prevDayPx": "407.28",
-  "source": "Hyperliquid"
+  "symbol": "BTC",
+  "name": "Bitcoin",
+  "price": 64700.0,
+  "price_currency": "USD",
+  "change_24h_pct": -4.28,
+  "change_7d_pct": -5.97,
+  "change_30d_pct": -27.54,
+  "volume_24h": 56772864157.0,
+  "market_cap": 1291834932905.0,
+  "trend": "bearish",
+  "trend_strength": "strong",
+  "momentum": "Bitcoin has declined 4.28% in the last 24 hours and nearly 6% over the past week, indicating sustained bearish pressure.",
+  "volume_analysis": "The 24-hour volume of $56.8B indicates significant market activity despite the downturn.",
+  "summary": "Bitcoin is in a strong bearish trend with a 27.5% decline over the past month. High trading volumes suggest active selling pressure rather than low-liquidity drift.",
+  "sources_used": ["Yahoo Finance", "CoinGecko"],
+  "confidence": "high"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `symbol` | string | Asset symbol |
-| `price` | string | Current spot price (USD) |
-| `change24h` | string | 24-hour price change (%) |
-| `volume24h` | string | 24-hour notional volume (USD) |
-| `prevDayPx` | string | Previous day price (USD) |
-| `source` | string | `"Hyperliquid"` |
+| `name` | string | Full asset name |
+| `price` | number | Best available current price (USD) |
+| `price_currency` | string | Always `"USD"` |
+| `change_24h_pct` | number\|null | 24-hour price change (%) |
+| `change_7d_pct` | number\|null | 7-day price change (%) — crypto only via CoinGecko |
+| `change_30d_pct` | number\|null | 30-day price change (%) — crypto only via CoinGecko |
+| `volume_24h` | number\|null | 24-hour trading volume (USD) |
+| `market_cap` | number\|null | Market capitalization (USD) |
+| `trend` | string | `"bullish"`, `"bearish"`, or `"neutral"` |
+| `trend_strength` | string | `"strong"`, `"moderate"`, or `"weak"` |
+| `momentum` | string | 1-2 sentence momentum analysis |
+| `volume_analysis` | string | 1 sentence volume context |
+| `summary` | string | 2-3 sentence market overview |
+| `sources_used` | array | Data sources that contributed to the analysis |
+| `confidence` | string | `"high"`, `"medium"`, or `"low"` |
 
-#### JSON Schema — Yahoo Finance
+#### JSON Schema — Basic (without OpenAI)
+
+When no OpenAI key is configured, returns merged raw data:
 
 ```json
 {
   "symbol": "AAPL",
-  "price": "245.12",
-  "change24h": "1.25",
-  "currency": "USD",
-  "exchange": "NMS",
-  "source": "Yahoo Finance"
+  "price": "266.18",
+  "change24h": "4.07",
+  "volume24h": 34926242.0,
+  "sources_used": ["Yahoo Finance"]
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `currency` | string | Trading currency |
-| `exchange` | string | Exchange code (NMS = NASDAQ, NYQ = NYSE) |
+#### Human Output Example
+
+```
+  📊 BTC (Bitcoin)
+  Price:      $64,683.00
+  24h Change: -4.31%
+
+  📉 Trend:  bearish (strong)
+
+  💫 Momentum: Bitcoin has declined over 4% in the last 24 hours and
+     nearly 6% over the past week, indicating sustained bearish pressure.
+  📊 Volume:   The 24-hour volume of $56.8B indicates significant activity.
+
+  📝 Summary:
+     Bitcoin is in a strong bearish trend with a 27.5% decline over
+     the past month. High volumes suggest active selling pressure.
+
+  Sources: Yahoo Finance, CoinGecko | Confidence: high
+```
 
 ---
 
@@ -261,6 +348,34 @@ Returns an array of up to 10 articles:
 
 ---
 
+### `fintool report annual <SYMBOL>`
+
+Fetch the latest 10-K (annual) filing from SEC EDGAR. Use `--output <file>` to save the full text.
+
+### `fintool report quarterly <SYMBOL>`
+
+Fetch the latest 10-Q (quarterly) filing from SEC EDGAR.
+
+### `fintool report list <SYMBOL>`
+
+List recent SEC filings for a company.
+
+### `fintool report get <SYMBOL> <ACCESSION>`
+
+Fetch a specific filing by accession number.
+
+#### Examples
+
+```bash
+fintool report annual AAPL
+fintool report quarterly TSLA --output tsla_10q.txt
+fintool report list MSFT
+fintool report list AAPL --human
+fintool report get AAPL 0000320193-24-000123
+```
+
+---
+
 ### `fintool order buy <SYMBOL> <AMOUNT_USDC> <MAX_PRICE>`
 
 Place a **spot** limit buy order. The price is the **maximum price** you're willing to pay per unit. Size is calculated as `AMOUNT_USDC / MAX_PRICE`.
@@ -270,14 +385,9 @@ The symbol is auto-resolved to its Hyperliquid spot pair (e.g. `TSLA` → `TSLA/
 #### Examples
 
 ```bash
-# Buy $1 of TSLA at max $410 per share
-fintool order buy TSLA 1 410
-
-# Buy $100 of HYPE at max $25
-fintool order buy HYPE 100 25
-
-# Buy $50 of BTC spot at max $66,000
-fintool order buy BTC 50 66000
+fintool order buy TSLA 1 410      # buy $1 of TSLA at max $410
+fintool order buy HYPE 100 25     # buy $100 of HYPE at max $25
+fintool order buy BTC 50 66000    # buy $50 of BTC spot at max $66,000
 ```
 
 #### JSON Schema
@@ -294,16 +404,6 @@ fintool order buy BTC 50 66000
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `action` | string | `"spot_buy"` |
-| `symbol` | string | Input symbol |
-| `size` | string | Calculated order size (AMOUNT_USDC / MAX_PRICE) |
-| `maxPrice` | string | Maximum price per unit (limit price) |
-| `total_usdc` | string | Total USDC amount |
-| `network` | string | `"mainnet"` or `"testnet"` |
-| `result` | string | Exchange response |
-
 ---
 
 ### `fintool order sell <SYMBOL> <AMOUNT> <MIN_PRICE>`
@@ -313,11 +413,8 @@ Place a **spot** limit sell order. The price is the **minimum price** you'll acc
 #### Examples
 
 ```bash
-# Sell 1 TSLA at minimum $420
-fintool order sell TSLA 1 420
-
-# Sell 10 HYPE at minimum $30
-fintool order sell HYPE 10 30
+fintool order sell TSLA 1 420     # sell 1 TSLA at minimum $420
+fintool order sell HYPE 10 30     # sell 10 HYPE at minimum $30
 ```
 
 #### JSON Schema
@@ -333,15 +430,6 @@ fintool order sell HYPE 10 30
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `action` | string | `"spot_sell"` |
-| `symbol` | string | Input symbol |
-| `size` | string | Amount of asset to sell |
-| `minPrice` | string | Minimum price per unit (limit price) |
-| `network` | string | `"mainnet"` or `"testnet"` |
-| `result` | string | Exchange response |
-
 ---
 
 ### `fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE>`
@@ -351,28 +439,8 @@ Place a **perpetual futures** limit buy (long) order.
 #### Examples
 
 ```bash
-# Long $100 of BTC at $65,000
-fintool perp buy BTC 100 65000
-
-# Long $500 of ETH at $1,800
-fintool perp buy ETH 500 1800
-
-# Long $50 of SOL at $150
-fintool perp buy SOL 50 150
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "perp_buy",
-  "symbol": "BTC",
-  "size": "0.001538",
-  "price": "65000",
-  "total_usdc": "100",
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
+fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
+fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
 ```
 
 ---
@@ -384,24 +452,8 @@ Place a **perpetual futures** limit sell (short) order.
 #### Examples
 
 ```bash
-# Short 0.01 BTC at $70,000
-fintool perp sell BTC 0.01 70000
-
-# Short 1 ETH at $2,000
-fintool perp sell ETH 1 2000
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "perp_sell",
-  "symbol": "BTC",
-  "size": "0.01",
-  "price": "70000",
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
+fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
+fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
 ```
 
 ---
@@ -410,37 +462,11 @@ fintool perp sell ETH 1 2000
 
 List open orders (both spot and perp). Optionally filter by symbol.
 
-#### Examples
-
 ```bash
 fintool orders
 fintool orders BTC
 fintool orders --human
 ```
-
-#### JSON Schema
-
-```json
-[
-  {
-    "coin": "BTC",
-    "limitPx": "65000.0",
-    "oid": 91490942,
-    "side": "B",
-    "sz": "0.001538",
-    "timestamp": 1681247412573
-  }
-]
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `coin` | string | Asset symbol |
-| `limitPx` | string | Limit price |
-| `oid` | number | Order ID |
-| `side` | string | `"B"` (buy) or `"A"` (sell) |
-| `sz` | string | Remaining size |
-| `timestamp` | number | Order creation time (ms epoch) |
 
 ---
 
@@ -448,23 +474,8 @@ fintool orders --human
 
 Cancel an open order. Format: `SYMBOL:ORDER_ID`.
 
-#### Examples
-
 ```bash
 fintool cancel BTC:91490942
-fintool cancel TSLA:12345678
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "cancel",
-  "symbol": "BTC",
-  "orderId": 91490942,
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
 ```
 
 ---
@@ -473,31 +484,9 @@ fintool cancel TSLA:12345678
 
 Show account balances and margin summary.
 
-#### Examples
-
 ```bash
 fintool balance
 fintool balance --human
-```
-
-#### JSON Schema
-
-Returns the raw Hyperliquid `clearinghouseState` response:
-
-```json
-{
-  "marginSummary": {
-    "accountValue": "10000.00",
-    "totalMarginUsed": "500.00",
-    "totalNtlPos": "5000.00"
-  },
-  "crossMarginSummary": {
-    "accountValue": "10000.00",
-    "totalMarginUsed": "500.00",
-    "totalNtlPos": "5000.00"
-  },
-  "assetPositions": [...]
-}
 ```
 
 ---
@@ -506,39 +495,10 @@ Returns the raw Hyperliquid `clearinghouseState` response:
 
 Show open positions with PnL.
 
-#### Examples
-
 ```bash
 fintool positions
 fintool positions --human
 ```
-
-#### JSON Schema
-
-```json
-[
-  {
-    "position": {
-      "coin": "BTC",
-      "szi": "0.1",
-      "entryPx": "65000.0",
-      "positionValue": "6580.0",
-      "unrealizedPnl": "80.0",
-      "leverage": { "type": "cross", "value": 10 }
-    },
-    "type": "oneWay"
-  }
-]
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `coin` | string | Asset symbol |
-| `szi` | string | Signed size (negative = short) |
-| `entryPx` | string | Average entry price |
-| `positionValue` | string | Current position value |
-| `unrealizedPnl` | string | Unrealized profit/loss |
-| `leverage` | object | Leverage type and value |
 
 ---
 
@@ -548,220 +508,51 @@ fintool positions --human
 
 ```bash
 fintool options buy BTC call 70000 2026-03-28 0.1
-fintool options sell ETH put 1500 2026-03-28 1.0
-```
-
-#### JSON Schema
-
-```json
-{
-  "status": "not_implemented",
-  "note": "Native options support coming with Hyperliquid HIP-4",
-  "params": { "symbol": "BTC", "type": "call", "strike": "70000", "expiry": "2026-03-28", "size": "0.1" }
-}
 ```
 
 ---
 
 ### `fintool predict list [--platform <PLATFORM>] [--limit <N>]`
 
-List trending prediction markets from Polymarket and/or Kalshi, sorted by volume.
-
-- `--platform`: `polymarket`, `kalshi`, or `all` (default: `all`)
-- `--limit`: max results (default: 10)
-
-#### Examples
+List trending prediction markets from Polymarket and/or Kalshi.
 
 ```bash
-# Top markets from both platforms
 fintool predict list
-
-# Only Polymarket, top 5
 fintool predict list --platform polymarket --limit 5
-
-# Only Kalshi
-fintool predict list --platform kalshi --limit 10
-
-# Human-readable
-fintool predict list --human
+fintool predict list --platform kalshi --human
 ```
-
-#### JSON Schema
-
-```json
-[
-  {
-    "platform": "polymarket",
-    "id": "polymarket:china-coup-attempt-before-2027",
-    "question": "China coup attempt before 2027?",
-    "yesPrice": 0.046,
-    "noPrice": 0.954,
-    "volume": "99934.32838",
-    "liquidity": "13217.82684",
-    "endDate": "2026-12-31T00:00:00Z",
-    "outcomes": ["Yes", "No"],
-    "url": "https://polymarket.com/event/china-coup-attempt-before-2027"
-  },
-  {
-    "platform": "kalshi",
-    "id": "kalshi:KXBALANCE-29",
-    "question": "Will Trump balance the budget?",
-    "yesPrice": 0.125,
-    "noPrice": 0.875,
-    "volume": "38049",
-    "endDate": "2029-07-01T14:00:00Z",
-    "outcomes": ["Yes", "No"],
-    "url": "https://kalshi.com/markets/KXBALANCE-29"
-  }
-]
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `platform` | string | `"polymarket"` or `"kalshi"` |
-| `id` | string | Market ID (`platform:slug` or `platform:TICKER`) |
-| `question` | string | Market question |
-| `yesPrice` | number | Yes probability (0-1) |
-| `noPrice` | number | No probability (0-1) |
-| `volume` | string | Total volume traded |
-| `liquidity` | string | Current liquidity (Polymarket only) |
-| `endDate` | string | Market close date (ISO 8601) |
-| `outcomes` | array | Outcome labels |
-| `url` | string | Market page URL |
 
 ---
 
 ### `fintool predict search <QUERY> [--platform <PLATFORM>] [--limit <N>]`
 
-Search prediction markets by keyword across both platforms.
-
-#### Examples
+Search prediction markets by keyword.
 
 ```bash
-# Search across both platforms
 fintool predict search "trump"
-
-# Search only Kalshi for BTC markets
 fintool predict search "BTC" --platform kalshi
-
-# Search Polymarket for election markets
-fintool predict search "election" --platform polymarket --limit 5
 ```
-
-#### JSON Schema
-
-Same schema as `predict list`.
 
 ---
 
 ### `fintool predict quote <MARKET_ID>`
 
-Get detailed price/probability quote for a specific market.
-
-**Market ID format:** `platform:identifier`
-- Polymarket: `polymarket:<slug>` (slug from the URL)
-- Kalshi: `kalshi:<TICKER>` (ticker from the market)
-
-Use `predict list` or `predict search` to find market IDs.
-
-#### Examples
+Get detailed quote for a specific market. Market ID format: `platform:identifier`.
 
 ```bash
-# Quote a Kalshi market
 fintool predict quote kalshi:KXBALANCE-29
-
-# Quote a Polymarket market
 fintool predict quote polymarket:china-coup-attempt-before-2027
-
-# Human-readable
-fintool predict quote kalshi:KXELONMARS-99 --human
 ```
-
-#### JSON Schema
-
-```json
-{
-  "platform": "kalshi",
-  "id": "kalshi:KXBALANCE-29",
-  "question": "Will Trump balance the budget?",
-  "yesPrice": 0.125,
-  "noPrice": 0.875,
-  "volume": "38049",
-  "endDate": "2029-07-01T14:00:00Z",
-  "outcomes": ["Yes", "No"],
-  "url": "https://kalshi.com/markets/KXBALANCE-29"
-}
-```
-
-Same fields as list/search, with all available detail for the specific market.
 
 ---
 
-### `fintool predict buy <MARKET_ID> <SIDE> <AMOUNT> [--max-price <CENTS>]`
+### `fintool predict buy/sell <MARKET_ID> <SIDE> <AMOUNT>`
 
-Buy prediction contracts on a specific market.
-
-- `SIDE`: `yes` or `no`
-- `AMOUNT`: USDC (Polymarket) or USD (Kalshi)
-- `--max-price`: optional max price in cents (1-99)
-
-> ⚠️ **Trading requires additional configuration:**
-> - **Polymarket:** wallet `private_key` in config (trades on Polygon)
-> - **Kalshi:** `kalshi_api_key` and `kalshi_api_secret` in config
-
-#### Examples
+> ⚠️ **Stub** — Requires Polymarket CLOB signing or Kalshi API credentials.
 
 ```bash
-# Buy $10 of YES on a Kalshi market
 fintool predict buy kalshi:KXBALANCE-29 yes 10
-
-# Buy $50 of NO on Polymarket, max 60¢
-fintool predict buy polymarket:china-coup-attempt-before-2027 no 50 --max-price 60
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "predict_buy",
-  "market": "kalshi:KXBALANCE-29",
-  "side": "yes",
-  "amount": "10",
-  "maxPrice": null,
-  "status": "not_implemented",
-  "note": "Trading on kalshi requires additional configuration."
-}
-```
-
----
-
-### `fintool predict sell <MARKET_ID> <SIDE> <AMOUNT> [--min-price <CENTS>]`
-
-Sell prediction contracts.
-
-- `SIDE`: `yes` or `no`
-- `AMOUNT`: number of contracts
-- `--min-price`: optional min price in cents (1-99)
-
-#### Examples
-
-```bash
-fintool predict sell kalshi:KXBALANCE-29 yes 5
-fintool predict sell polymarket:china-coup-attempt-before-2027 no 10 --min-price 90
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "predict_sell",
-  "market": "kalshi:KXBALANCE-29",
-  "side": "yes",
-  "amount": "5",
-  "minPrice": null,
-  "status": "not_implemented",
-  "note": "Trading on kalshi requires additional configuration."
-}
+fintool predict sell polymarket:some-market no 50 --min-price 90
 ```
 
 ---
@@ -771,59 +562,42 @@ fintool predict sell polymarket:china-coup-attempt-before-2027 no 10 --min-price
 | Command | Description |
 |---------|-------------|
 | `fintool init` | Create config file |
-| `fintool quote <SYM>` | Spot price (HL spot → Yahoo) |
+| `fintool quote <SYM>` | Multi-source price + LLM analysis |
 | `fintool perp quote <SYM>` | Perp price + funding/OI/premium |
 | `fintool news <SYM>` | Latest news headlines |
-| `fintool order buy <SYM> <USDC> <MAX_PRICE>` | Spot limit buy |
-| `fintool order sell <SYM> <AMT> <MIN_PRICE>` | Spot limit sell |
-| `fintool perp buy <SYM> <USDC> <PRICE>` | Perp limit long |
-| `fintool perp sell <SYM> <AMT> <PRICE>` | Perp limit short |
+| `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings |
+| `fintool report list <SYM>` | List recent SEC filings |
+| `fintool report get <SYM> <ACC>` | Fetch specific filing |
+| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy |
+| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell |
+| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long |
+| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short |
 | `fintool orders [SYM]` | List open orders |
 | `fintool cancel <SYM:OID>` | Cancel an order |
 | `fintool balance` | Account balances |
 | `fintool positions` | Open positions + PnL |
 | `fintool options buy/sell ...` | Options (stub, HIP-4) |
-| `fintool predict list [--platform X]` | List prediction markets (Polymarket + Kalshi) |
-| `fintool predict search <QUERY>` | Search prediction markets |
-| `fintool predict quote <ID>` | Quote a specific prediction market |
-| `fintool predict buy <ID> <SIDE> <AMT>` | Buy prediction contracts (stub) |
-| `fintool predict sell <ID> <SIDE> <AMT>` | Sell prediction contracts (stub) |
+| `fintool predict list` | List prediction markets |
+| `fintool predict search <Q>` | Search prediction markets |
+| `fintool predict quote <ID>` | Quote prediction market |
+| `fintool predict buy/sell <ID> ...` | Trade predictions (stub) |
 
 ## Data Sources
 
 | Data | Source | Auth Required |
 |------|--------|---------------|
 | Spot prices (crypto + tokenized stocks) | Hyperliquid Spot API | No |
-| Traditional stock prices | Yahoo Finance | No |
+| Traditional stock prices, indices, commodities | Yahoo Finance | No |
+| Crypto prices, 7d/30d trends, market cap | CoinGecko | No |
+| Quote analysis (trend, momentum, summary) | OpenAI API | `openai_api_key` |
 | Perp prices, funding, OI | Hyperliquid Perps API | No |
 | News | Google News RSS | No |
+| SEC filings (10-K, 10-Q) | SEC EDGAR | No |
 | Trading (spot + perps) | Hyperliquid Exchange API | Wallet private key |
 | Prediction markets (quotes) | Polymarket Gamma API | No |
 | Prediction markets (quotes) | Kalshi REST API | No |
 | Prediction markets (trading) | Polymarket CLOB | Wallet private key |
 | Prediction markets (trading) | Kalshi REST API | API key + secret |
-
-## API Endpoints
-
-| Endpoint | URL |
-|----------|-----|
-| Mainnet Info | `https://api.hyperliquid.xyz/info` |
-| Mainnet Exchange | `https://api.hyperliquid.xyz/exchange` |
-| Testnet Info | `https://api.hyperliquid-testnet.xyz/info` |
-| Testnet Exchange | `https://api.hyperliquid-testnet.xyz/exchange` |
-| Polymarket Gamma | `https://gamma-api.polymarket.com` |
-| Kalshi API | `https://api.elections.kalshi.com/trade-api/v2` |
-
-## Supported Assets
-
-### Spot
-All assets on Hyperliquid spot — tokenized stocks (TSLA, AAPL, GOOGL via Wagyu.xyz), crypto (BTC, ETH, HYPE), and more. Auto-resolved as `SYMBOL/USDC`.
-
-### Perps
-All perpetual futures on Hyperliquid — BTC, ETH, SOL, AVAX, ARB, DOGE, and 200+ more.
-
-### Stocks (quotes only)
-Any ticker on Yahoo Finance as fallback — AAPL, GOOGL, MSFT, AMZN, etc.
 
 ## Architecture
 
@@ -832,12 +606,13 @@ fintool/
 ├── src/
 │   ├── main.rs          # Entry point, command dispatch
 │   ├── cli.rs           # Clap CLI definitions
-│   ├── config.rs        # Config file loading (~/.fintool/config.toml)
+│   ├── config.rs        # Config loading (~/.fintool/config.toml)
 │   ├── signing.rs       # Wallet signing, asset resolution, order execution
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
-│       ├── quote.rs     # Spot + perp price quotes
+│       ├── quote.rs     # Multi-source quotes + LLM enrichment
 │       ├── news.rs      # News via Google News RSS
+│       ├── report.rs    # SEC filings via EDGAR
 │       ├── order.rs     # Spot limit buy/sell
 │       ├── perp.rs      # Perp limit buy/sell
 │       ├── orders.rs    # List open orders
@@ -846,6 +621,7 @@ fintool/
 │       ├── positions.rs # Open positions
 │       ├── options.rs   # Options (stub, HIP-4)
 │       └── predict.rs   # Prediction markets (Polymarket + Kalshi)
+├── config.toml.default  # Config template
 ├── Cargo.toml
 └── README.md
 ```
@@ -856,14 +632,12 @@ fintool/
 |-------|---------|
 | `hyperliquid_rust_sdk` | Hyperliquid exchange client with EIP-712 signing |
 | `ethers` | Ethereum wallet and signing primitives |
+| `reqwest` | HTTP client (rustls TLS — no OpenSSL) |
 | `clap` | CLI argument parsing |
-| `reqwest` | HTTP client |
 | `serde` / `serde_json` | JSON serialization |
 | `colored` | Terminal colors (`--human` mode) |
 | `tabled` | Table formatting (`--human` mode) |
 | `rust_decimal` | Precise financial math |
-| `eth-keystore` | Encrypted wallet JSON decryption |
-| `urlencoding` | URL parameter encoding |
 
 ## License
 
