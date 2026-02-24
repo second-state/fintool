@@ -1,6 +1,5 @@
 use anyhow::{bail, Result};
 use colored::Colorize;
-use ethers::signers::Signer;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -611,23 +610,10 @@ async fn polymarket_buy(
     max_price_str: Option<&str>,
     json_output: bool,
 ) -> Result<()> {
-    // Load wallet
-    let cfg = config::load_config_file()?;
-    let private_key = cfg
-        .wallet
-        .private_key
-        .as_ref()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No private_key configured. Set in ~/.fintool/config.toml under [wallet]"
-            )
-        })?
-        .strip_prefix("0x")
-        .unwrap_or(cfg.wallet.private_key.as_ref().unwrap())
-        .to_string();
-
-    let wallet: ethers::signers::LocalWallet = private_key.parse()?;
-    let address = format!("{:?}", wallet.address());
+    // Load wallet (supports both private_key and wallet_json + passcode)
+    let hl_cfg = config::load_hl_config()?;
+    let private_key = hl_cfg.private_key.clone();
+    let address = hl_cfg.address.clone();
 
     let client = reqwest::Client::new();
 
@@ -749,23 +735,10 @@ async fn polymarket_sell(
     min_price_str: Option<&str>,
     json_output: bool,
 ) -> Result<()> {
-    // Load wallet
-    let cfg = config::load_config_file()?;
-    let private_key = cfg
-        .wallet
-        .private_key
-        .as_ref()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No private_key configured. Set in ~/.fintool/config.toml under [wallet]"
-            )
-        })?
-        .strip_prefix("0x")
-        .unwrap_or(cfg.wallet.private_key.as_ref().unwrap())
-        .to_string();
-
-    let wallet: ethers::signers::LocalWallet = private_key.parse()?;
-    let address = format!("{:?}", wallet.address());
+    // Load wallet (supports both private_key and wallet_json + passcode)
+    let hl_cfg = config::load_hl_config()?;
+    let private_key = hl_cfg.private_key.clone();
+    let address = hl_cfg.address.clone();
 
     let client = reqwest::Client::new();
 

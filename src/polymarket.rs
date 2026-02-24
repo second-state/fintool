@@ -69,7 +69,8 @@ fn save_cached_credentials(
 
 fn clob_auth_eip712_hash(address: &Address, timestamp: &str) -> Result<[u8; 32]> {
     // Domain separator
-    let domain_type_hash = ethers::utils::keccak256("EIP712Domain(string name,string version,uint256 chainId)");
+    let domain_type_hash =
+        ethers::utils::keccak256("EIP712Domain(string name,string version,uint256 chainId)");
     let name_hash = ethers::utils::keccak256("ClobAuthDomain");
     let version_hash = ethers::utils::keccak256("1");
     let chain_id = U256::from(137);
@@ -82,10 +83,13 @@ fn clob_auth_eip712_hash(address: &Address, timestamp: &str) -> Result<[u8; 32]>
     ]));
 
     // Struct hash
-    let type_hash = ethers::utils::keccak256("ClobAuth(address address,string timestamp,string nonce,string message)");
+    let type_hash = ethers::utils::keccak256(
+        "ClobAuth(address address,string timestamp,string nonce,string message)",
+    );
     let timestamp_hash = ethers::utils::keccak256(timestamp.as_bytes());
     let nonce_hash = ethers::utils::keccak256("0".as_bytes());
-    let message_hash = ethers::utils::keccak256("This message attests that I control the given wallet".as_bytes());
+    let message_hash =
+        ethers::utils::keccak256("This message attests that I control the given wallet".as_bytes());
 
     let struct_hash = ethers::utils::keccak256(ethers::abi::encode(&[
         ethers::abi::Token::FixedBytes(type_hash.to_vec()),
@@ -209,7 +213,9 @@ fn order_eip712_hash(order_data: &OrderData, exchange_address: &str) -> Result<[
     let side = order_data.side;
     let signature_type = order_data.signature_type;
     // Domain separator
-    let domain_type_hash = ethers::utils::keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    let domain_type_hash = ethers::utils::keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    );
     let name_hash = ethers::utils::keccak256("Polymarket CTF Exchange");
     let version_hash = ethers::utils::keccak256("1");
     let chain_id = U256::from(137);
