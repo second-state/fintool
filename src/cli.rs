@@ -60,6 +60,28 @@ pub enum Commands {
     /// Get stock reports (10-K annual, 10-Q quarterly) from SEC EDGAR
     #[command(subcommand)]
     Report(ReportCmd),
+
+    /// Deposit assets to Hyperliquid via Unit bridge (ETH/BTC/SOL) or Arbitrum (USDC)
+    Deposit {
+        /// Amount to deposit (e.g. 0.5)
+        amount: String,
+        /// Asset: ETH, BTC, SOL, or USDC
+        asset: String,
+    },
+
+    /// Withdraw assets from Hyperliquid via Unit bridge (ETH/BTC/SOL) or Arbitrum (USDC)
+    Withdraw {
+        /// Amount to withdraw (e.g. 0.5)
+        amount: String,
+        /// Asset: ETH, BTC, SOL, or USDC
+        asset: String,
+        /// Destination address on the native chain (required for BTC, optional for ETH/SOL)
+        #[arg(long)]
+        to: Option<String>,
+    },
+
+    /// Show bridge operation status (deposits/withdrawals via Unit)
+    BridgeStatus,
 }
 
 #[derive(Subcommand)]

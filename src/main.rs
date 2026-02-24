@@ -6,6 +6,7 @@ mod config;
 mod format;
 mod polymarket;
 mod signing;
+mod unit;
 
 use anyhow::Result;
 use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, PredictCmd, ReportCmd};
@@ -125,6 +126,11 @@ async fn main() -> Result<()> {
                 min_price,
             } => commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await,
         },
+        Commands::Deposit { amount, asset } => commands::deposit::run(&amount, &asset, json).await,
+        Commands::Withdraw { amount, asset, to } => {
+            commands::withdraw::run(&amount, &asset, to.as_deref(), json).await
+        }
+        Commands::BridgeStatus => commands::bridge_status::run(json).await,
         Commands::Report(cmd) => match cmd {
             ReportCmd::Annual { symbol, output } => {
                 commands::report::annual(&symbol, output.as_deref(), json).await

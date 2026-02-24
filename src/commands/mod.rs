@@ -1,5 +1,7 @@
 pub mod balance;
+pub mod bridge_status;
 pub mod cancel;
+pub mod deposit;
 pub mod news;
 pub mod options;
 pub mod order;
@@ -9,3 +11,4 @@ pub mod positions;
 pub mod predict;
 pub mod quote;
 pub mod report;
+pub mod withdraw;
