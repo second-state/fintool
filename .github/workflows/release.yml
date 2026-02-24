@@ -73,6 +73,31 @@ jobs:
           # For Windows GNU, link statically
           RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-gnu' && '-C target-feature=+crt-static' || '' }}
 
+      - name: Verify static linking
+        run: |
+          bin="target/${{ matrix.target }}/release/fintool"
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            bin="${bin}.exe"
+          fi
+          echo "=== Binary info ==="
+          file "$bin"
+          if [[ "${{ matrix.target }}" == *"linux-musl"* ]]; then
+            # musl binaries should be statically linked
+            if ldd "$bin" 2>&1 | grep -q "not a dynamic executable\|statically linked"; then
+              echo "✅ Static binary confirmed"
+            else
+              echo "❌ Binary is dynamically linked!"
+              ldd "$bin"
+              exit 1
+            fi
+          elif [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
+            # macOS: check no non-system dylibs
+            echo "Dynamic libraries:"
+            otool -L "$bin" || true
+          elif [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            echo "Windows binary — static check via file output above"
+          fi
+
       - name: Package zip
         run: |
           dir="${{ matrix.artifact }}"
