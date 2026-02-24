@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -84,7 +84,10 @@ fn coingecko_symbol_map() -> HashMap<&'static str, &'static str> {
 pub async fn run_spot(symbol: &str, json_output: bool) -> Result<()> {
     let raw_upper = symbol.to_uppercase();
     let aliases = symbol_aliases();
-    let symbol_upper = aliases.get(raw_upper.as_str()).map(|s| s.to_string()).unwrap_or(raw_upper);
+    let symbol_upper = aliases
+        .get(raw_upper.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or(raw_upper);
     let client = reqwest::Client::new();
 
     // Fetch all sources in parallel
@@ -123,7 +126,10 @@ pub async fn run_spot(symbol: &str, json_output: bool) -> Result<()> {
                 return Ok(());
             }
             Err(e) => {
-                eprintln!("OpenAI enrichment failed: {}, falling back to basic output", e);
+                eprintln!(
+                    "OpenAI enrichment failed: {}, falling back to basic output",
+                    e
+                );
             }
         }
     }
@@ -209,8 +215,11 @@ async fn fetch_hl_spot(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         }
     }
 
-    let key = spot_key.ok_or_else(|| anyhow::anyhow!("Symbol {} not found on Hyperliquid spot", symbol))?;
-    let price = mids.get(&key).ok_or_else(|| anyhow::anyhow!("No mid price for {}", symbol))?;
+    let key = spot_key
+        .ok_or_else(|| anyhow::anyhow!("Symbol {} not found on Hyperliquid spot", symbol))?;
+    let price = mids
+        .get(&key)
+        .ok_or_else(|| anyhow::anyhow!("No mid price for {}", symbol))?;
 
     // Get spot context for volume/prevDayPx
     let mut volume = String::new();
@@ -230,15 +239,31 @@ async fn fetch_hl_spot(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         let expected = format!("@{}", spot_index.unwrap());
         for ctx in ctxs {
             if ctx.get("coin").and_then(|c| c.as_str()) == Some(&expected) {
-                volume = ctx.get("dayNtlVlm").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                mark_px = ctx.get("markPx").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                prev_day_px = ctx.get("prevDayPx").and_then(|f| f.as_str()).unwrap_or("").to_string();
+                volume = ctx
+                    .get("dayNtlVlm")
+                    .and_then(|f| f.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                mark_px = ctx
+                    .get("markPx")
+                    .and_then(|f| f.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                prev_day_px = ctx
+                    .get("prevDayPx")
+                    .and_then(|f| f.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 break;
             }
         }
     }
 
-    let display_price = if !mark_px.is_empty() { mark_px.clone() } else { price.clone() };
+    let display_price = if !mark_px.is_empty() {
+        mark_px.clone()
+    } else {
+        price.clone()
+    };
     let change_24h = calc_change(&display_price, &prev_day_px);
 
     Ok(json!({
@@ -264,20 +289,54 @@ async fn fetch_hl_perp(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         .context("Failed to parse metaAndAssetCtxs")?;
 
     if let (Some(universe), Some(ctxs)) = (
-        meta_resp.get(0).and_then(|m| m.get("universe")).and_then(|u| u.as_array()),
+        meta_resp
+            .get(0)
+            .and_then(|m| m.get("universe"))
+            .and_then(|u| u.as_array()),
         meta_resp.get(1).and_then(|c| c.as_array()),
     ) {
         for (i, asset) in universe.iter().enumerate() {
             if asset.get("name").and_then(|n| n.as_str()) == Some(symbol) {
                 if let Some(ctx) = ctxs.get(i) {
-                    let funding = ctx.get("funding").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let open_interest = ctx.get("openInterest").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let volume = ctx.get("dayNtlVlm").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let mark_px = ctx.get("markPx").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let oracle_px = ctx.get("oraclePx").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let prev_day_px = ctx.get("prevDayPx").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let premium = ctx.get("premium").and_then(|f| f.as_str()).unwrap_or("").to_string();
-                    let max_leverage = asset.get("maxLeverage").and_then(|l| l.as_u64()).unwrap_or(0);
+                    let funding = ctx
+                        .get("funding")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let open_interest = ctx
+                        .get("openInterest")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let volume = ctx
+                        .get("dayNtlVlm")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let mark_px = ctx
+                        .get("markPx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let oracle_px = ctx
+                        .get("oraclePx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let prev_day_px = ctx
+                        .get("prevDayPx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let premium = ctx
+                        .get("premium")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let max_leverage = asset
+                        .get("maxLeverage")
+                        .and_then(|l| l.as_u64())
+                        .unwrap_or(0);
                     let change_24h = calc_change(&mark_px, &prev_day_px);
 
                     return Ok(json!({
@@ -309,19 +368,19 @@ async fn fetch_yahoo_quote(client: &reqwest::Client, symbol: &str) -> Result<Val
     } else {
         vec![symbol.to_string(), format!("{}-USD", symbol)]
     };
-    
+
     for ticker in symbols_to_try {
         let url = format!(
             "https://query1.finance.yahoo.com/v8/finance/chart/{}?interval=1d&range=5d",
             ticker
         );
-        
+
         let resp_result = client
             .get(&url)
             .header("User-Agent", "Mozilla/5.0")
             .send()
             .await;
-        
+
         if let Ok(resp) = resp_result {
             if let Ok(json_resp) = resp.json::<Value>().await {
                 if let Some(result) = json_resp["chart"]["result"].get(0) {
@@ -370,14 +429,19 @@ async fn fetch_yahoo_quote(client: &reqwest::Client, symbol: &str) -> Result<Val
             }
         }
     }
-    
-    anyhow::bail!("Could not fetch valid data from Yahoo Finance for {}", symbol)
+
+    anyhow::bail!(
+        "Could not fetch valid data from Yahoo Finance for {}",
+        symbol
+    )
 }
 
 async fn fetch_coingecko(client: &reqwest::Client, symbol: &str) -> Result<Value> {
     // Try to map symbol to CoinGecko ID
     let map = coingecko_symbol_map();
-    let mut cg_id = map.get(symbol.to_uppercase().as_str()).map(|s| s.to_string());
+    let mut cg_id = map
+        .get(symbol.to_uppercase().as_str())
+        .map(|s| s.to_string());
 
     // If not in hardcoded map, try search
     if cg_id.is_none() {
@@ -408,12 +472,15 @@ async fn fetch_coingecko(client: &reqwest::Client, symbol: &str) -> Result<Value
         .send()
         .await
         .context("Failed to reach CoinGecko")?;
-    
+
     if !raw_resp.status().is_success() {
         anyhow::bail!("CoinGecko returned status {}", raw_resp.status());
     }
-    
-    let resp: Value = raw_resp.json().await.context("Failed to parse CoinGecko response")?;
+
+    let resp: Value = raw_resp
+        .json()
+        .await
+        .context("Failed to parse CoinGecko response")?;
 
     let market_data = &resp["market_data"];
     let price = market_data["current_price"]["usd"].as_f64();
@@ -542,14 +609,17 @@ Raw source data:
         .await
         .context("Failed to reach OpenAI API")?;
 
-    let resp_json: Value = resp.json().await.context("Failed to parse OpenAI response")?;
+    let resp_json: Value = resp
+        .json()
+        .await
+        .context("Failed to parse OpenAI response")?;
 
     let content = resp_json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No content in OpenAI response"))?;
 
-    let enriched: Value = serde_json::from_str(content)
-        .context("Failed to parse OpenAI JSON response")?;
+    let enriched: Value =
+        serde_json::from_str(content).context("Failed to parse OpenAI JSON response")?;
 
     Ok(enriched)
 }
@@ -656,7 +726,7 @@ fn print_enriched_quote(data: &Value) {
     };
 
     println!();
-    println!("  {} {} ({})", "📊", symbol.bold().cyan(), name.dimmed());
+    println!("  📊 {} ({})", symbol.bold().cyan(), name.dimmed());
     println!("  Price:      {}", format!("${:.2}", price).green().bold());
     println!("  24h Change: {}", change_str);
     println!();
@@ -681,14 +751,18 @@ fn print_enriched_quote(data: &Value) {
             .filter_map(|s| s.as_str())
             .map(|s| s.to_string())
             .collect();
-        println!("  Sources: {} | Confidence: {}", source_names.join(", ").yellow(), confidence);
+        println!(
+            "  Sources: {} | Confidence: {}",
+            source_names.join(", ").yellow(),
+            confidence
+        );
     }
     println!();
 }
 
 fn print_basic_quote(data: &Value) {
     let symbol = data["symbol"].as_str().unwrap_or("");
-    
+
     // Handle price as either string or number
     let price_str = if let Some(p) = data["price"].as_str() {
         p.to_string()
@@ -697,12 +771,12 @@ fn print_basic_quote(data: &Value) {
     } else {
         "?".to_string()
     };
-    
+
     let change = data["change24h"].as_str().unwrap_or("0");
     let change_str = crate::format::color_change(change);
 
     println!();
-    println!("  {} {}", "📊", symbol.bold().cyan());
+    println!("  📊 {}", symbol.bold().cyan());
     println!("  Price:      {}", format!("${}", price_str).green().bold());
     println!("  24h Change: {}", change_str);
 
@@ -737,7 +811,7 @@ fn print_perp_quote(data: &Value) {
     let change_str = crate::format::color_change(change);
 
     println!();
-    println!("  {} {} (perp)", "📊".to_string(), symbol.bold().cyan());
+    println!("  📊 {} (perp)", symbol.bold().cyan());
     println!("  Mark Price:    {}", format!("${}", mark).green().bold());
     println!("  Oracle Price:  ${}", oracle);
     println!("  24h Change:    {}", change_str);

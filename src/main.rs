@@ -5,7 +5,7 @@ mod format;
 mod signing;
 
 use anyhow::Result;
-use cli::{Cli, Commands, OrderCmd, PerpCmd, OptionsCmd, PredictCmd, ReportCmd};
+use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, PredictCmd, ReportCmd};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,46 +13,60 @@ async fn main() -> Result<()> {
     let json = !cli.human;
 
     let result = match cli.command {
-        Commands::Init => {
-            match config::init_config() {
-                Ok(path) => {
-                    println!("Config file created at: {}", path.display());
-                    println!("Edit it to add your wallet and API keys.");
-                    Ok(())
-                }
-                Err(e) => Err(e),
+        Commands::Init => match config::init_config() {
+            Ok(path) => {
+                println!("Config file created at: {}", path.display());
+                println!("Edit it to add your wallet and API keys.");
+                Ok(())
             }
-        }
+            Err(e) => Err(e),
+        },
         Commands::Quote { symbol } => commands::quote::run_spot(&symbol, json).await,
         Commands::News { symbol } => commands::news::run(&symbol, json).await,
         Commands::Order(cmd) => match cmd {
-            OrderCmd::Buy { symbol, amount_usdc, max_price } => {
-                commands::order::buy(&symbol, &amount_usdc, &max_price, json).await
-            }
-            OrderCmd::Sell { symbol, amount, min_price } => {
-                commands::order::sell(&symbol, &amount, &min_price, json).await
-            }
+            OrderCmd::Buy {
+                symbol,
+                amount_usdc,
+                max_price,
+            } => commands::order::buy(&symbol, &amount_usdc, &max_price, json).await,
+            OrderCmd::Sell {
+                symbol,
+                amount,
+                min_price,
+            } => commands::order::sell(&symbol, &amount, &min_price, json).await,
         },
         Commands::Orders { symbol } => commands::orders::run(symbol.as_deref(), json).await,
         Commands::Cancel { order_id } => commands::cancel::run(&order_id, json).await,
         Commands::Balance => commands::balance::run(json).await,
         Commands::Positions => commands::positions::run(json).await,
         Commands::Perp(cmd) => match cmd {
-            PerpCmd::Quote { symbol } => {
-                commands::quote::run_perp(&symbol, json).await
-            }
-            PerpCmd::Buy { symbol, amount_usdc, price } => {
-                commands::perp::buy(&symbol, &amount_usdc, &price, json).await
-            }
-            PerpCmd::Sell { symbol, amount, price } => {
-                commands::perp::sell(&symbol, &amount, &price, json).await
-            }
+            PerpCmd::Quote { symbol } => commands::quote::run_perp(&symbol, json).await,
+            PerpCmd::Buy {
+                symbol,
+                amount_usdc,
+                price,
+            } => commands::perp::buy(&symbol, &amount_usdc, &price, json).await,
+            PerpCmd::Sell {
+                symbol,
+                amount,
+                price,
+            } => commands::perp::sell(&symbol, &amount, &price, json).await,
         },
         Commands::Options(cmd) => match cmd {
-            OptionsCmd::Buy { symbol, option_type, strike, expiry, size } => {
-                commands::options::buy(&symbol, &option_type, &strike, &expiry, &size, json).await
-            }
-            OptionsCmd::Sell { symbol, option_type, strike, expiry, size } => {
+            OptionsCmd::Buy {
+                symbol,
+                option_type,
+                strike,
+                expiry,
+                size,
+            } => commands::options::buy(&symbol, &option_type, &strike, &expiry, &size, json).await,
+            OptionsCmd::Sell {
+                symbol,
+                option_type,
+                strike,
+                expiry,
+                size,
+            } => {
                 commands::options::sell(&symbol, &option_type, &strike, &expiry, &size, json).await
             }
         },
@@ -60,24 +74,38 @@ async fn main() -> Result<()> {
             PredictCmd::List { platform, limit } => {
                 commands::predict::list(&platform, limit, json).await
             }
-            PredictCmd::Search { query, platform, limit } => {
-                commands::predict::search(&query, &platform, limit, json).await
-            }
-            PredictCmd::Quote { market } => {
-                commands::predict::quote(&market, json).await
-            }
-            PredictCmd::Buy { market, side, amount, max_price } => {
-                commands::predict::buy(&market, &side, &amount, max_price.as_deref(), json).await
-            }
-            PredictCmd::Sell { market, side, amount, min_price } => {
-                commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await
-            }
+            PredictCmd::Search {
+                query,
+                platform,
+                limit,
+            } => commands::predict::search(&query, &platform, limit, json).await,
+            PredictCmd::Quote { market } => commands::predict::quote(&market, json).await,
+            PredictCmd::Buy {
+                market,
+                side,
+                amount,
+                max_price,
+            } => commands::predict::buy(&market, &side, &amount, max_price.as_deref(), json).await,
+            PredictCmd::Sell {
+                market,
+                side,
+                amount,
+                min_price,
+            } => commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await,
         },
         Commands::Report(cmd) => match cmd {
-            ReportCmd::Annual { symbol, output } => commands::report::annual(&symbol, output.as_deref(), json).await,
-            ReportCmd::Quarterly { symbol, output } => commands::report::quarterly(&symbol, output.as_deref(), json).await,
+            ReportCmd::Annual { symbol, output } => {
+                commands::report::annual(&symbol, output.as_deref(), json).await
+            }
+            ReportCmd::Quarterly { symbol, output } => {
+                commands::report::quarterly(&symbol, output.as_deref(), json).await
+            }
             ReportCmd::List { symbol, limit } => commands::report::list(&symbol, limit, json).await,
-            ReportCmd::Get { symbol, accession, output } => commands::report::get(&symbol, &accession, output.as_deref(), json).await,
+            ReportCmd::Get {
+                symbol,
+                accession,
+                output,
+            } => commands::report::get(&symbol, &accession, output.as_deref(), json).await,
         },
     };
 

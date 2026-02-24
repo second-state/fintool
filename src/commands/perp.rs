@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
@@ -14,12 +14,15 @@ pub async fn buy(symbol: &str, amount_usdc: &str, price: &str, json_output: bool
 
     if !json_output {
         println!();
-        println!("  {} Placing perp limit BUY (long)", "📝");
+        println!("  📝 Placing perp limit BUY (long)");
         println!("  Symbol:   {}", symbol.cyan());
         println!("  Size:     {:.6}", size);
         println!("  Price:    ${}", price);
         println!("  Total:    ${}", amount_usdc);
-        println!("  Network:  {}", if cfg.testnet { "Testnet" } else { "Mainnet" });
+        println!(
+            "  Network:  {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
         println!();
     }
 
@@ -41,11 +44,11 @@ pub async fn buy(symbol: &str, amount_usdc: &str, price: &str, json_output: bool
     } else {
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  {} Perp order placed!", "✅".green());
+                println!("  ✅ Perp order placed!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  {} Order failed: {}", "❌".red(), e);
+                println!("  ❌ Order failed: {}", e);
             }
         }
         println!();
@@ -62,11 +65,14 @@ pub async fn sell(symbol: &str, amount: &str, price: &str, json_output: bool) ->
 
     if !json_output {
         println!();
-        println!("  {} Placing perp limit SELL (short)", "📝");
+        println!("  📝 Placing perp limit SELL (short)");
         println!("  Symbol:   {}", symbol.cyan());
         println!("  Size:     {}", amount);
         println!("  Price:    ${}", price);
-        println!("  Network:  {}", if cfg.testnet { "Testnet" } else { "Mainnet" });
+        println!(
+            "  Network:  {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
         println!();
     }
 
@@ -86,11 +92,11 @@ pub async fn sell(symbol: &str, amount: &str, price: &str, json_output: bool) ->
     } else {
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  {} Perp order placed!", "✅".green());
+                println!("  ✅ Perp order placed!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  {} Order failed: {}", "❌".red(), e);
+                println!("  ❌ Order failed: {}", e);
             }
         }
         println!();

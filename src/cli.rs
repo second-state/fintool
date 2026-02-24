@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "fintool", about = "Financial trading CLI for crypto and stocks")]
+#[command(
+    name = "fintool",
+    about = "Financial trading CLI for crypto and stocks"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -17,9 +20,7 @@ pub enum Commands {
     Init,
 
     /// Get spot price quote (Hyperliquid spot → Yahoo Finance fallback)
-    Quote {
-        symbol: String,
-    },
+    Quote { symbol: String },
 
     /// Get latest news for a symbol
     News { symbol: String },

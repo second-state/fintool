@@ -1,11 +1,11 @@
-pub mod quote;
+pub mod balance;
+pub mod cancel;
 pub mod news;
+pub mod options;
 pub mod order;
 pub mod orders;
-pub mod cancel;
-pub mod balance;
-pub mod positions;
 pub mod perp;
-pub mod options;
+pub mod positions;
 pub mod predict;
+pub mod quote;
 pub mod report;

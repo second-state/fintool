@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -53,15 +53,7 @@ pub struct HlConfig {
     pub testnet: bool,
 }
 
-impl HlConfig {
-    pub fn base_url(&self) -> &str {
-        if self.testnet {
-            "https://api.hyperliquid-testnet.xyz"
-        } else {
-            "https://api.hyperliquid.xyz"
-        }
-    }
-}
+impl HlConfig {}
 
 /// Return the config file path (~/.fintool/config.toml)
 pub fn config_path() -> PathBuf {
@@ -108,7 +100,11 @@ pub fn load_hl_config() -> Result<HlConfig> {
     if let Some(ref key) = cfg.wallet.private_key {
         let key = key.strip_prefix("0x").unwrap_or(key).to_string();
         let address = address_from_key(&key)?;
-        return Ok(HlConfig { private_key: key, address, testnet });
+        return Ok(HlConfig {
+            private_key: key,
+            address,
+            testnet,
+        });
     }
 
     // 2. Check config file wallet_json + wallet_passcode
@@ -140,7 +136,11 @@ fn load_from_keystore(path: &str, passcode: &str, testnet: bool) -> Result<HlCon
 
     let key = hex::encode(&decrypted);
     let address = address_from_key(&key)?;
-    Ok(HlConfig { private_key: key, address, testnet })
+    Ok(HlConfig {
+        private_key: key,
+        address,
+        testnet,
+    })
 }
 
 fn address_from_key(hex_key: &str) -> Result<String> {
@@ -149,9 +149,8 @@ fn address_from_key(hex_key: &str) -> Result<String> {
         bail!("Private key must be 32 bytes");
     }
     use k256::ecdsa::SigningKey;
-    use k256::elliptic_curve::sec1::ToEncodedPoint;
-    let signing_key = SigningKey::from_bytes(bytes.as_slice().into())
-        .context("Invalid private key")?;
+    let signing_key =
+        SigningKey::from_bytes(bytes.as_slice().into()).context("Invalid private key")?;
     let verifying_key = signing_key.verifying_key();
     let public_key = verifying_key.to_encoded_point(false);
     let public_key_bytes = &public_key.as_bytes()[1..]; // skip 0x04 prefix
@@ -176,16 +175,6 @@ pub fn info_url() -> String {
     } else {
         "https://api.hyperliquid.xyz/info".to_string()
     }
-}
-
-/// Get the CryptoPanic API token
-pub fn cryptopanic_token() -> Option<String> {
-    load_config_file().ok()?.api_keys.cryptopanic_token
-}
-
-/// Get the NewsAPI key
-pub fn newsapi_key() -> Option<String> {
-    load_config_file().ok()?.api_keys.newsapi_key
 }
 
 /// Get the OpenAI API key

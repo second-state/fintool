@@ -1,8 +1,8 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use ethers::signers::LocalWallet;
 use hyperliquid_rust_sdk::{
-    BaseUrl, ExchangeClient, ExchangeResponseStatus,
-    ClientOrderRequest, ClientOrder, ClientLimit, ClientCancelRequest,
+    BaseUrl, ClientCancelRequest, ClientLimit, ClientOrder, ClientOrderRequest, ExchangeClient,
+    ExchangeResponseStatus,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -12,7 +12,9 @@ use crate::config;
 /// Create a LocalWallet from config
 pub fn get_wallet() -> Result<LocalWallet> {
     let cfg = config::load_hl_config()?;
-    let wallet: LocalWallet = cfg.private_key.parse()
+    let wallet: LocalWallet = cfg
+        .private_key
+        .parse()
         .context("Failed to parse private key")?;
     Ok(wallet)
 }
@@ -103,7 +105,8 @@ pub async fn place_spot_order(
         }),
     };
 
-    let result = client.order(order, None)
+    let result = client
+        .order(order, None)
         .await
         .map_err(|e| anyhow::anyhow!("Spot order failed: {:?}", e))?;
     Ok(result)
@@ -130,7 +133,8 @@ pub async fn place_perp_order(
         }),
     };
 
-    let result = client.order(order, None)
+    let result = client
+        .order(order, None)
         .await
         .map_err(|e| anyhow::anyhow!("Perp order failed: {:?}", e))?;
     Ok(result)
@@ -139,7 +143,8 @@ pub async fn place_perp_order(
 /// Cancel an order by asset and order ID (works for both spot and perp)
 pub async fn cancel_order(asset: &str, order_id: u64) -> Result<ExchangeResponseStatus> {
     // Try spot first, fall back to perp name
-    let asset_name = resolve_spot_name(asset).await
+    let asset_name = resolve_spot_name(asset)
+        .await
         .unwrap_or_else(|_| asset.to_string());
 
     let client = get_exchange_client().await?;
@@ -149,7 +154,8 @@ pub async fn cancel_order(asset: &str, order_id: u64) -> Result<ExchangeResponse
         oid: order_id,
     };
 
-    let result = client.cancel(cancel, None)
+    let result = client
+        .cancel(cancel, None)
         .await
         .map_err(|e| anyhow::anyhow!("Cancel failed: {:?}", e))?;
     Ok(result)

@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
@@ -6,7 +6,12 @@ use crate::config;
 use crate::signing;
 
 /// Spot limit buy — price is the maximum price you'll pay per unit
-pub async fn buy(symbol: &str, amount_usdc: &str, max_price: &str, json_output: bool) -> Result<()> {
+pub async fn buy(
+    symbol: &str,
+    amount_usdc: &str,
+    max_price: &str,
+    json_output: bool,
+) -> Result<()> {
     let cfg = config::load_hl_config()?;
     let symbol = symbol.to_uppercase();
     let price_f: f64 = max_price.parse().context("Invalid max price")?;
@@ -15,12 +20,15 @@ pub async fn buy(symbol: &str, amount_usdc: &str, max_price: &str, json_output: 
 
     if !json_output {
         println!();
-        println!("  {} Placing spot limit BUY", "📝");
+        println!("  📝 Placing spot limit BUY");
         println!("  Symbol:    {}", symbol.cyan());
         println!("  Size:      {:.6}", size);
         println!("  Max Price: ${}", max_price);
         println!("  Total:     ${}", amount_usdc);
-        println!("  Network:   {}", if cfg.testnet { "Testnet" } else { "Mainnet" });
+        println!(
+            "  Network:   {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
         println!();
     }
 
@@ -41,11 +49,11 @@ pub async fn buy(symbol: &str, amount_usdc: &str, max_price: &str, json_output: 
     } else {
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  {} Spot buy order placed!", "✅".green());
+                println!("  ✅ Spot buy order placed!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  {} Order failed: {}", "❌".red(), e);
+                println!("  ❌ Order failed: {}", e);
             }
         }
         println!();
@@ -63,11 +71,14 @@ pub async fn sell(symbol: &str, amount: &str, min_price: &str, json_output: bool
 
     if !json_output {
         println!();
-        println!("  {} Placing spot limit SELL", "📝");
+        println!("  📝 Placing spot limit SELL");
         println!("  Symbol:    {}", symbol.cyan());
         println!("  Size:      {}", amount);
         println!("  Min Price: ${}", min_price);
-        println!("  Network:   {}", if cfg.testnet { "Testnet" } else { "Mainnet" });
+        println!(
+            "  Network:   {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
         println!();
     }
 
@@ -87,11 +98,11 @@ pub async fn sell(symbol: &str, amount: &str, min_price: &str, json_output: bool
     } else {
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  {} Spot sell order placed!", "✅".green());
+                println!("  ✅ Spot sell order placed!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  {} Order failed: {}", "❌".red(), e);
+                println!("  ❌ Order failed: {}", e);
             }
         }
         println!();

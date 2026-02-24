@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -49,14 +49,19 @@ impl PolyMarket {
         let (yes, no) = self.parse_prices();
         let volume = val_to_string(self.volume.as_ref());
         let liquidity = self.liquidity.as_ref().map(|v| val_to_string(Some(v)));
-        let outcomes: Option<Vec<String>> = self.outcomes.as_ref()
+        let outcomes: Option<Vec<String>> = self
+            .outcomes
+            .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
 
         Some(Market {
             platform: "polymarket".into(),
             id: format!("polymarket:{}", slug),
-            question, yes_price: yes, no_price: no,
-            volume, liquidity,
+            question,
+            yes_price: yes,
+            no_price: no,
+            volume,
+            liquidity,
             end_date: self.end_date.clone(),
             outcomes,
             url: format!("https://polymarket.com/event/{}", slug),
@@ -66,8 +71,14 @@ impl PolyMarket {
     fn parse_prices(&self) -> (f64, f64) {
         if let Some(ref s) = self.outcome_prices {
             if let Ok(arr) = serde_json::from_str::<Vec<String>>(s) {
-                let yes = arr.first().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
-                let no = arr.get(1).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+                let yes = arr
+                    .first()
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                let no = arr
+                    .get(1)
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .unwrap_or(0.0);
                 return (yes, no);
             }
         }
@@ -124,7 +135,9 @@ impl KalshiMarket {
     fn to_market(&self) -> Option<Market> {
         let ticker = self.ticker.as_deref()?;
         let title = self.title.as_deref().unwrap_or("");
-        let subtitle = self.subtitle.as_deref()
+        let subtitle = self
+            .subtitle
+            .as_deref()
             .or(self.yes_sub_title.as_deref())
             .unwrap_or("");
 
@@ -156,7 +169,8 @@ impl KalshiMarket {
             platform: "kalshi".into(),
             id: format!("kalshi:{}", ticker),
             question,
-            yes_price: yes, no_price: no,
+            yes_price: yes,
+            no_price: no,
             volume,
             liquidity: None,
             end_date: self.close_time.clone(),
@@ -171,14 +185,23 @@ fn val_to_string(v: Option<&serde_json::Value>) -> String {
         serde_json::Value::Number(n) => n.to_string(),
         serde_json::Value::String(s) => s.clone(),
         _ => "0".into(),
-    }).unwrap_or_else(|| "0".into())
+    })
+    .unwrap_or_else(|| "0".into())
 }
 
 // --- API fetchers ---
 
-async fn fetch_polymarket_list(client: &reqwest::Client, limit: usize, query: Option<&str>) -> Vec<Market> {
+async fn fetch_polymarket_list(
+    client: &reqwest::Client,
+    limit: usize,
+    query: Option<&str>,
+) -> Vec<Market> {
     // Fetch more than needed to allow client-side filtering
-    let fetch_limit = if query.is_some() { 100.min(limit * 10) } else { limit };
+    let fetch_limit = if query.is_some() {
+        100.min(limit * 10)
+    } else {
+        limit
+    };
     let url = format!(
         "{}/markets?limit={}&active=true&closed=false&order=volume&ascending=false",
         POLYMARKET_BASE, fetch_limit
@@ -202,18 +225,28 @@ async fn fetch_polymarket_list(client: &reqwest::Client, limit: usize, query: Op
     }
 }
 
-async fn fetch_kalshi_list(client: &reqwest::Client, limit: usize, query: Option<&str>) -> Vec<Market> {
+async fn fetch_kalshi_list(
+    client: &reqwest::Client,
+    limit: usize,
+    query: Option<&str>,
+) -> Vec<Market> {
     if let Some(q) = query {
         // Search: try as series ticker first, then fetch events and search titles
         let q_upper = q.to_uppercase();
         let q_lower = q.to_lowercase();
 
         // Try direct series ticker match (e.g. "BTC" -> series_ticker=KXBTC)
-        let series_url = format!("{}/markets?limit={}&status=open&series_ticker=KX{}", KALSHI_BASE, limit, q_upper);
+        let series_url = format!(
+            "{}/markets?limit={}&status=open&series_ticker=KX{}",
+            KALSHI_BASE, limit, q_upper
+        );
         if let Ok(resp) = client.get(&series_url).send().await {
             if let Ok(body) = resp.json::<KalshiMarketsResponse>().await {
-                let markets: Vec<Market> = body.markets.unwrap_or_default()
-                    .iter().filter_map(|m| m.to_market())
+                let markets: Vec<Market> = body
+                    .markets
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|m| m.to_market())
                     .filter(|m| m.volume.parse::<i64>().unwrap_or(0) > 0 || m.yes_price > 0.0)
                     .collect();
                 if !markets.is_empty() {
@@ -226,24 +259,36 @@ async fn fetch_kalshi_list(client: &reqwest::Client, limit: usize, query: Option
         let events_url = format!("{}/events?limit=100&status=open", KALSHI_BASE);
         if let Ok(resp) = client.get(&events_url).send().await {
             if let Ok(body) = resp.json::<KalshiEventsResponse>().await {
-                let matching_events: Vec<&KalshiEvent> = body.events.as_ref()
-                    .map(|events| events.iter()
-                        .filter(|e| {
-                            let title = e.title.as_deref().unwrap_or("").to_lowercase();
-                            let cat = e.category.as_deref().unwrap_or("").to_lowercase();
-                            title.contains(&q_lower) || cat.contains(&q_lower)
-                        })
-                        .collect())
+                let matching_events: Vec<&KalshiEvent> = body
+                    .events
+                    .as_ref()
+                    .map(|events| {
+                        events
+                            .iter()
+                            .filter(|e| {
+                                let title = e.title.as_deref().unwrap_or("").to_lowercase();
+                                let cat = e.category.as_deref().unwrap_or("").to_lowercase();
+                                title.contains(&q_lower) || cat.contains(&q_lower)
+                            })
+                            .collect()
+                    })
                     .unwrap_or_default();
 
                 let mut all_markets = Vec::new();
                 for event in matching_events.iter().take(5) {
                     if let Some(ticker) = &event.event_ticker {
-                        let markets_url = format!("{}/markets?limit={}&status=open&event_ticker={}", KALSHI_BASE, limit, ticker);
+                        let markets_url = format!(
+                            "{}/markets?limit={}&status=open&event_ticker={}",
+                            KALSHI_BASE, limit, ticker
+                        );
                         if let Ok(resp) = client.get(&markets_url).send().await {
                             if let Ok(body) = resp.json::<KalshiMarketsResponse>().await {
-                                let markets: Vec<Market> = body.markets.unwrap_or_default()
-                                    .iter().filter_map(|m| m.to_market()).collect();
+                                let markets: Vec<Market> = body
+                                    .markets
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .filter_map(|m| m.to_market())
+                                    .collect();
                                 all_markets.extend(markets);
                             }
                         }
@@ -273,11 +318,17 @@ async fn fetch_kalshi_list(client: &reqwest::Client, limit: usize, query: Option
                             continue;
                         }
                         if let Some(ticker) = &event.event_ticker {
-                            let markets_url = format!("{}/markets?limit=2&status=open&event_ticker={}", KALSHI_BASE, ticker);
+                            let markets_url = format!(
+                                "{}/markets?limit=2&status=open&event_ticker={}",
+                                KALSHI_BASE, ticker
+                            );
                             if let Ok(resp) = client.get(&markets_url).send().await {
                                 if let Ok(body) = resp.json::<KalshiMarketsResponse>().await {
-                                    let markets: Vec<Market> = body.markets.unwrap_or_default()
-                                        .iter().filter_map(|m| m.to_market())
+                                    let markets: Vec<Market> = body
+                                        .markets
+                                        .unwrap_or_default()
+                                        .iter()
+                                        .filter_map(|m| m.to_market())
                                         .filter(|m| !m.question.starts_with("yes "))
                                         .collect();
                                     all_markets.extend(markets);
@@ -312,7 +363,7 @@ fn sort_by_volume(markets: &mut [Market]) {
 
 fn print_market_list(markets: &[Market]) {
     println!();
-    println!("  {} Prediction Markets", "🔮");
+    println!("  🔮 Prediction Markets");
     println!();
     if markets.is_empty() {
         println!("  No markets found.");
@@ -327,9 +378,18 @@ fn print_market_list(markets: &[Market]) {
         };
         let yes_str = format!("{:.0}%", m.yes_price * 100.0);
         let no_str = format!("{:.0}%", m.no_price * 100.0);
-        println!("  {}. {} {}", (i + 1).to_string().bold(), tag, m.question.cyan());
-        println!("     Yes: {}  No: {}  Vol: {}",
-            yes_str.green(), no_str.red(), m.volume);
+        println!(
+            "  {}. {} {}",
+            (i + 1).to_string().bold(),
+            tag,
+            m.question.cyan()
+        );
+        println!(
+            "     Yes: {}  No: {}  Vol: {}",
+            yes_str.green(),
+            no_str.red(),
+            m.volume
+        );
         println!("     ID: {}", m.id.dimmed());
         if let Some(ref end) = m.end_date {
             println!("     Ends: {}", end.dimmed());
@@ -340,7 +400,7 @@ fn print_market_list(markets: &[Market]) {
 
 fn print_market_detail(m: &Market) {
     println!();
-    println!("  {} Market Quote", "🔮");
+    println!("  🔮 Market Quote");
     println!();
     println!("  Platform:  {}", m.platform.cyan());
     println!("  ID:        {}", m.id);
@@ -371,7 +431,7 @@ pub async fn list(platform: &str, limit: usize, json_output: bool) -> Result<()>
     let mut markets = match platform {
         "polymarket" => fetch_polymarket_list(&client, limit, None).await,
         "kalshi" => fetch_kalshi_list(&client, limit, None).await,
-        "all" | _ => {
+        _ => {
             let (pm, ka) = tokio::join!(
                 fetch_polymarket_list(&client, limit, None),
                 fetch_kalshi_list(&client, limit, None)
@@ -383,8 +443,11 @@ pub async fn list(platform: &str, limit: usize, json_output: bool) -> Result<()>
     };
     sort_by_volume(&mut markets);
     markets.truncate(limit);
-    if json_output { println!("{}", serde_json::to_string_pretty(&markets)?); }
-    else { print_market_list(&markets); }
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&markets)?);
+    } else {
+        print_market_list(&markets);
+    }
     Ok(())
 }
 
@@ -393,7 +456,7 @@ pub async fn search(query: &str, platform: &str, limit: usize, json_output: bool
     let mut markets = match platform {
         "polymarket" => fetch_polymarket_list(&client, limit, Some(query)).await,
         "kalshi" => fetch_kalshi_list(&client, limit, Some(query)).await,
-        "all" | _ => {
+        _ => {
             let (pm, ka) = tokio::join!(
                 fetch_polymarket_list(&client, limit, Some(query)),
                 fetch_kalshi_list(&client, limit, Some(query))
@@ -405,19 +468,27 @@ pub async fn search(query: &str, platform: &str, limit: usize, json_output: bool
     };
     sort_by_volume(&mut markets);
     markets.truncate(limit);
-    if json_output { println!("{}", serde_json::to_string_pretty(&markets)?); }
-    else { print_market_list(&markets); }
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&markets)?);
+    } else {
+        print_market_list(&markets);
+    }
     Ok(())
 }
 
 pub async fn quote(market_id: &str, json_output: bool) -> Result<()> {
     let client = reqwest::Client::new();
-    let (platform, id) = market_id.split_once(':')
+    let (platform, id) = market_id
+        .split_once(':')
         .ok_or_else(|| anyhow::anyhow!("Format: polymarket:<slug> or kalshi:<TICKER>"))?;
 
     let market = match platform {
         "polymarket" => {
-            let url = format!("{}/markets?slug={}", POLYMARKET_BASE, urlencoding::encode(id));
+            let url = format!(
+                "{}/markets?slug={}",
+                POLYMARKET_BASE,
+                urlencoding::encode(id)
+            );
             let markets: Vec<PolyMarket> = client.get(&url).send().await?.json().await?;
             markets.first().and_then(|m| m.to_market())
         }
@@ -431,56 +502,83 @@ pub async fn quote(market_id: &str, json_output: bool) -> Result<()> {
 
     match market {
         Some(m) => {
-            if json_output { println!("{}", serde_json::to_string_pretty(&m)?); }
-            else { print_market_detail(&m); }
+            if json_output {
+                println!("{}", serde_json::to_string_pretty(&m)?);
+            } else {
+                print_market_detail(&m);
+            }
         }
         None => bail!("Market '{}' not found.", market_id),
     }
     Ok(())
 }
 
-pub async fn buy(market: &str, side: &str, amount: &str, max_price: Option<&str>, json_output: bool) -> Result<()> {
-    let (platform, _) = market.split_once(':')
+pub async fn buy(
+    market: &str,
+    side: &str,
+    amount: &str,
+    max_price: Option<&str>,
+    json_output: bool,
+) -> Result<()> {
+    let (platform, _) = market
+        .split_once(':')
         .ok_or_else(|| anyhow::anyhow!("Format: polymarket:<slug> or kalshi:<TICKER>"))?;
 
     if json_output {
-        println!("{}", json!({
-            "action": "predict_buy", "market": market, "side": side,
-            "amount": amount, "maxPrice": max_price,
-            "status": "not_implemented",
-            "note": format!("Trading on {} requires additional configuration.", platform)
-        }));
+        println!(
+            "{}",
+            json!({
+                "action": "predict_buy", "market": market, "side": side,
+                "amount": amount, "maxPrice": max_price,
+                "status": "not_implemented",
+                "note": format!("Trading on {} requires additional configuration.", platform)
+            })
+        );
     } else {
         println!();
-        println!("  {} Prediction Buy (Preview)", "🔮");
+        println!("  🔮 Prediction Buy (Preview)");
         println!("  Market:    {}", market.cyan());
         println!("  Side:      {}", side);
         println!("  Amount:    {}", amount);
-        if let Some(mp) = max_price { println!("  Max Price: {}¢", mp); }
+        if let Some(mp) = max_price {
+            println!("  Max Price: {}¢", mp);
+        }
         println!();
         print_trading_config_hint(platform);
     }
     Ok(())
 }
 
-pub async fn sell(market: &str, side: &str, amount: &str, min_price: Option<&str>, json_output: bool) -> Result<()> {
-    let (platform, _) = market.split_once(':')
+pub async fn sell(
+    market: &str,
+    side: &str,
+    amount: &str,
+    min_price: Option<&str>,
+    json_output: bool,
+) -> Result<()> {
+    let (platform, _) = market
+        .split_once(':')
         .ok_or_else(|| anyhow::anyhow!("Format: polymarket:<slug> or kalshi:<TICKER>"))?;
 
     if json_output {
-        println!("{}", json!({
-            "action": "predict_sell", "market": market, "side": side,
-            "amount": amount, "minPrice": min_price,
-            "status": "not_implemented",
-            "note": format!("Trading on {} requires additional configuration.", platform)
-        }));
+        println!(
+            "{}",
+            json!({
+                "action": "predict_sell", "market": market, "side": side,
+                "amount": amount, "minPrice": min_price,
+                "status": "not_implemented",
+                "note": format!("Trading on {} requires additional configuration.", platform)
+            })
+        );
     } else {
         println!();
-        println!("  {} Prediction Sell (Preview)", "🔮");
+        println!("  🔮 Prediction Sell (Preview)");
         println!("  Market:    {}", market.cyan());
         println!("  Side:      {}", side);
         println!("  Amount:    {}", amount);
-        if let Some(mp) = min_price { println!("  Min Price: {}¢", mp); }
+        if let Some(mp) = min_price {
+            println!("  Min Price: {}¢", mp);
+        }
         println!();
         print_trading_config_hint(platform);
     }
@@ -490,11 +588,17 @@ pub async fn sell(market: &str, side: &str, amount: &str, min_price: Option<&str
 fn print_trading_config_hint(platform: &str) {
     match platform {
         "polymarket" => {
-            println!("  {} Trading on Polymarket requires wallet config.", "⚠️".yellow());
+            println!(
+                "  {} Trading on Polymarket requires wallet config.",
+                "⚠️".yellow()
+            );
             println!("  Set private_key in ~/.fintool/config.toml (trades on Polygon).");
         }
         "kalshi" => {
-            println!("  {} Trading on Kalshi requires API credentials.", "⚠️".yellow());
+            println!(
+                "  {} Trading on Kalshi requires API credentials.",
+                "⚠️".yellow()
+            );
             println!("  Set kalshi_api_key and kalshi_api_secret in ~/.fintool/config.toml");
         }
         _ => println!("  {} Unknown platform.", "⚠️".yellow()),

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use serde_json::{json, Value};
-use tabled::{Table, settings::Style, Tabled};
+use tabled::{settings::Style, Table, Tabled};
 
 use crate::config;
 use crate::format;
@@ -60,24 +60,35 @@ pub async fn run(json_output: bool) -> Result<()> {
         return Ok(());
     }
 
-    let rows: Vec<PositionRow> = active.iter().map(|p| {
-        let pos = &p["position"];
-        let szi = pos["szi"].as_str().unwrap_or("0");
-        let is_long = !szi.starts_with('-');
-        PositionRow {
-            symbol: pos["coin"].as_str().unwrap_or("").to_string(),
-            side: if is_long { "LONG".green().to_string() } else { "SHORT".red().to_string() },
-            size: szi.to_string(),
-            entry: format!("${}", pos["entryPx"].as_str().unwrap_or("-")),
-            mark: format!("${}", pos["positionValue"].as_str().unwrap_or("-")),
-            pnl: format::color_pnl(pos["unrealizedPnl"].as_str().unwrap_or("0")),
-            leverage: format!("{}x", pos["leverage"]["value"].as_str()
-                .or_else(|| pos["leverage"]["value"].as_f64().map(|_| ""))
-                .unwrap_or("-")),
-        }
-    }).collect();
+    let rows: Vec<PositionRow> = active
+        .iter()
+        .map(|p| {
+            let pos = &p["position"];
+            let szi = pos["szi"].as_str().unwrap_or("0");
+            let is_long = !szi.starts_with('-');
+            PositionRow {
+                symbol: pos["coin"].as_str().unwrap_or("").to_string(),
+                side: if is_long {
+                    "LONG".green().to_string()
+                } else {
+                    "SHORT".red().to_string()
+                },
+                size: szi.to_string(),
+                entry: format!("${}", pos["entryPx"].as_str().unwrap_or("-")),
+                mark: format!("${}", pos["positionValue"].as_str().unwrap_or("-")),
+                pnl: format::color_pnl(pos["unrealizedPnl"].as_str().unwrap_or("0")),
+                leverage: format!(
+                    "{}x",
+                    pos["leverage"]["value"]
+                        .as_str()
+                        .or_else(|| pos["leverage"]["value"].as_f64().map(|_| ""))
+                        .unwrap_or("-")
+                ),
+            }
+        })
+        .collect();
 
-    println!("\n  {} Open Positions\n", "📊");
+    println!("\n  📊 Open Positions\n");
     let table = Table::new(rows).with(Style::rounded()).to_string();
     for line in table.lines() {
         println!("  {}", line);

@@ -18,9 +18,7 @@ struct Filing {
 }
 
 fn client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .build()?)
+    Ok(reqwest::Client::builder().user_agent(USER_AGENT).build()?)
 }
 
 async fn resolve_cik(symbol: &str) -> Result<(u64, String)> {
@@ -33,7 +31,7 @@ async fn resolve_cik(symbol: &str) -> Result<(u64, String)> {
         .await?;
 
     let sym_upper = symbol.to_uppercase();
-    for (_k, v) in &body {
+    for v in body.values() {
         if v.get("ticker").and_then(|t| t.as_str()) == Some(sym_upper.as_str()) {
             let cik = v["cik_str"].as_u64().unwrap();
             let title = v["title"].as_str().unwrap_or("").to_string();
@@ -49,7 +47,9 @@ async fn get_filings(cik: u64, form_type: Option<&str>, limit: usize) -> Result<
     let body: Value = c.get(&url).send().await?.json().await?;
 
     let recent = &body["filings"]["recent"];
-    let forms = recent["form"].as_array().ok_or_else(|| anyhow!("No filings found"))?;
+    let forms = recent["form"]
+        .as_array()
+        .ok_or_else(|| anyhow!("No filings found"))?;
     let filing_dates = recent["filingDate"].as_array().unwrap();
     let accessions = recent["accessionNumber"].as_array().unwrap();
     let primary_docs = recent["primaryDocument"].as_array().unwrap();
@@ -121,7 +121,8 @@ fn html_to_text(html: &str) -> String {
     s = re_tags.replace_all(&s, "").to_string();
 
     // Decode entities
-    s = s.replace("&amp;", "&")
+    s = s
+        .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
@@ -142,7 +143,9 @@ async fn fetch_and_output(
 ) -> Result<()> {
     let (cik, company) = resolve_cik(symbol).await?;
     let filings = get_filings(cik, Some(form_type), 1).await?;
-    let filing = filings.first().ok_or_else(|| anyhow!("No {} filing found for {}", form_type, symbol))?;
+    let filing = filings
+        .first()
+        .ok_or_else(|| anyhow!("No {} filing found for {}", form_type, symbol))?;
     let text = fetch_filing_text(cik, &filing.accession_number, &filing.primary_document).await?;
 
     if json {
@@ -160,8 +163,16 @@ async fn fetch_and_output(
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         use colored::Colorize;
-        println!("{} {} ({})", form_type.bold(), company.bold(), symbol.to_uppercase());
-        println!("Filed: {}  Period: {}", filing.filing_date, filing.report_date);
+        println!(
+            "{} {} ({})",
+            form_type.bold(),
+            company.bold(),
+            symbol.to_uppercase()
+        );
+        println!(
+            "Filed: {}  Period: {}",
+            filing.filing_date, filing.report_date
+        );
         println!("Accession: {}", filing.accession_number);
         println!("URL: {}\n", filing.url);
 
@@ -170,8 +181,11 @@ async fn fetch_and_output(
             println!("Full report saved to: {}", path.green());
         } else {
             let truncated = if text.len() > 5000 {
-                format!("{}...\n\n[Truncated — {} total chars. Use --output to save full report]",
-                    &text[..5000], text.len())
+                format!(
+                    "{}...\n\n[Truncated — {} total chars. Use --output to save full report]",
+                    &text[..5000],
+                    text.len()
+                )
             } else {
                 text
             };
@@ -197,11 +211,19 @@ pub async fn list(symbol: &str, limit: usize, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&filings)?);
     } else {
         use colored::Colorize;
-        println!("{} recent filings for {} ({}):\n", limit, company.bold(), symbol.to_uppercase());
-        println!("{:<8} {:<12} {:<12} {}", "Form", "Filed", "Period", "Accession Number");
+        println!(
+            "{} recent filings for {} ({}):\n",
+            limit,
+            company.bold(),
+            symbol.to_uppercase()
+        );
+        println!("Form     Filed        Period       Accession Number");
         println!("{}", "-".repeat(70));
         for f in &filings {
-            println!("{:<8} {:<12} {:<12} {}", f.form, f.filing_date, f.report_date, f.accession_number);
+            println!(
+                "{:<8} {:<12} {:<12} {}",
+                f.form, f.filing_date, f.report_date, f.accession_number
+            );
         }
     }
     Ok(())
@@ -210,7 +232,9 @@ pub async fn list(symbol: &str, limit: usize, json: bool) -> Result<()> {
 pub async fn get(symbol: &str, accession: &str, output: Option<&str>, json: bool) -> Result<()> {
     let (cik, company) = resolve_cik(symbol).await?;
     let filings = get_filings(cik, None, 100).await?;
-    let filing = filings.iter().find(|f| f.accession_number == accession)
+    let filing = filings
+        .iter()
+        .find(|f| f.accession_number == accession)
         .ok_or_else(|| anyhow!("Filing with accession '{}' not found", accession))?;
     let text = fetch_filing_text(cik, accession, &filing.primary_document).await?;
 
@@ -229,8 +253,16 @@ pub async fn get(symbol: &str, accession: &str, output: Option<&str>, json: bool
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         use colored::Colorize;
-        println!("{} {} ({})", filing.form.bold(), company.bold(), symbol.to_uppercase());
-        println!("Filed: {}  Period: {}", filing.filing_date, filing.report_date);
+        println!(
+            "{} {} ({})",
+            filing.form.bold(),
+            company.bold(),
+            symbol.to_uppercase()
+        );
+        println!(
+            "Filed: {}  Period: {}",
+            filing.filing_date, filing.report_date
+        );
         println!("Accession: {}", filing.accession_number);
         println!("URL: {}\n", filing.url);
 
@@ -239,8 +271,11 @@ pub async fn get(symbol: &str, accession: &str, output: Option<&str>, json: bool
             println!("Full report saved to: {}", path.green());
         } else {
             let truncated = if text.len() > 5000 {
-                format!("{}...\n\n[Truncated — {} total chars. Use --output to save full report]",
-                    &text[..5000], text.len())
+                format!(
+                    "{}...\n\n[Truncated — {} total chars. Use --output to save full report]",
+                    &text[..5000],
+                    text.len()
+                )
             } else {
                 text
             };

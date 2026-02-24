@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json::{json, Value};
 
@@ -17,10 +17,7 @@ pub async fn run(symbol: &str, json_output: bool) -> Result<()> {
 }
 
 async fn fetch_google_news(client: &reqwest::Client, symbol: &str) -> Result<Vec<Value>> {
-    let url = format!(
-        "https://news.google.com/rss/search?q={}+stock",
-        symbol
-    );
+    let url = format!("https://news.google.com/rss/search?q={}+stock", symbol);
     let text = client
         .get(&url)
         .header("User-Agent", "Mozilla/5.0")
@@ -69,7 +66,7 @@ fn extract_xml_tag(text: &str, tag: &str) -> Option<String> {
 
 fn print_news(symbol: &str, articles: &[Value]) {
     println!();
-    println!("  {} News for {}", "📰", symbol.bold().cyan());
+    println!("  📰 News for {}", symbol.bold().cyan());
     println!();
 
     if articles.is_empty() {

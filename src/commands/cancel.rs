@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
@@ -21,10 +21,13 @@ pub async fn run(order_id: &str, json_output: bool) -> Result<()> {
 
     if !json_output {
         println!();
-        println!("  {} Cancelling order", "🗑️");
+        println!("  🗑️ Cancelling order");
         println!("  Symbol:   {}", asset.cyan());
         println!("  Order ID: {}", oid);
-        println!("  Network:  {}", if cfg.testnet { "Testnet" } else { "Mainnet" });
+        println!(
+            "  Network:  {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
         println!();
     }
 
@@ -43,11 +46,11 @@ pub async fn run(order_id: &str, json_output: bool) -> Result<()> {
     } else {
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  {} Order cancelled!", "✅".green());
+                println!("  ✅ Order cancelled!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  {} Cancel failed: {}", "❌".red(), e);
+                println!("  ❌ Cancel failed: {}", e);
             }
         }
         println!();

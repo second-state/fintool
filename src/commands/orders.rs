@@ -1,7 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use serde_json::{json, Value};
-use tabled::{Table, settings::Style, Tabled};
+use tabled::{settings::Style, Table, Tabled};
 
 use crate::config;
 
@@ -39,9 +39,10 @@ pub async fn run(symbol: Option<&str>, json_output: bool) -> Result<()> {
     // Filter by symbol if provided
     let orders: Vec<&Value> = if let Some(sym) = symbol {
         let sym = sym.to_uppercase();
-        orders.iter().filter(|o| {
-            o.get("coin").and_then(|c| c.as_str()) == Some(sym.as_str())
-        }).collect()
+        orders
+            .iter()
+            .filter(|o| o.get("coin").and_then(|c| c.as_str()) == Some(sym.as_str()))
+            .collect()
     } else {
         orders.iter().collect()
     };
@@ -56,18 +57,23 @@ pub async fn run(symbol: Option<&str>, json_output: bool) -> Result<()> {
         return Ok(());
     }
 
-    let rows: Vec<OrderRow> = orders.iter().map(|o| {
-        OrderRow {
+    let rows: Vec<OrderRow> = orders
+        .iter()
+        .map(|o| OrderRow {
             oid: o["oid"].as_str().unwrap_or("").chars().take(8).collect(),
             symbol: o["coin"].as_str().unwrap_or("").to_string(),
-            side: if o["side"].as_str() == Some("B") { "BUY".green().to_string() } else { "SELL".red().to_string() },
+            side: if o["side"].as_str() == Some("B") {
+                "BUY".green().to_string()
+            } else {
+                "SELL".red().to_string()
+            },
             size: o["sz"].as_str().unwrap_or("0").to_string(),
             price: format!("${}", o["limitPx"].as_str().unwrap_or("0")),
             order_type: o["orderType"].as_str().unwrap_or("Limit").to_string(),
-        }
-    }).collect();
+        })
+        .collect();
 
-    println!("\n  {} Open Orders\n", "📋");
+    println!("\n  📋 Open Orders\n");
     let table = Table::new(rows).with(Style::rounded()).to_string();
     for line in table.lines() {
         println!("  {}", line);
