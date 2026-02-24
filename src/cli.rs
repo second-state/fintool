@@ -61,10 +61,19 @@ pub enum Commands {
     #[command(subcommand)]
     Report(ReportCmd),
 
-    /// Get your deposit address for Hyperliquid via Unit bridge (ETH/BTC/SOL) or Arbitrum (USDC)
+    /// Deposit to Hyperliquid: address for ETH/BTC/SOL (Unit), or bridge USDC (Across)
     Deposit {
         /// Asset: ETH, BTC, SOL, or USDC
         asset: String,
+        /// Amount (required for USDC, ignored for ETH/BTC/SOL)
+        #[arg(long)]
+        amount: Option<String>,
+        /// Source chain for USDC: ethereum or base (required for USDC)
+        #[arg(long)]
+        from: Option<String>,
+        /// Execute the transactions (without this, shows quote only)
+        #[arg(long)]
+        execute: bool,
     },
 
     /// Withdraw assets from Hyperliquid via Unit bridge (ETH/BTC/SOL) or Arbitrum (USDC)

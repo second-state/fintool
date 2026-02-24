@@ -1,19 +1,25 @@
-//! `fintool deposit <amount> <asset>` — generate a Unit deposit address and show instructions
-//! For ETH/BTC/SOL: uses Unit bridge (native chain → Hyperliquid)
-//! For USDC: uses Hyperliquid's Arbitrum bridge (HL SDK)
+//! `fintool deposit <asset>` — deposit to Hyperliquid
+//! - ETH/BTC/SOL: generates a permanent Unit deposit address (no amount needed)
+//! - USDC: bridges USDC from Ethereum/Base → Arbitrum → HL (amount + --from required)
 
 use anyhow::{bail, Result};
 use colored::Colorize;
 use serde_json::json;
 
+use crate::bridge::{self, SourceChain};
 use crate::config;
 use crate::unit;
 
-pub async fn run(asset: &str, json_out: bool) -> Result<()> {
+pub async fn run(
+    asset: &str,
+    amount: Option<&str>,
+    from: Option<&str>,
+    json_out: bool,
+) -> Result<()> {
     let asset_lower = asset.to_lowercase();
 
     if asset_lower == "usdc" {
-        return deposit_usdc(json_out).await;
+        return deposit_usdc(amount, from, json_out).await;
     }
 
     if !unit::is_supported(&asset_lower) {
@@ -128,52 +134,198 @@ pub async fn run(asset: &str, json_out: bool) -> Result<()> {
     Ok(())
 }
 
-async fn deposit_usdc(json_out: bool) -> Result<()> {
+async fn deposit_usdc(
+    amount: Option<&str>,
+    from: Option<&str>,
+    json_out: bool,
+) -> Result<()> {
     let cfg = config::load_hl_config()?;
 
+    let amount = match amount {
+        Some(a) => a,
+        None => bail!(
+            "USDC deposits require an amount.\n\
+             Usage: fintool deposit USDC --amount 100 --from ethereum\n\
+             \n\
+             Supported source chains: ethereum, base"
+        ),
+    };
+
+    let from = match from {
+        Some(f) => f,
+        None => bail!(
+            "USDC deposits require a source chain.\n\
+             Usage: fintool deposit USDC --amount 100 --from ethereum\n\
+             \n\
+             Supported source chains: ethereum, base"
+        ),
+    };
+
+    let source: SourceChain = from.parse()?;
+
+    // Step 1: Get Across bridge quote
+    eprintln!("Fetching bridge quote from Across...");
+    let quote = bridge::get_across_quote(source, amount, &cfg.address).await?;
+
+    let output_amount = quote
+        .expected_output_amount
+        .as_deref()
+        .unwrap_or(&quote.input_amount);
+    let fill_time = quote.expected_fill_time.unwrap_or(0);
+    let needs_approval = quote.approval_txns.is_some()
+        && !quote.approval_txns.as_ref().unwrap().is_empty();
+
     if json_out {
-        let out = json!({
-            "action": "deposit",
-            "asset": "USDC",
-            "source_chain": "arbitrum",
+        let mut out = json!({
+            "action": "deposit_usdc",
+            "source_chain": source.name(),
             "destination": "hyperliquid",
+            "amount_in": bridge::format_usdc(&quote.input_amount),
+            "amount_out_arbitrum": bridge::format_usdc(output_amount),
+            "expected_fill_time_seconds": fill_time,
+            "needs_approval": needs_approval,
             "hl_address": cfg.address,
-            "instructions": "Send USDC on Arbitrum to the Hyperliquid bridge contract. \
-                 Use the Hyperliquid web UI at https://app.hyperliquid.xyz or \
-                 the HL SDK's deposit method.",
-            "note": "USDC deposits use Hyperliquid's native Arbitrum bridge, not Unit.",
+            "steps": [],
         });
+
+        let steps = out["steps"].as_array_mut().unwrap();
+
+        if needs_approval {
+            for (i, tx) in quote.approval_txns.as_ref().unwrap().iter().enumerate() {
+                steps.push(json!({
+                    "step": format!("approve_{}", i + 1),
+                    "chain": source.name(),
+                    "chain_id": source.chain_id(),
+                    "to": tx.to,
+                    "data": tx.data,
+                    "description": "ERC-20 approval for Across SpokePool",
+                }));
+            }
+        }
+
+        steps.push(json!({
+            "step": "bridge",
+            "chain": source.name(),
+            "chain_id": source.chain_id(),
+            "to": quote.swap_tx.to,
+            "data": quote.swap_tx.data,
+            "value": quote.swap_tx.value,
+            "description": format!(
+                "Bridge {} from {} to Arbitrum via Across (~{}s)",
+                bridge::format_usdc(&quote.input_amount),
+                source.name(),
+                fill_time
+            ),
+        }));
+
+        steps.push(json!({
+            "step": "hl_deposit",
+            "chain": "arbitrum",
+            "chain_id": bridge::ARBITRUM_CHAIN_ID,
+            "to": bridge::HL_BRIDGE2_MAINNET,
+            "description": format!(
+                "Send {} to HL Bridge2 on Arbitrum (auto-credited to {})",
+                bridge::format_usdc(output_amount),
+                cfg.address
+            ),
+        }));
+
+        if let Some(ref fees) = quote.fees {
+            out["fees"] = fees.clone();
+        }
+
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        println!("{}", "━".repeat(50).dimmed());
+        println!("{}", "━".repeat(55).dimmed());
         println!(
-            "  {} {} → Hyperliquid",
+            "  {} {} USDC  {} → Hyperliquid",
             "Deposit".green().bold(),
-            "USDC".cyan()
+            amount,
+            source.name().yellow()
         );
-        println!("{}", "━".repeat(50).dimmed());
+        println!("{}", "━".repeat(55).dimmed());
         println!();
         println!(
-            "  {} Arbitrum (native HL bridge, not Unit)",
-            "Source chain:".dimmed()
+            "  {} {} → Arbitrum → Hyperliquid",
+            "Route:      ".dimmed(),
+            source.name()
         );
         println!(
             "  {} {}",
-            "HL address:  ".dimmed(),
+            "Bridge:     ".dimmed(),
+            "Across Protocol"
+        );
+        println!(
+            "  {} {}",
+            "Amount in:  ".dimmed(),
+            bridge::format_usdc(&quote.input_amount).cyan()
+        );
+        println!(
+            "  {} {}",
+            "Amount out: ".dimmed(),
+            bridge::format_usdc(output_amount).green()
+        );
+        println!(
+            "  {} ~{}s",
+            "Fill time:  ".dimmed(),
+            fill_time
+        );
+        println!(
+            "  {} {}",
+            "HL address: ".dimmed(),
             cfg.address.cyan()
         );
+
+        println!();
+        println!("  {}", "Transaction Steps:".bold());
+
+        let mut step = 1;
+        if needs_approval {
+            for tx in quote.approval_txns.as_ref().unwrap() {
+                println!(
+                    "  {}. {} USDC approval on {} → {}",
+                    step,
+                    "Approve".yellow(),
+                    source.name(),
+                    &tx.to[..10]
+                );
+                step += 1;
+            }
+        }
+
+        println!(
+            "  {}. {} {} via Across SpokePool on {}",
+            step,
+            "Bridge".green(),
+            bridge::format_usdc(&quote.input_amount),
+            source.name()
+        );
+        step += 1;
+
+        println!(
+            "  {}. {} {} to HL Bridge2 on Arbitrum",
+            step,
+            "Deposit".green(),
+            bridge::format_usdc(output_amount)
+        );
+
         println!();
         println!(
-            "  {} USDC deposits go through Hyperliquid's native Arbitrum bridge.",
+            "  {} All transactions use your configured private key.",
             "ℹ".blue()
         );
         println!(
-            "  {} Use https://app.hyperliquid.xyz → Deposit",
-            "→".green().bold()
+            "  {} RPC: {} (source), {} (Arbitrum)",
+            "ℹ".blue(),
+            source.rpc_url(),
+            bridge::RPC_ARBITRUM
         );
+        println!();
         println!(
-            "  {} Or send USDC on Arbitrum to the HL bridge contract.",
-            "→".green().bold()
+            "  {} To execute, run: fintool deposit USDC --amount {} --from {} --execute",
+            "→".green().bold(),
+            amount,
+            source.name()
         );
         println!();
     }

@@ -1,4 +1,5 @@
 mod binance;
+mod bridge;
 mod cli;
 mod coinbase;
 mod commands;
@@ -126,7 +127,14 @@ async fn main() -> Result<()> {
                 min_price,
             } => commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await,
         },
-        Commands::Deposit { asset } => commands::deposit::run(&asset, json).await,
+        Commands::Deposit {
+            asset,
+            amount,
+            from,
+            execute: _execute,
+        } => {
+            commands::deposit::run(&asset, amount.as_deref(), from.as_deref(), json).await
+        }
         Commands::Withdraw { amount, asset, to } => {
             commands::withdraw::run(&amount, &asset, to.as_deref(), json).await
         }
