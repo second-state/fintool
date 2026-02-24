@@ -21,7 +21,8 @@ toml = "0.8"
 dirs = "6"
 shellexpand = "3"
 eth-keystore = "0.5"
-hyperliquid_rust_sdk = "0.6"
-ethers = "2"
+hyperliquid_rust_sdk = { version = "0.6", default-features = false }
+ethers = { version = "2", default-features = false, features = ["rustls", "eip712"] }
 urlencoding = "2"
 regex = "1"
+openssl = { version = "0.10", features = ["vendored"] }
