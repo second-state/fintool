@@ -84,10 +84,9 @@ fn clob_auth_eip712_hash(address: &Address, timestamp: &str) -> Result<[u8; 32]>
 
     // Struct hash
     let type_hash = ethers::utils::keccak256(
-        "ClobAuth(address address,string timestamp,string nonce,string message)",
+        "ClobAuth(address address,string timestamp,uint256 nonce,string message)",
     );
     let timestamp_hash = ethers::utils::keccak256(timestamp.as_bytes());
-    let nonce_hash = ethers::utils::keccak256("0".as_bytes());
     let message_hash =
         ethers::utils::keccak256("This message attests that I control the given wallet".as_bytes());
 
@@ -95,7 +94,7 @@ fn clob_auth_eip712_hash(address: &Address, timestamp: &str) -> Result<[u8; 32]>
         ethers::abi::Token::FixedBytes(type_hash.to_vec()),
         ethers::abi::Token::Address(*address),
         ethers::abi::Token::FixedBytes(timestamp_hash.to_vec()),
-        ethers::abi::Token::FixedBytes(nonce_hash.to_vec()),
+        ethers::abi::Token::Uint(U256::zero()),
         ethers::abi::Token::FixedBytes(message_hash.to_vec()),
     ]));
 
@@ -118,7 +117,7 @@ pub async fn derive_api_credentials(
     let wallet: LocalWallet = private_key
         .parse()
         .context("Invalid private key for Polymarket")?;
-    let address = format!("{:?}", wallet.address());
+    let address = ethers::utils::to_checksum(&wallet.address(), None);
 
     // Check cache first
     if let Some((api_key, secret, passphrase)) = load_cached_credentials(&address) {
@@ -135,10 +134,32 @@ pub async fn derive_api_credentials(
     let signature = wallet.sign_hash(hash.into())?;
     let sig_hex = format!("0x{}", hex::encode(signature.to_vec()));
 
-    // POST to derive-api-key (or create new)
-    let url = format!("{}/auth/derive-api-key", CLOB_BASE);
+    // Try to create API key first (for new wallets), fall back to derive
+    let create_url = format!("{}/auth/api-key", CLOB_BASE);
     let resp = client
-        .get(&url)
+        .post(&create_url)
+        .header("POLY_ADDRESS", &address)
+        .header("POLY_SIGNATURE", &sig_hex)
+        .header("POLY_TIMESTAMP", &timestamp)
+        .header("POLY_NONCE", "0")
+        .send()
+        .await?;
+
+    if resp.status().is_success() {
+        let body: serde_json::Value = resp.json().await?;
+        let api_key = body["apiKey"].as_str().unwrap_or_default().to_string();
+        let secret = body["secret"].as_str().unwrap_or_default().to_string();
+        let passphrase = body["passphrase"].as_str().unwrap_or_default().to_string();
+        if !api_key.is_empty() {
+            let _ = save_cached_credentials(&address, &api_key, &secret, &passphrase);
+            return Ok((api_key, secret, passphrase));
+        }
+    }
+
+    // Fall back to derive existing credentials
+    let derive_url = format!("{}/auth/derive-api-key", CLOB_BASE);
+    let resp = client
+        .get(&derive_url)
         .header("POLY_ADDRESS", &address)
         .header("POLY_SIGNATURE", &sig_hex)
         .header("POLY_TIMESTAMP", &timestamp)
@@ -284,7 +305,7 @@ pub async fn sign_order(
 #[allow(dead_code)]
 struct GammaMarket {
     #[serde(rename = "clobTokenIds")]
-    clob_token_ids: Option<Vec<String>>,
+    clob_token_ids: Option<serde_json::Value>,
     slug: Option<String>,
     #[serde(rename = "negRisk")]
     neg_risk: Option<bool>,
@@ -295,22 +316,41 @@ pub async fn get_market_info(client: &reqwest::Client, slug: &str) -> Result<(Ve
     let url = format!("{}/markets?slug={}", GAMMA_BASE, urlencoding::encode(slug));
     let markets: Vec<GammaMarket> = client.get(&url).send().await?.json().await?;
     let market = markets.first().context("Market not found")?;
-    let token_ids = market.clob_token_ids.clone().context("No CLOB token IDs")?;
     let neg_risk = market.neg_risk.unwrap_or(false);
+
+    // clobTokenIds can be a JSON array or a JSON string containing an array
+    let token_ids = match &market.clob_token_ids {
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        Some(serde_json::Value::String(s)) => {
+            serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+    if token_ids.is_empty() {
+        bail!("No CLOB token IDs found for market");
+    }
     Ok((token_ids, neg_risk))
 }
 
 /// Get tick size for a token
 pub async fn get_tick_size(client: &reqwest::Client, token_id: &str) -> Result<f64> {
     let url = format!("{}/tick-size?token_id={}", CLOB_BASE, token_id);
-    #[derive(Deserialize)]
-    struct TickResponse {
-        #[serde(rename = "tickSize")]
-        tick_size: Option<String>,
-    }
-    let resp: TickResponse = client.get(&url).send().await?.json().await?;
-    resp.tick_size
-        .and_then(|s| s.parse::<f64>().ok())
+    let resp: serde_json::Value = client.get(&url).send().await?.json().await?;
+    // Handle both "minimum_tick_size" (number) and "tickSize" (string)
+    resp.get("minimum_tick_size")
+        .and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
+        .or_else(|| {
+            resp.get("tickSize").and_then(|v| {
+                v.as_f64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
+        })
         .context("Failed to get tick size")
 }
 
