@@ -526,6 +526,55 @@ pub async fn get_deposit_address(
     Ok(body)
 }
 
+/// Submit a withdrawal request
+pub async fn withdraw(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    coin: &str,
+    address: &str,
+    amount: &str,
+    network: Option<&str>,
+) -> Result<serde_json::Value> {
+    let timestamp = timestamp_ms();
+    let mut query_string = format!(
+        "coin={}&address={}&amount={}&timestamp={}",
+        coin.to_uppercase(),
+        address,
+        amount,
+        timestamp
+    );
+    if let Some(net) = network {
+        query_string = format!("{}&network={}", query_string, net);
+    }
+    let signature = sign_request(api_secret, &query_string);
+    let url = format!(
+        "{}/sapi/v1/capital/withdraw/apply?{}&signature={}",
+        SPOT_BASE_URL, query_string, signature
+    );
+
+    let response = client
+        .post(&url)
+        .header("X-MBX-APIKEY", api_key)
+        .send()
+        .await
+        .context("Failed to submit Binance withdrawal")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
 /// Cancel a futures order
 pub async fn cancel_futures_order(
     client: &Client,

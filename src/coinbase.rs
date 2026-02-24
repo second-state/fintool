@@ -313,6 +313,69 @@ pub async fn create_deposit_address(
     Ok(body)
 }
 
+/// Send crypto (withdrawal) from a Coinbase account
+#[allow(clippy::too_many_arguments)]
+pub async fn send_crypto(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    account_id: &str,
+    to: &str,
+    amount: &str,
+    currency: &str,
+    network: Option<&str>,
+) -> Result<serde_json::Value> {
+    let ts = timestamp();
+    let path = format!("/v2/accounts/{}/transactions", account_id);
+
+    let mut body = json!({
+        "type": "send",
+        "to": to,
+        "amount": amount,
+        "currency": currency.to_uppercase(),
+        "idem": uuid::Uuid::new_v4().to_string(),
+    });
+
+    if let Some(net) = network {
+        body["network"] = json!(net);
+    }
+
+    let body_str = serde_json::to_string(&body)?;
+    let signature = sign_request(api_secret, &ts, "POST", &path, &body_str);
+    let url = format!("{}{}", BASE_URL, path);
+
+    let response = client
+        .post(&url)
+        .header("CB-ACCESS-KEY", api_key)
+        .header("CB-ACCESS-SIGN", signature)
+        .header("CB-ACCESS-TIMESTAMP", ts)
+        .header("CB-VERSION", "2024-01-01")
+        .header("Content-Type", "application/json")
+        .body(body_str)
+        .send()
+        .await
+        .context("Failed to send crypto from Coinbase")?;
+
+    let status = response.status();
+    let resp_body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(errs) = resp_body["errors"].as_array() {
+            errs.iter()
+                .filter_map(|e| e["message"].as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        } else if let Some(msg) = resp_body.get("message") {
+            format!("{}", msg)
+        } else {
+            format!("{:?}", resp_body)
+        };
+        bail!("Coinbase API error: {}", error_msg);
+    }
+
+    Ok(resp_body)
+}
+
 pub async fn cancel_order(
     client: &Client,
     api_key: &str,

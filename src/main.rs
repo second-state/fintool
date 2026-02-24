@@ -143,8 +143,23 @@ async fn main() -> Result<()> {
             )
             .await
         }
-        Commands::Withdraw { amount, asset, to } => {
-            commands::withdraw::run(&amount, &asset, to.as_deref(), json).await
+        Commands::Withdraw {
+            amount,
+            asset,
+            to,
+            network,
+            dry_run,
+        } => {
+            commands::withdraw::run(
+                &amount,
+                &asset,
+                to.as_deref(),
+                network.as_deref(),
+                &cli.exchange,
+                dry_run,
+                json,
+            )
+            .await
         }
         Commands::BridgeStatus => commands::bridge_status::run(json).await,
         Commands::Report(cmd) => match cmd {

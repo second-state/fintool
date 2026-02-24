@@ -76,15 +76,21 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Withdraw assets from Hyperliquid via Unit bridge (ETH/BTC/SOL) or Arbitrum (USDC)
+    /// Withdraw from exchange to external address
     Withdraw {
         /// Amount to withdraw (e.g. 0.5)
         amount: String,
-        /// Asset: ETH, BTC, SOL, or USDC
+        /// Asset: ETH, BTC, SOL, USDC, etc.
         asset: String,
-        /// Destination address on the native chain (required for BTC, optional for ETH/SOL)
+        /// Destination address (required for BTC, Binance, Coinbase; optional for ETH/SOL on HL)
         #[arg(long)]
         to: Option<String>,
+        /// Network for Binance/Coinbase (e.g. ethereum, base, arbitrum, solana)
+        #[arg(long)]
+        network: Option<String>,
+        /// Show quote only, don't execute
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Show bridge operation status (deposits/withdrawals via Unit)
