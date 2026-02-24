@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
+A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Unit**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, prediction markets on **Polymarket** and **Kalshi**, SEC filings, and news.
 
 ## Install as an OpenClaw Skill
 
