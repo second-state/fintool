@@ -1,6 +1,6 @@
 ---
 name: fintool
-description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. LLM-enriched price quotes with trend analysis. Prediction markets (Polymarket + Kalshi). News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, check portfolio, or browse prediction markets."
+description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. Deposit and withdraw across chains (Unit bridge, Across Protocol). LLM-enriched price quotes with trend analysis. Prediction markets (Polymarket + Kalshi). News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, check portfolio, or browse prediction markets."
 homepage: https://github.com/second-state/fintool
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
@@ -49,6 +49,8 @@ cat ~/.fintool/config.toml 2>/dev/null
 | Spot orders | ✅ | ✅ | ✅ |
 | Perp orders | ✅ | ✅ | ❌ |
 | Options | ❌ | ✅ | ❌ |
+| Deposit | ✅ (Unit + Across) | ✅ (API) | ✅ (API) |
+| Withdraw | ✅ (Bridge2 + Unit + Across) | ✅ (API) | ✅ (API) |
 | Balance | ✅ | ✅ | ✅ |
 | Open orders | ✅ | ✅ | ✅ |
 | Cancel | ✅ | ✅ | ✅ |
@@ -207,6 +209,86 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 {baseDir}/scripts/fintool cancel binance_spot:BTCUSDT:123   # Binance spot
 {baseDir}/scripts/fintool cancel binance_futures:BTCUSDT:456 # Binance futures
 {baseDir}/scripts/fintool cancel coinbase:uuid-here          # Coinbase
+```
+
+### Workflow 6: Depositing Funds
+
+**Goal**: Fund an exchange account with crypto from an external wallet or another chain.
+
+**Hyperliquid — ETH/BTC/SOL (permanent deposit address via HyperUnit):**
+```bash
+{baseDir}/scripts/fintool deposit ETH
+{baseDir}/scripts/fintool deposit BTC
+{baseDir}/scripts/fintool deposit SOL
+```
+Returns a reusable deposit address on the native chain. User sends any amount, any time.
+
+**Hyperliquid — USDC from Ethereum or Base (automated bridge):**
+```bash
+# Bridge 100 USDC from Ethereum mainnet → Hyperliquid
+{baseDir}/scripts/fintool deposit USDC --amount 100 --from ethereum
+
+# Bridge 500 USDC from Base → Hyperliquid
+{baseDir}/scripts/fintool deposit USDC --amount 500 --from base
+
+# Preview the route and fees without executing
+{baseDir}/scripts/fintool deposit USDC --amount 100 --from ethereum --dry-run
+```
+Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 deposit.
+
+**Binance — get deposit address:**
+```bash
+{baseDir}/scripts/fintool deposit USDC --exchange binance --from ethereum
+{baseDir}/scripts/fintool deposit ETH --exchange binance
+{baseDir}/scripts/fintool deposit BTC --exchange binance --from bitcoin
+```
+
+**Coinbase — get deposit address:**
+```bash
+{baseDir}/scripts/fintool deposit ETH --exchange coinbase
+{baseDir}/scripts/fintool deposit USDC --exchange coinbase
+```
+
+### Workflow 7: Withdrawing Funds
+
+**Goal**: Move assets from an exchange to an external wallet or another chain.
+
+**Hyperliquid — USDC to Arbitrum (default, ~3-4 min):**
+```bash
+{baseDir}/scripts/fintool withdraw 100 USDC
+{baseDir}/scripts/fintool withdraw 100 USDC --to 0xOtherAddress
+```
+
+**Hyperliquid — USDC to Ethereum or Base (chained bridge, ~5-7 min):**
+```bash
+{baseDir}/scripts/fintool withdraw 100 USDC --network ethereum
+{baseDir}/scripts/fintool withdraw 100 USDC --network base
+{baseDir}/scripts/fintool withdraw 100 USDC --network ethereum --dry-run
+```
+Automatically chains: HL Bridge2 → Arbitrum → Across bridge → destination.
+
+**Hyperliquid — ETH/BTC/SOL to native chain (via HyperUnit):**
+```bash
+{baseDir}/scripts/fintool withdraw 0.5 ETH
+{baseDir}/scripts/fintool withdraw 0.01 BTC --to bc1q...
+{baseDir}/scripts/fintool withdraw 1 SOL --to SomeSolanaAddress
+```
+
+**Binance:**
+```bash
+{baseDir}/scripts/fintool withdraw 100 USDC --to 0x... --exchange binance --network ethereum
+{baseDir}/scripts/fintool withdraw 0.5 ETH --to 0x... --exchange binance --network arbitrum
+```
+
+**Coinbase:**
+```bash
+{baseDir}/scripts/fintool withdraw 100 USDC --to 0x... --exchange coinbase
+{baseDir}/scripts/fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
+```
+
+**Track HyperUnit bridge operations:**
+```bash
+{baseDir}/scripts/fintool bridge-status
 ```
 
 ## Symbol Aliases
