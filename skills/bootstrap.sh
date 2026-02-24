@@ -22,12 +22,18 @@ OS=$(uname -s)
 ARCH=$(uname -m)
 
 case "${OS}-${ARCH}" in
-  Linux-x86_64)   ARTIFACT="fintool-linux-x86_64" ;;
-  Linux-aarch64)  ARTIFACT="fintool-linux-aarch64" ;;
-  Darwin-arm64)   ARTIFACT="fintool-macos-aarch64" ;;
+  Linux-x86_64)    ARTIFACT="fintool-linux-x86_64" ;;
+  Linux-aarch64)   ARTIFACT="fintool-linux-aarch64" ;;
+  Darwin-arm64)    ARTIFACT="fintool-macos-aarch64" ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "❌ Native Windows is not supported. Please use WSL2 (Windows Subsystem for Linux)."
+    echo "   Install WSL2: wsl --install"
+    echo "   Then re-run this script inside WSL2."
+    exit 1
+    ;;
   *)
     echo "❌ Unsupported platform: ${OS}-${ARCH}"
-    echo "Supported: Linux (x86_64, aarch64), macOS (Apple Silicon)"
+    echo "Supported: Linux (x86_64, aarch64), macOS (Apple Silicon), Windows (via WSL2)"
     exit 1
     ;;
 esac

@@ -52,7 +52,7 @@ If the bootstrap script fails:
    - `fintool-linux-x86_64.zip` (Linux x86_64)
    - `fintool-linux-aarch64.zip` (Linux ARM64)
    - `fintool-macos-aarch64.zip` (macOS Apple Silicon)
-   - `fintool-windows-x86_64.exe.zip` (Windows x86_64)
+   - Windows: use WSL2 and download the Linux x86_64 build
 3. Extract and copy the binary:
    ```bash
    mkdir -p ~/.openclaw/skills/fintool/scripts
@@ -86,7 +86,7 @@ curl -I "https://github.com/second-state/fintool/releases/latest"
 echo "OS: $(uname -s), Arch: $(uname -m)"
 ```
 
-Supported: Linux (x86_64, aarch64), macOS (Apple Silicon arm64), Windows (x86_64).
+Supported: Linux (x86_64, aarch64), macOS (Apple Silicon arm64), Windows (via WSL2).
 
 ### Config Not Found
 
