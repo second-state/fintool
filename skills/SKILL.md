@@ -1,3 +1,10 @@
+---
+name: fintool
+description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. LLM-enriched price quotes with trend analysis. Prediction markets (Polymarket + Kalshi). News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, check portfolio, or browse prediction markets."
+homepage: https://github.com/second-state/fintool
+metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
+---
+
 # fintool — Financial Trading Skill
 
 A CLI tool for market intelligence and trading across multiple exchanges.
@@ -28,7 +35,7 @@ cat ~/.fintool/config.toml 2>/dev/null
    - If missing: Ask the user for their OpenAI API key, or tell them to add it to `~/.fintool/config.toml` under `[api_keys]`
 
 2. **At least one exchange** — Required for trading commands.
-   - **Hyperliquid**: `private_key = "0x..."` in `[wallet]` (spot + perps)
+   - **Hyperliquid**: `private_key` or `wallet_json` + `wallet_passcode` in `[wallet]` (spot + perps)
    - **Binance**: `binance_api_key` + `binance_api_secret` in `[api_keys]` (spot + perps + options)
    - **Coinbase**: `coinbase_api_key` + `coinbase_api_secret` in `[api_keys]` (spot only)
    - If none configured: Ask the user which exchange they want to use and request the credentials.
@@ -75,13 +82,7 @@ Returns: price, 24h/7d/30d changes, trend (bullish/bearish/neutral), momentum, v
 ```
 Returns: up to 10 recent headlines from Google News RSS.
 
-**Step 3 — Check SEC filings (for stocks):**
-```bash
-{baseDir}/scripts/fintool report list <SYMBOL>
-{baseDir}/scripts/fintool report annual <SYMBOL>
-```
-
-**Step 4 — Place the trade:**
+**Step 3 — Place the trade:**
 ```bash
 # Buy: spend $<AMOUNT> at max price $<PRICE>
 {baseDir}/scripts/fintool order buy <SYMBOL> <AMOUNT_USDC> <MAX_PRICE>
@@ -93,7 +94,7 @@ Returns: up to 10 recent headlines from Google News RSS.
 {baseDir}/scripts/fintool order buy <SYMBOL> <AMOUNT> <PRICE> --exchange binance
 ```
 
-**Step 5 — Verify:**
+**Step 4 — Verify:**
 ```bash
 {baseDir}/scripts/fintool orders
 {baseDir}/scripts/fintool balance
@@ -230,4 +231,3 @@ Common indices and commodities have convenient aliases:
 - **Check news before large trades** — Headlines can explain sudden price moves.
 - **Use `--exchange` when ambiguous** — If the user has multiple exchanges, explicitly select one to avoid confusion.
 - **JSON output is default** — Parse it programmatically. Use `--human` only when showing to the user in terminal.
-- **For stocks, check SEC filings** — `report annual` and `report quarterly` give fundamental context.
