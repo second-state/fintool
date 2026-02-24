@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI for financial trading and market intelligence — spot and perpetual futures on Hyperliquid, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
+A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid** and **Binance**, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
 
 ## Installation
 
@@ -44,13 +44,16 @@ fintool report list TSLA
 fintool predict list
 fintool predict search "election"
 
-# Spot trading (requires wallet config)
+# Spot trading (Hyperliquid or Binance)
 fintool order buy TSLA 100 410
 fintool order sell TSLA 1 420
 
 # Perp trading
 fintool perp buy BTC 100 65000
 fintool perp sell BTC 0.01 70000
+
+# Options trading (Binance only)
+fintool options buy BTC call 70000 260328 0.1 --exchange binance
 ```
 
 ## Output Modes
@@ -73,6 +76,46 @@ The `--human` flag is global and works with any subcommand.
 
 ---
 
+## Exchange Support
+
+`fintool` supports multiple exchanges with automatic routing:
+
+### Global Exchange Flag
+
+All trading commands support `--exchange <EXCHANGE>`:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Auto-select based on configured exchanges and command type |
+| `hyperliquid` | Force Hyperliquid (requires wallet config) |
+| `binance` | Force Binance (requires API keys) |
+
+### Auto Mode Routing
+
+When `--exchange auto` (default):
+
+1. **Options commands** → Always Binance (Hyperliquid doesn't support options)
+2. **If only one exchange configured** → Use that one
+3. **If both configured** → Hyperliquid for spot/perp, Binance for options
+
+### Examples
+
+```bash
+# Auto routing (uses configured exchange)
+fintool order buy BTC 100 65000
+
+# Force Hyperliquid
+fintool order buy BTC 100 65000 --exchange hyperliquid
+
+# Force Binance
+fintool order buy BTC 100 65000 --exchange binance
+
+# Options require Binance
+fintool options buy BTC call 70000 260328 0.1
+```
+
+---
+
 ## Configuration
 
 Config file: `~/.fintool/config.toml`
@@ -81,7 +124,7 @@ Run `fintool init` to generate a template, or copy `config.toml.default` from th
 
 ```toml
 [wallet]
-# Private key (hex, with or without 0x prefix)
+# Hyperliquid private key (hex, with or without 0x prefix)
 private_key = "0xabcdef1234567890..."
 
 # Alternative: encrypted keystore file
@@ -96,6 +139,10 @@ testnet = false
 openai_api_key = "sk-..."
 openai_model = "gpt-4.1-mini"
 
+# Binance — enables spot/futures/options trading
+binance_api_key = "..."
+binance_api_secret = "..."
+
 # Kalshi — prediction market trading
 # kalshi_api_key = "..."
 # kalshi_api_secret = "..."
@@ -105,28 +152,34 @@ openai_model = "gpt-4.1-mini"
 
 | Section | Key | Type | Default | Description |
 |---------|-----|------|---------|-------------|
-| `wallet` | `private_key` | string | — | Hex private key (with or without `0x`). **Takes priority** over keystore. |
+| `wallet` | `private_key` | string | — | Hyperliquid wallet hex private key (with or without `0x`). **Takes priority** over keystore. |
 | `wallet` | `wallet_json` | string | — | Path to encrypted Ethereum keystore JSON file. Supports `~` expansion. |
 | `wallet` | `wallet_passcode` | string | — | Passcode to decrypt the keystore file. |
 | `network` | `testnet` | bool | `false` | Use Hyperliquid testnet. |
 | `api_keys` | `openai_api_key` | string | — | OpenAI API key. Enables LLM-enriched quotes with trend/momentum analysis. |
 | `api_keys` | `openai_model` | string | `gpt-4.1-mini` | OpenAI model for quote analysis. Any chat completions model works. |
+| `api_keys` | `binance_api_key` | string | — | Binance API key for spot/futures/options trading. |
+| `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
 | `api_keys` | `kalshi_api_key` | string | — | Kalshi API key (for prediction market trading). |
 | `api_keys` | `kalshi_api_secret` | string | — | Kalshi API secret. |
 
-### What Needs a Wallet
+### What Needs Configuration
 
-| Command | Wallet Required | OpenAI Key |
-|---------|----------------|------------|
-| `quote` | No | Optional (enriches output) |
-| `perp quote` | No | No |
-| `news`, `init` | No | No |
-| `report` | No | No |
-| `predict list/search/quote` | No | No |
-| `order buy/sell`, `perp buy/sell` | Yes | No |
-| `orders`, `cancel`, `balance`, `positions` | Yes | No |
-| `predict buy/sell` | Yes | No |
-| `options` | — | — (stub) |
+| Command | Hyperliquid Wallet | Binance Keys | OpenAI Key | Exchange Support |
+|---------|-------------------|--------------|------------|------------------|
+| `quote` | No | No | Optional (enriches) | N/A (read-only) |
+| `perp quote` | No | No | No | N/A (read-only) |
+| `news`, `init` | No | No | No | N/A |
+| `report` | No | No | No | N/A |
+| `predict list/search/quote` | No | No | No | N/A |
+| `order buy/sell` | Yes (HL) | Yes (Binance) | No | Both |
+| `perp buy/sell` | Yes (HL) | Yes (Binance) | No | Both |
+| `orders` | Yes (HL) | Yes (Binance) | No | Both |
+| `cancel` | Yes (HL) | Yes (Binance) | No | Both |
+| `balance` | Yes (HL) | Yes (Binance) | No | Both |
+| `positions` | Yes (HL) | Yes (Binance) | No | Both |
+| `options buy/sell` | No | Yes (Binance) | No | Binance only |
+| `predict buy/sell` | Yes (HL) | No | No | Polymarket/Kalshi |
 
 ---
 
@@ -270,12 +323,15 @@ When no OpenAI key is configured, returns merged raw data:
 
 Get the current **perpetual futures** price with funding rate, open interest, premium, and leverage info.
 
+**Supported exchanges:** Hyperliquid (default), Binance (via `--exchange binance`)
+
 #### Examples
 
 ```bash
 fintool perp quote BTC
 fintool perp quote ETH
 fintool perp quote SOL --human
+fintool perp quote BTC --exchange binance
 ```
 
 #### JSON Schema
@@ -308,7 +364,7 @@ fintool perp quote SOL --human
 | `volume24h` | string | 24-hour notional volume (USD) |
 | `prevDayPx` | string | Previous day price (USD) |
 | `maxLeverage` | number | Maximum allowed leverage |
-| `source` | string | `"Hyperliquid"` |
+| `source` | string | `"Hyperliquid"` or `"Binance"` |
 
 ---
 
@@ -380,7 +436,11 @@ fintool report get AAPL 0000320193-24-000123
 
 Place a **spot** limit buy order. The price is the **maximum price** you're willing to pay per unit. Size is calculated as `AMOUNT_USDC / MAX_PRICE`.
 
-The symbol is auto-resolved to its Hyperliquid spot pair (e.g. `TSLA` → `TSLA/USDC`).
+**Exchanges:** Hyperliquid (native), Binance (via `/api/v3/order`)
+
+The symbol is auto-resolved:
+- **Hyperliquid:** `TSLA` → `TSLA/USDC` spot pair
+- **Binance:** `TSLA` → `TSLAUSDT` spot pair
 
 #### Examples
 
@@ -388,6 +448,9 @@ The symbol is auto-resolved to its Hyperliquid spot pair (e.g. `TSLA` → `TSLA/
 fintool order buy TSLA 1 410      # buy $1 of TSLA at max $410
 fintool order buy HYPE 100 25     # buy $100 of HYPE at max $25
 fintool order buy BTC 50 66000    # buy $50 of BTC spot at max $66,000
+
+# Force Binance
+fintool order buy BTC 100 65000 --exchange binance
 ```
 
 #### JSON Schema
@@ -410,11 +473,16 @@ fintool order buy BTC 50 66000    # buy $50 of BTC spot at max $66,000
 
 Place a **spot** limit sell order. The price is the **minimum price** you'll accept per unit.
 
+**Exchanges:** Hyperliquid (native), Binance (via `/api/v3/order`)
+
 #### Examples
 
 ```bash
 fintool order sell TSLA 1 420     # sell 1 TSLA at minimum $420
 fintool order sell HYPE 10 30     # sell 10 HYPE at minimum $30
+
+# Force Binance
+fintool order sell BTC 0.01 67000 --exchange binance
 ```
 
 #### JSON Schema
@@ -436,11 +504,16 @@ fintool order sell HYPE 10 30     # sell 10 HYPE at minimum $30
 
 Place a **perpetual futures** limit buy (long) order.
 
+**Exchanges:** Hyperliquid (native), Binance (via `/fapi/v1/order`)
+
 #### Examples
 
 ```bash
 fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
 fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
+
+# Force Binance
+fintool perp buy BTC 100 65000 --exchange binance
 ```
 
 ---
@@ -449,11 +522,16 @@ fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
 
 Place a **perpetual futures** limit sell (short) order.
 
+**Exchanges:** Hyperliquid (native), Binance (via `/fapi/v1/order`)
+
 #### Examples
 
 ```bash
 fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
 fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
+
+# Force Binance
+fintool perp sell BTC 0.01 70000 --exchange binance
 ```
 
 ---
@@ -462,20 +540,40 @@ fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
 
 List open orders (both spot and perp). Optionally filter by symbol.
 
+**Exchanges:** Both Hyperliquid and Binance supported
+
 ```bash
 fintool orders
 fintool orders BTC
 fintool orders --human
+fintool orders --exchange binance
 ```
 
 ---
 
-### `fintool cancel <SYMBOL:OID>`
+### `fintool cancel <ORDER_ID>`
 
-Cancel an open order. Format: `SYMBOL:ORDER_ID`.
+Cancel an open order.
+
+**Order ID formats:**
+
+| Exchange | Format | Example |
+|----------|--------|---------|
+| Hyperliquid | `SYMBOL:OID` | `BTC:91490942` |
+| Binance spot | `binance_spot:SYMBOL:ORDERID` | `binance_spot:BTCUSDT:12345678` |
+| Binance futures | `binance_futures:SYMBOL:ORDERID` | `binance_futures:BTCUSDT:87654321` |
+
+#### Examples
 
 ```bash
+# Hyperliquid
 fintool cancel BTC:91490942
+
+# Binance spot
+fintool cancel binance_spot:BTCUSDT:12345678
+
+# Binance futures
+fintool cancel binance_futures:BTCUSDT:87654321
 ```
 
 ---
@@ -484,9 +582,12 @@ fintool cancel BTC:91490942
 
 Show account balances and margin summary.
 
+**Exchanges:** Both Hyperliquid and Binance supported
+
 ```bash
 fintool balance
 fintool balance --human
+fintool balance --exchange binance
 ```
 
 ---
@@ -495,20 +596,38 @@ fintool balance --human
 
 Show open positions with PnL.
 
+**Exchanges:** Both Hyperliquid and Binance supported
+
 ```bash
 fintool positions
 fintool positions --human
+fintool positions --exchange binance
 ```
 
 ---
 
 ### `fintool options buy/sell <SYMBOL> <TYPE> <STRIKE> <EXPIRY> <SIZE>`
 
-> ⚠️ **Stub** — Native options support coming with Hyperliquid HIP-4.
+Place an options order. **Binance only** — Hyperliquid doesn't support options yet (pending HIP-4).
+
+**Binance options symbol format:** `BTC-260328-80000-C`
+- Format: `BASE-YYMMDD-STRIKE-C/P`
+- `C` = Call, `P` = Put
+
+#### Examples
 
 ```bash
-fintool options buy BTC call 70000 2026-03-28 0.1
+# Buy a BTC call option (strike $80k, expiry 2026-03-28)
+fintool options buy BTC call 80000 260328 0.1
+
+# Sell a BTC put option
+fintool options sell BTC put 60000 260328 0.1
+
+# Explicit exchange flag (optional for options)
+fintool options buy BTC call 70000 260328 0.1 --exchange binance
 ```
+
+**Note:** Hyperliquid will return an error: *"Options trading requires Binance"*
 
 ---
 
@@ -559,45 +678,49 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 
 ## Command Summary
 
-| Command | Description |
-|---------|-------------|
-| `fintool init` | Create config file |
-| `fintool quote <SYM>` | Multi-source price + LLM analysis |
-| `fintool perp quote <SYM>` | Perp price + funding/OI/premium |
-| `fintool news <SYM>` | Latest news headlines |
-| `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings |
-| `fintool report list <SYM>` | List recent SEC filings |
-| `fintool report get <SYM> <ACC>` | Fetch specific filing |
-| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy |
-| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell |
-| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long |
-| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short |
-| `fintool orders [SYM]` | List open orders |
-| `fintool cancel <SYM:OID>` | Cancel an order |
-| `fintool balance` | Account balances |
-| `fintool positions` | Open positions + PnL |
-| `fintool options buy/sell ...` | Options (stub, HIP-4) |
-| `fintool predict list` | List prediction markets |
-| `fintool predict search <Q>` | Search prediction markets |
-| `fintool predict quote <ID>` | Quote prediction market |
-| `fintool predict buy/sell <ID> ...` | Trade predictions (stub) |
+| Command | Description | Exchanges |
+|---------|-------------|-----------|
+| `fintool init` | Create config file | N/A |
+| `fintool quote <SYM>` | Multi-source price + LLM analysis | N/A (read-only) |
+| `fintool perp quote <SYM>` | Perp price + funding/OI/premium | Hyperliquid, Binance |
+| `fintool news <SYM>` | Latest news headlines | N/A |
+| `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
+| `fintool report list <SYM>` | List recent SEC filings | N/A |
+| `fintool report get <SYM> <ACC>` | Fetch specific filing | N/A |
+| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance |
+| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance |
+| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long | Hyperliquid, Binance |
+| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short | Hyperliquid, Binance |
+| `fintool orders [SYM]` | List open orders | Hyperliquid, Binance |
+| `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance |
+| `fintool balance` | Account balances | Hyperliquid, Binance |
+| `fintool positions` | Open positions + PnL | Hyperliquid, Binance |
+| `fintool options buy/sell ...` | Options trading | Binance only |
+| `fintool predict list` | List prediction markets | Polymarket, Kalshi |
+| `fintool predict search <Q>` | Search prediction markets | Polymarket, Kalshi |
+| `fintool predict quote <ID>` | Quote prediction market | Polymarket, Kalshi |
+| `fintool predict buy/sell <ID> ...` | Trade predictions (stub) | Polymarket, Kalshi |
 
 ## Data Sources
 
-| Data | Source | Auth Required |
-|------|--------|---------------|
-| Spot prices (crypto + tokenized stocks) | Hyperliquid Spot API | No |
-| Traditional stock prices, indices, commodities | Yahoo Finance | No |
-| Crypto prices, 7d/30d trends, market cap | CoinGecko | No |
-| Quote analysis (trend, momentum, summary) | OpenAI API | `openai_api_key` |
-| Perp prices, funding, OI | Hyperliquid Perps API | No |
-| News | Google News RSS | No |
-| SEC filings (10-K, 10-Q) | SEC EDGAR | No |
-| Trading (spot + perps) | Hyperliquid Exchange API | Wallet private key |
-| Prediction markets (quotes) | Polymarket Gamma API | No |
-| Prediction markets (quotes) | Kalshi REST API | No |
-| Prediction markets (trading) | Polymarket CLOB | Wallet private key |
-| Prediction markets (trading) | Kalshi REST API | API key + secret |
+| Data | Source | Auth Required | Notes |
+|------|--------|---------------|-------|
+| Spot prices (crypto + tokenized stocks) | Hyperliquid Spot API | No | |
+| Traditional stock prices, indices, commodities | Yahoo Finance | No | |
+| Crypto prices, 7d/30d trends, market cap | CoinGecko | No | |
+| Quote analysis (trend, momentum, summary) | OpenAI API | `openai_api_key` | |
+| Perp prices, funding, OI (Hyperliquid) | Hyperliquid Perps API | No | |
+| Perp prices, funding, OI (Binance) | Binance Futures API | No | |
+| News | Google News RSS | No | |
+| SEC filings (10-K, 10-Q) | SEC EDGAR | No | |
+| Trading — Hyperliquid spot + perps | Hyperliquid Exchange API | Wallet private key | EIP-712 signing |
+| Trading — Binance spot | Binance Spot API `/api/v3/order` | API key + secret | HMAC-SHA256 signing |
+| Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
+| Trading — Binance options | Binance Options API `/eapi/v1/order` | API key + secret | HMAC-SHA256 signing |
+| Prediction markets (quotes) | Polymarket Gamma API | No | |
+| Prediction markets (quotes) | Kalshi REST API | No | |
+| Prediction markets (trading) | Polymarket CLOB | Wallet private key | |
+| Prediction markets (trading) | Kalshi REST API | API key + secret | |
 
 ## Architecture
 
@@ -605,26 +728,41 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 fintool/
 ├── src/
 │   ├── main.rs          # Entry point, command dispatch
-│   ├── cli.rs           # Clap CLI definitions
+│   ├── cli.rs           # Clap CLI definitions (global --exchange flag)
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
-│   ├── signing.rs       # Wallet signing, asset resolution, order execution
+│   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
+│   ├── binance.rs       # Binance API client (spot/futures/options, HMAC-SHA256 signing)
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
 │       ├── news.rs      # News via Google News RSS
 │       ├── report.rs    # SEC filings via EDGAR
-│       ├── order.rs     # Spot limit buy/sell
-│       ├── perp.rs      # Perp limit buy/sell
+│       ├── order.rs     # Spot limit buy/sell with exchange routing
+│       ├── perp.rs      # Perp limit buy/sell with exchange routing
 │       ├── orders.rs    # List open orders
-│       ├── cancel.rs    # Cancel orders
+│       ├── cancel.rs    # Cancel orders (supports Binance format)
 │       ├── balance.rs   # Account balance
 │       ├── positions.rs # Open positions
-│       ├── options.rs   # Options (stub, HIP-4)
+│       ├── options.rs   # Options trading (Binance only, real implementation)
 │       └── predict.rs   # Prediction markets (Polymarket + Kalshi)
 ├── config.toml.default  # Config template
 ├── Cargo.toml
 └── README.md
 ```
+
+### Key Modules
+
+**`binance.rs`** — Binance exchange integration:
+- HMAC-SHA256 request signing
+- Spot orders: `/api/v3/order`
+- Futures orders: `/fapi/v1/order`
+- Options orders: `/eapi/v1/order`
+- Account balances, positions, open orders, cancellation
+
+**Exchange Routing** — Commands with `--exchange` flag:
+- `resolve_exchange()` in each command module
+- Auto mode logic: check configured exchanges, default to Hyperliquid for spot/perp
+- Options always require Binance
 
 ## Key Dependencies
 
@@ -633,6 +771,7 @@ fintool/
 | `hyperliquid_rust_sdk` | Hyperliquid exchange client with EIP-712 signing |
 | `ethers` | Ethereum wallet and signing primitives |
 | `reqwest` | HTTP client (rustls TLS — no OpenSSL) |
+| `hmac`, `sha2`, `hex` | HMAC-SHA256 signing for Binance API |
 | `clap` | CLI argument parsing |
 | `serde` / `serde_json` | JSON serialization |
 | `colored` | Terminal colors (`--human` mode) |
