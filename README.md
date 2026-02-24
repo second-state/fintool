@@ -2,7 +2,15 @@
 
 A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, prediction markets, SEC filings, and news.
 
-## Installation
+## Install as an OpenClaw Skill
+
+Tell your [OpenClaw](https://openclaw.ai) agent:
+
+> Read https://raw.githubusercontent.com/second-state/fintool/refs/heads/main/skills/install.md and install the fintool skill.
+
+The agent will download the correct binary for your platform, set up the skill, and walk you through configuration.
+
+## Installation (Manual)
 
 ```bash
 cd fintool
