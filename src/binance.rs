@@ -485,6 +485,47 @@ pub async fn cancel_spot_order(
     Ok(body)
 }
 
+/// Get deposit address for a coin on a specific network
+pub async fn get_deposit_address(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    coin: &str,
+    network: Option<&str>,
+) -> Result<serde_json::Value> {
+    let timestamp = timestamp_ms();
+    let mut query_string = format!("coin={}&timestamp={}", coin.to_uppercase(), timestamp);
+    if let Some(net) = network {
+        query_string = format!("{}&network={}", query_string, net);
+    }
+    let signature = sign_request(api_secret, &query_string);
+    let url = format!(
+        "{}/sapi/v1/capital/deposit/address?{}&signature={}",
+        SPOT_BASE_URL, query_string, signature
+    );
+
+    let response = client
+        .get(&url)
+        .header("X-MBX-APIKEY", api_key)
+        .send()
+        .await
+        .context("Failed to get Binance deposit address")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
 /// Cancel a futures order
 pub async fn cancel_futures_order(
     client: &Client,

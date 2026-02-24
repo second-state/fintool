@@ -28,6 +28,7 @@ pub const USDC_ARBITRUM: &str = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
 
 // HL Bridge2 on Arbitrum
 pub const HL_BRIDGE2_MAINNET: &str = "0x2df1c51e09aecf9cacb7bc98cb1742757f163df7";
+#[allow(dead_code)]
 pub const HL_BRIDGE2_TESTNET: &str = "0x08cfc1B6b2dCF36A1480b99353A354AA8AC56f89";
 
 // Across API
@@ -90,6 +91,7 @@ impl std::str::FromStr for SourceChain {
 // ── Across API ───────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct AcrossSwapResponse {
     #[serde(rename = "crossSwapType")]
     pub cross_swap_type: Option<String>,

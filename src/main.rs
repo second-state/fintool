@@ -131,9 +131,17 @@ async fn main() -> Result<()> {
             asset,
             amount,
             from,
-            execute: _execute,
+            dry_run,
         } => {
-            commands::deposit::run(&asset, amount.as_deref(), from.as_deref(), json).await
+            commands::deposit::run(
+                &asset,
+                amount.as_deref(),
+                from.as_deref(),
+                &cli.exchange,
+                dry_run,
+                json,
+            )
+            .await
         }
         Commands::Withdraw { amount, asset, to } => {
             commands::withdraw::run(&amount, &asset, to.as_deref(), json).await

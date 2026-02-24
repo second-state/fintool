@@ -247,6 +247,72 @@ pub async fn get_orders(
 }
 
 /// Cancel an order
+/// List accounts (returns raw JSON, for internal use)
+pub async fn list_accounts_raw(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+) -> Result<serde_json::Value> {
+    let ts = timestamp();
+    let path = "/api/v3/brokerage/accounts";
+    let signature = sign_request(api_secret, &ts, "GET", path, "");
+    let url = format!("{}{}?limit=250", BASE_URL, path);
+
+    let response = client
+        .get(&url)
+        .header("CB-ACCESS-KEY", api_key)
+        .header("CB-ACCESS-SIGN", signature)
+        .header("CB-ACCESS-TIMESTAMP", ts)
+        .send()
+        .await
+        .context("Failed to get Coinbase accounts")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        bail!("Coinbase API error: {:?}", body);
+    }
+
+    Ok(body)
+}
+
+/// Generate a crypto deposit address for a Coinbase account
+pub async fn create_deposit_address(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    account_id: &str,
+) -> Result<serde_json::Value> {
+    let ts = timestamp();
+    let path = format!(
+        "/v2/accounts/{}/addresses",
+        account_id
+    );
+    let signature = sign_request(api_secret, &ts, "POST", &path, "{}");
+    let url = format!("{}{}", BASE_URL, path);
+
+    let response = client
+        .post(&url)
+        .header("CB-ACCESS-KEY", api_key)
+        .header("CB-ACCESS-SIGN", signature)
+        .header("CB-ACCESS-TIMESTAMP", ts)
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .send()
+        .await
+        .context("Failed to create Coinbase deposit address")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        bail!("Coinbase API error: {:?}", body);
+    }
+
+    Ok(body)
+}
+
 pub async fn cancel_order(
     client: &Client,
     api_key: &str,
