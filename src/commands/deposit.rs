@@ -40,7 +40,10 @@ pub async fn run(
                 deposit_unit(asset, json_out).await
             }
         }
-        other => bail!("Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase", other),
+        other => bail!(
+            "Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase",
+            other
+        ),
     }
 }
 
@@ -60,9 +63,14 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
     let chain = unit::native_chain(&asset_lower).unwrap();
     let min = unit::minimum_amount(&asset_lower).unwrap_or("unknown");
 
-    let resp =
-        unit::generate_address(chain, "hyperliquid", &asset_lower, &cfg.address, cfg.testnet)
-            .await?;
+    let resp = unit::generate_address(
+        chain,
+        "hyperliquid",
+        &asset_lower,
+        &cfg.address,
+        cfg.testnet,
+    )
+    .await?;
 
     let fees = unit::estimate_fees(cfg.testnet).await.ok();
 
@@ -116,8 +124,10 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
                 );
             }
             if let Some(fee) = f.get(chain).and_then(|c| c.get(&key_fee)) {
-                let fee_str =
-                    unit::format_amount(&fee.as_f64().unwrap_or(0.0).to_string(), &asset.to_lowercase());
+                let fee_str = unit::format_amount(
+                    &fee.as_f64().unwrap_or(0.0).to_string(),
+                    &asset.to_lowercase(),
+                );
                 println!("  {} {}", "Est. fee:    ".dimmed(), fee_str);
             }
         }
@@ -126,10 +136,7 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
             "  {} This address is permanent — send any amount, any time.",
             "ℹ".blue()
         );
-        println!(
-            "  {} Track status: fintool bridge-status",
-            "ℹ".blue()
-        );
+        println!("  {} Track status: fintool bridge-status", "ℹ".blue());
         println!();
     }
 
@@ -172,10 +179,7 @@ async fn deposit_usdc_hl(
         .as_deref()
         .unwrap_or(&quote.input_amount);
     let fill_time = quote.expected_fill_time.unwrap_or(0);
-    let needs_approval = quote
-        .approval_txns
-        .as_ref()
-        .is_some_and(|a| !a.is_empty());
+    let needs_approval = quote.approval_txns.as_ref().is_some_and(|a| !a.is_empty());
 
     if dry_run {
         // Quote-only mode
@@ -225,24 +229,25 @@ async fn deposit_usdc_hl(
             println!("  {} ~{}s", "Fill time:  ".dimmed(), fill_time);
             println!("  {} {}", "HL address: ".dimmed(), cfg.address.cyan());
             println!();
-            println!(
-                "  {} Remove --dry-run to execute.",
-                "ℹ".blue()
-            );
+            println!("  {} Remove --dry-run to execute.", "ℹ".blue());
             println!();
         }
         return Ok(());
     }
 
     // Execute mode
-    eprintln!("Executing USDC bridge: {} → Arbitrum → Hyperliquid...", source.name());
+    eprintln!(
+        "Executing USDC bridge: {} → Arbitrum → Hyperliquid...",
+        source.name()
+    );
 
     let provider_url = source.rpc_url();
     let arb_provider_url = bridge::RPC_ARBITRUM;
 
     // Build ethers provider + signer for source chain
-    let source_provider = ethers::providers::Provider::<ethers::providers::Http>::try_from(provider_url)
-        .context("Failed to connect to source chain RPC")?;
+    let source_provider =
+        ethers::providers::Provider::<ethers::providers::Http>::try_from(provider_url)
+            .context("Failed to connect to source chain RPC")?;
     let source_wallet = cfg
         .private_key
         .parse::<ethers::signers::LocalWallet>()
@@ -258,8 +263,14 @@ async fn deposit_usdc_hl(
         for (i, atx) in approval_txns.iter().enumerate() {
             eprintln!("  Sending approval tx {}/{}...", i + 1, approval_txns.len());
             let tx = ethers::types::TransactionRequest::new()
-                .to(atx.to.parse::<ethers::types::Address>().context("Invalid approval address")?)
-                .data(hex::decode(atx.data.strip_prefix("0x").unwrap_or(&atx.data)).context("Invalid approval data")?)
+                .to(atx
+                    .to
+                    .parse::<ethers::types::Address>()
+                    .context("Invalid approval address")?)
+                .data(
+                    hex::decode(atx.data.strip_prefix("0x").unwrap_or(&atx.data))
+                        .context("Invalid approval data")?,
+                )
                 .chain_id(source.chain_id());
 
             let pending = source_client
@@ -272,10 +283,7 @@ async fn deposit_usdc_hl(
                 .context("Approval tx failed")?
                 .ok_or_else(|| anyhow::anyhow!("Approval tx dropped"))?;
 
-            eprintln!(
-                "  ✅ Approval tx confirmed: {:?}",
-                receipt.transaction_hash
-            );
+            eprintln!("  ✅ Approval tx confirmed: {:?}", receipt.transaction_hash);
         }
     }
 
@@ -289,8 +297,21 @@ async fn deposit_usdc_hl(
         .unwrap_or_default();
 
     let bridge_tx = ethers::types::TransactionRequest::new()
-        .to(quote.swap_tx.to.parse::<ethers::types::Address>().context("Invalid bridge address")?)
-        .data(hex::decode(quote.swap_tx.data.strip_prefix("0x").unwrap_or(&quote.swap_tx.data)).context("Invalid bridge data")?)
+        .to(quote
+            .swap_tx
+            .to
+            .parse::<ethers::types::Address>()
+            .context("Invalid bridge address")?)
+        .data(
+            hex::decode(
+                quote
+                    .swap_tx
+                    .data
+                    .strip_prefix("0x")
+                    .unwrap_or(&quote.swap_tx.data),
+            )
+            .context("Invalid bridge data")?,
+        )
         .value(bridge_value)
         .chain_id(source.chain_id());
 
@@ -308,17 +329,15 @@ async fn deposit_usdc_hl(
     eprintln!("  ✅ Bridge tx confirmed: {}", bridge_tx_hash);
 
     // Step 4: Wait for Across relayer to fill on Arbitrum
-    eprintln!(
-        "  Waiting for Across relayer (~{}s)...",
-        fill_time.max(5)
-    );
+    eprintln!("  Waiting for Across relayer (~{}s)...", fill_time.max(5));
     tokio::time::sleep(tokio::time::Duration::from_secs(fill_time.max(10))).await;
 
     // Step 5: Send USDC from Arbitrum address to HL Bridge2
     eprintln!("  Sending USDC to HL Bridge2 on Arbitrum...");
 
-    let arb_provider = ethers::providers::Provider::<ethers::providers::Http>::try_from(arb_provider_url)
-        .context("Failed to connect to Arbitrum RPC")?;
+    let arb_provider =
+        ethers::providers::Provider::<ethers::providers::Http>::try_from(arb_provider_url)
+            .context("Failed to connect to Arbitrum RPC")?;
     let arb_wallet = cfg
         .private_key
         .parse::<ethers::signers::LocalWallet>()
@@ -332,7 +351,9 @@ async fn deposit_usdc_hl(
     // ERC-20 transfer USDC to HL Bridge2
     let transfer_data = bridge::encode_erc20_transfer(bridge::HL_BRIDGE2_MAINNET, output_amount)?;
     let hl_deposit_tx = ethers::types::TransactionRequest::new()
-        .to(bridge::USDC_ARBITRUM.parse::<ethers::types::Address>().context("Invalid USDC address")?)
+        .to(bridge::USDC_ARBITRUM
+            .parse::<ethers::types::Address>()
+            .context("Invalid USDC address")?)
         .data(transfer_data)
         .chain_id(bridge::ARBITRUM_CHAIN_ID);
 
@@ -395,25 +416,24 @@ async fn deposit_usdc_hl(
 // ── Binance deposit address ──────────────────────────────────────────
 
 async fn deposit_binance(asset: &str, network: Option<&str>, json_out: bool) -> Result<()> {
-    let (api_key, api_secret) = config::binance_credentials()
-        .ok_or_else(|| anyhow::anyhow!("Binance API keys not configured in ~/.fintool/config.toml"))?;
+    let (api_key, api_secret) = config::binance_credentials().ok_or_else(|| {
+        anyhow::anyhow!("Binance API keys not configured in ~/.fintool/config.toml")
+    })?;
 
     let client = reqwest::Client::new();
 
     // Map common chain names to Binance network codes
-    let binance_network: Option<String> = network.map(|n| {
-        match n.to_lowercase().as_str() {
-            "ethereum" | "eth" | "mainnet" | "erc20" => "ETH".to_string(),
-            "base" => "BASE".to_string(),
-            "arbitrum" | "arb" => "ARBITRUM".to_string(),
-            "solana" | "sol" => "SOL".to_string(),
-            "bitcoin" | "btc" => "BTC".to_string(),
-            "bsc" | "bnb" => "BSC".to_string(),
-            "polygon" | "matic" => "MATIC".to_string(),
-            "optimism" | "op" => "OPTIMISM".to_string(),
-            "avalanche" | "avax" => "AVAXC".to_string(),
-            _ => n.to_uppercase(),
-        }
+    let binance_network: Option<String> = network.map(|n| match n.to_lowercase().as_str() {
+        "ethereum" | "eth" | "mainnet" | "erc20" => "ETH".to_string(),
+        "base" => "BASE".to_string(),
+        "arbitrum" | "arb" => "ARBITRUM".to_string(),
+        "solana" | "sol" => "SOL".to_string(),
+        "bitcoin" | "btc" => "BTC".to_string(),
+        "bsc" | "bnb" => "BSC".to_string(),
+        "polygon" | "matic" => "MATIC".to_string(),
+        "optimism" | "op" => "OPTIMISM".to_string(),
+        "avalanche" | "avax" => "AVAXC".to_string(),
+        _ => n.to_uppercase(),
     });
 
     let resp = binance::get_deposit_address(
@@ -448,11 +468,7 @@ async fn deposit_binance(asset: &str, network: Option<&str>, json_out: bool) -> 
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         println!("{}", "━".repeat(50).dimmed());
-        println!(
-            "  {} {} → Binance",
-            "Deposit".green().bold(),
-            coin.cyan()
-        );
+        println!("  {} {} → Binance", "Deposit".green().bold(), coin.cyan());
         println!("{}", "━".repeat(50).dimmed());
         println!();
         if let Some(net) = binance_network.as_deref() {
@@ -474,8 +490,9 @@ async fn deposit_binance(asset: &str, network: Option<&str>, json_out: bool) -> 
 // ── Coinbase deposit address ─────────────────────────────────────────
 
 async fn deposit_coinbase(asset: &str, json_out: bool) -> Result<()> {
-    let (api_key, api_secret) = config::coinbase_credentials()
-        .ok_or_else(|| anyhow::anyhow!("Coinbase API keys not configured in ~/.fintool/config.toml"))?;
+    let (api_key, api_secret) = config::coinbase_credentials().ok_or_else(|| {
+        anyhow::anyhow!("Coinbase API keys not configured in ~/.fintool/config.toml")
+    })?;
 
     let client = reqwest::Client::new();
 
@@ -510,9 +527,7 @@ async fn deposit_coinbase(asset: &str, json_out: bool) -> Result<()> {
         .or_else(|| resp["address"].as_str())
         .unwrap_or("unknown");
 
-    let network = resp["data"]["network"]
-        .as_str()
-        .unwrap_or("");
+    let network = resp["data"]["network"].as_str().unwrap_or("");
 
     if json_out {
         let mut out = json!({

@@ -186,11 +186,7 @@ fn float_to_wire(val: f64, sz_decimals: u32) -> String {
 
 fn price_to_wire(price: f64, sz_decimals: u32) -> String {
     // Prices use (6 - szDecimals) significant decimals for perps
-    let max_decimals = if sz_decimals < 6 {
-        6 - sz_decimals
-    } else {
-        0
-    };
+    let max_decimals = if sz_decimals < 6 { 6 - sz_decimals } else { 0 };
     let s = format!("{:.5}", price); // 5 sig figures first
     let parsed: f64 = s.parse().unwrap_or(price);
     format!("{:.prec$}", parsed, prec = max_decimals as usize)
@@ -236,8 +232,8 @@ pub async fn place_order(
         .duration_since(std::time::UNIX_EPOCH)?
         .as_millis() as u64;
 
-    let mut bytes = rmp_serde::to_vec_named(&action)
-        .context("Failed to msgpack serialize order")?;
+    let mut bytes =
+        rmp_serde::to_vec_named(&action).context("Failed to msgpack serialize order")?;
     bytes.extend(timestamp.to_be_bytes());
     bytes.push(0u8); // no vault address
     let connection_id = H256(keccak256(bytes));
