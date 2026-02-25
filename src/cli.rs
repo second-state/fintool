@@ -53,10 +53,6 @@ pub enum Commands {
     #[command(subcommand)]
     Options(OptionsCmd),
 
-    /// Prediction market trading
-    #[command(subcommand)]
-    Predict(PredictCmd),
-
     /// Get stock reports (10-K annual, 10-Q quarterly) from SEC EDGAR
     #[command(subcommand)]
     Report(ReportCmd),
@@ -190,55 +186,5 @@ pub enum OptionsCmd {
         strike: String,
         expiry: String,
         size: String,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum PredictCmd {
-    /// List trending/popular prediction markets
-    List {
-        /// Filter by platform: polymarket, kalshi, or all (default)
-        #[arg(long, default_value = "all")]
-        platform: String,
-        /// Max results
-        #[arg(long, default_value = "10")]
-        limit: usize,
-    },
-    /// Search prediction markets by keyword
-    Search {
-        query: String,
-        #[arg(long, default_value = "all")]
-        platform: String,
-        #[arg(long, default_value = "10")]
-        limit: usize,
-    },
-    /// Get price/probability quote for a specific market
-    Quote {
-        /// Market ID or ticker (e.g. polymarket:slug or kalshi:TICKER)
-        market: String,
-    },
-    /// Buy a prediction contract
-    Buy {
-        /// Market ID (polymarket:slug or kalshi:TICKER)
-        market: String,
-        /// Side: yes or no
-        side: String,
-        /// Amount in USDC (Polymarket) or USD (Kalshi)
-        amount: String,
-        /// Max price in cents (1-99)
-        #[arg(long)]
-        max_price: Option<String>,
-    },
-    /// Sell a prediction contract
-    Sell {
-        /// Market ID (polymarket:slug or kalshi:TICKER)
-        market: String,
-        /// Side: yes or no
-        side: String,
-        /// Number of contracts to sell
-        amount: String,
-        /// Min price in cents (1-99)
-        #[arg(long)]
-        min_price: Option<String>,
     },
 }

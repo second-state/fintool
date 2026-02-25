@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Unit**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, prediction markets on **Polymarket** and **Kalshi**, SEC filings, and news.
+A Rust CLI for financial trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Unit**, **Binance**, and **Coinbase**, stock quotes, LLM-enriched analysis, SEC filings, and news.
 
 ## Install as an OpenClaw Skill
 
@@ -47,10 +47,6 @@ fintool news ETH
 # SEC filings
 fintool report annual AAPL
 fintool report list TSLA
-
-# Prediction markets
-fintool predict list
-fintool predict search "election"
 
 # Spot trading (auto-selects exchange)
 fintool order buy TSLA 100 410
@@ -186,9 +182,6 @@ binance_api_secret = "..."
 coinbase_api_key = "..."
 coinbase_api_secret = "..."
 
-# Kalshi — prediction market trading
-# kalshi_api_key = "..."
-# kalshi_api_secret = "..."
 ```
 
 ### Config Options
@@ -205,9 +198,6 @@ coinbase_api_secret = "..."
 | `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
 | `api_keys` | `coinbase_api_key` | string | — | Coinbase Advanced Trade API key. |
 | `api_keys` | `coinbase_api_secret` | string | — | Coinbase Advanced Trade API secret (HMAC-SHA256 signing). |
-| `api_keys` | `kalshi_api_key` | string | — | Kalshi API key (for prediction market trading). |
-| `api_keys` | `kalshi_api_secret` | string | — | Kalshi API secret. |
-
 ### What Needs Configuration
 
 | Command | Hyperliquid Wallet | Binance Keys | Coinbase Keys | OpenAI Key | Exchange Support |
@@ -216,7 +206,6 @@ coinbase_api_secret = "..."
 | `perp quote` | No | No | No | No | N/A (read-only) |
 | `news`, `init` | No | No | No | No | N/A |
 | `report` | No | No | No | No | N/A |
-| `predict list/search/quote` | No | No | No | No | N/A |
 | `order buy/sell` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `perp buy/sell` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
 | `orders` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
@@ -224,7 +213,6 @@ coinbase_api_secret = "..."
 | `balance` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `positions` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `options buy/sell` | No | Yes (Binance) | No | No | Binance only |
-| `predict buy/sell` | Yes (HL) | No | No | No | Polymarket/Kalshi |
 | `deposit` (HL) | Yes | No | No | No | Hyperliquid |
 | `deposit` (Binance) | No | Yes | No | No | Binance |
 | `deposit` (Coinbase) | No | No | Yes | No | Coinbase |
@@ -950,51 +938,6 @@ fintool bridge-status --human
 
 ---
 
-### `fintool predict list [--platform <PLATFORM>] [--limit <N>]`
-
-List trending prediction markets from Polymarket and/or Kalshi.
-
-```bash
-fintool predict list
-fintool predict list --platform polymarket --limit 5
-fintool predict list --platform kalshi --human
-```
-
----
-
-### `fintool predict search <QUERY> [--platform <PLATFORM>] [--limit <N>]`
-
-Search prediction markets by keyword.
-
-```bash
-fintool predict search "trump"
-fintool predict search "BTC" --platform kalshi
-```
-
----
-
-### `fintool predict quote <MARKET_ID>`
-
-Get detailed quote for a specific market. Market ID format: `platform:identifier`.
-
-```bash
-fintool predict quote kalshi:KXBALANCE-29
-fintool predict quote polymarket:china-coup-attempt-before-2027
-```
-
----
-
-### `fintool predict buy/sell <MARKET_ID> <SIDE> <AMOUNT>`
-
-> ⚠️ **Stub** — Requires Polymarket CLOB signing or Kalshi API credentials.
-
-```bash
-fintool predict buy kalshi:KXBALANCE-29 yes 10
-fintool predict sell polymarket:some-market no 50 --min-price 90
-```
-
----
-
 ## Command Summary
 
 | Command | Description | Exchanges |
@@ -1015,14 +958,9 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | `fintool balance` | Account balances | Hyperliquid, Binance, Coinbase |
 | `fintool positions` | Open positions + PnL | Hyperliquid, Binance, Coinbase |
 | `fintool options buy/sell ...` | Options trading | Binance only |
-| `fintool predict list` | List prediction markets | Polymarket, Kalshi |
-| `fintool predict search <Q>` | Search prediction markets | Polymarket, Kalshi |
-| `fintool predict quote <ID>` | Quote prediction market | Polymarket, Kalshi |
 | `fintool deposit <ASSET>` | Deposit to exchange | Hyperliquid, Binance, Coinbase |
 | `fintool withdraw <AMT> <ASSET>` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
 | `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
-| `fintool predict buy/sell <ID> ...` | Trade predictions (stub) | Polymarket, Kalshi |
-
 ## Data Sources
 
 | Data | Source | Auth Required | Notes |
@@ -1040,10 +978,6 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance options | Binance Options API `/eapi/v1/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Coinbase spot | Coinbase Advanced Trade API `/api/v3/brokerage/orders` | API key + secret | HMAC-SHA256 signing |
-| Prediction markets (quotes) | Polymarket Gamma API | No | |
-| Prediction markets (quotes) | Kalshi REST API | No | |
-| Prediction markets (trading) | Polymarket CLOB | Wallet private key | |
-| Prediction markets (trading) | Kalshi REST API | API key + secret | |
 | Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
 | Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
 | Deposit/Withdraw — HL USDC | Hyperliquid Bridge2 | Wallet private key | Arbitrum ↔ Hyperliquid |
@@ -1067,7 +1001,6 @@ fintool/
 │   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, deposit/withdraw, HMAC-SHA256)
 │   ├── bridge.rs        # Across Protocol cross-chain USDC bridge (Ethereum/Base ↔ Arbitrum)
 │   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw, fee estimation)
-│   ├── polymarket.rs    # Polymarket CLOB client
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
@@ -1080,7 +1013,6 @@ fintool/
 │       ├── balance.rs   # Account balance
 │       ├── positions.rs # Open positions
 │       ├── options.rs   # Options trading (Binance only)
-│       ├── predict.rs   # Prediction markets (Polymarket + Kalshi)
 │       ├── deposit.rs   # Multi-exchange deposit (Unit, Across, Binance, Coinbase)
 │       ├── withdraw.rs  # Multi-exchange withdraw (Bridge2, Unit, Across, Binance, Coinbase)
 │       └── bridge_status.rs # HyperUnit bridge operation tracker

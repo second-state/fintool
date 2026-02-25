@@ -6,12 +6,11 @@ mod commands;
 mod config;
 mod format;
 mod hip3;
-mod polymarket;
 mod signing;
 mod unit;
 
 use anyhow::Result;
-use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, PredictCmd, ReportCmd};
+use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, ReportCmd};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -104,29 +103,6 @@ async fn main() -> Result<()> {
                 )
                 .await
             }
-        },
-        Commands::Predict(cmd) => match cmd {
-            PredictCmd::List { platform, limit } => {
-                commands::predict::list(&platform, limit, json).await
-            }
-            PredictCmd::Search {
-                query,
-                platform,
-                limit,
-            } => commands::predict::search(&query, &platform, limit, json).await,
-            PredictCmd::Quote { market } => commands::predict::quote(&market, json).await,
-            PredictCmd::Buy {
-                market,
-                side,
-                amount,
-                max_price,
-            } => commands::predict::buy(&market, &side, &amount, max_price.as_deref(), json).await,
-            PredictCmd::Sell {
-                market,
-                side,
-                amount,
-                min_price,
-            } => commands::predict::sell(&market, &side, &amount, min_price.as_deref(), json).await,
         },
         Commands::Deposit {
             asset,

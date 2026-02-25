@@ -55,11 +55,6 @@ jobs:
       - name: Smoke test - news
         run: ./target/release/fintool news BTC || true
 
-      - name: Smoke test - predict
-        run: |
-          ./target/release/fintool predict list || true
-          ./target/release/fintool predict search "election" || true
-
       - name: Smoke test - report
         run: ./target/release/fintool report list AAPL || true
 
