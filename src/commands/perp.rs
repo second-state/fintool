@@ -2,8 +2,8 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
-use crate::commands::quote::commodity_to_spot_token;
-use crate::{binance, config, signing};
+use crate::commands::quote::resolve_hip3_asset;
+use crate::{binance, config, hip3, signing};
 
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
@@ -69,9 +69,9 @@ pub async fn buy(
     let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
     let size = amount_f / price_f;
 
-    // Check if this is a commodity → route to spot order
-    if let Some(spot_token) = commodity_to_spot_token(&symbol) {
-        return commodity_spot_buy(spot_token, &symbol, price_f, size, &cfg, json_output).await;
+    // Check if this is a HIP-3 asset (commodities, stocks)
+    if let Some((dex, asset_name)) = resolve_hip3_asset(&symbol) {
+        return hip3_perp_buy(&dex, &asset_name, &symbol, price_f, size, amount_usdc, &cfg, json_output).await;
     }
 
     if !json_output {
@@ -156,9 +156,9 @@ pub async fn sell(
     let size: f64 = amount.parse().context("Invalid amount")?;
     let price_f: f64 = price.parse().context("Invalid price")?;
 
-    // Check if this is a commodity → route to spot order
-    if let Some(spot_token) = commodity_to_spot_token(&symbol) {
-        return commodity_spot_sell(spot_token, &symbol, price_f, size, &cfg, json_output).await;
+    // Check if this is a HIP-3 asset (commodities, stocks)
+    if let Some((dex, asset_name)) = resolve_hip3_asset(&symbol) {
+        return hip3_perp_sell(&dex, &asset_name, &symbol, price_f, size, &cfg, json_output).await;
     }
 
     if !json_output {
@@ -203,29 +203,32 @@ pub async fn sell(
     Ok(())
 }
 
-// ── Commodity spot order helpers ─────────────────────────────────────
+// ── HIP-3 perp order helpers ─────────────────────────────────────────
 
-/// Route a commodity "perp buy" to a spot buy on HL
-async fn commodity_spot_buy(
-    spot_token: &str,
+/// Place a HIP-3 perp buy order (e.g. cash:SILVER)
+#[allow(clippy::too_many_arguments)]
+async fn hip3_perp_buy(
+    dex: &str,
+    asset_name: &str,
     original_symbol: &str,
     price: f64,
     size: f64,
+    amount_usdc: &str,
     cfg: &config::HlConfig,
     json_output: bool,
 ) -> Result<()> {
     if !json_output {
         println!();
         println!(
-            "  📝 {} trades as {}/USDC spot on Hyperliquid",
-            original_symbol,
-            spot_token
+            "  📝 Placing HIP-3 perp limit BUY ({} on {} dex)",
+            asset_name.cyan(),
+            dex
         );
-        println!("  Placing spot limit BUY");
-        println!("  Token:    {}", spot_token.cyan());
+        println!("  Symbol:   {}", original_symbol.cyan());
+        println!("  Asset:    {}", asset_name);
         println!("  Size:     {:.6}", size);
         println!("  Price:    ${:.2}", price);
-        println!("  Total:    ${:.2}", price * size);
+        println!("  Total:    ${}", amount_usdc);
         println!(
             "  Network:  {}",
             if cfg.testnet { "Testnet" } else { "Mainnet" }
@@ -233,41 +236,41 @@ async fn commodity_spot_buy(
         println!();
     }
 
-    let result = signing::place_spot_order(spot_token, true, price, size).await?;
+    let result = hip3::place_order(dex, asset_name, true, price, size).await?;
 
     let response = json!({
-        "action": "commodity_spot_buy",
+        "action": "hip3_perp_buy",
         "symbol": original_symbol,
-        "spotToken": spot_token,
+        "hip3Asset": asset_name,
+        "dex": dex,
         "size": format!("{:.6}", size),
         "price": format!("{:.2}", price),
-        "total_usdc": format!("{:.2}", price * size),
+        "total_usdc": amount_usdc,
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
-        "note": format!("{} trades as {}/USDC spot pair (no perp available)", original_symbol, spot_token),
-        "result": format!("{:?}", result),
+        "result": result,
     });
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&response)?);
     } else {
-        match result {
-            hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  ✅ Spot order placed!");
-                println!("  Response: {:?}", data);
-            }
-            hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  ❌ Order failed: {}", e);
+        if let Some(status) = result.get("status").and_then(|s| s.as_str()) {
+            if status == "ok" {
+                println!("  ✅ HIP-3 perp order placed!");
+            } else {
+                println!("  ❌ Order failed: {}", status);
             }
         }
+        println!("  Response: {}", serde_json::to_string_pretty(&result)?);
         println!();
     }
 
     Ok(())
 }
 
-/// Route a commodity "perp sell" to a spot sell on HL
-async fn commodity_spot_sell(
-    spot_token: &str,
+/// Place a HIP-3 perp sell order
+async fn hip3_perp_sell(
+    dex: &str,
+    asset_name: &str,
     original_symbol: &str,
     price: f64,
     size: f64,
@@ -277,12 +280,12 @@ async fn commodity_spot_sell(
     if !json_output {
         println!();
         println!(
-            "  📝 {} trades as {}/USDC spot on Hyperliquid",
-            original_symbol,
-            spot_token
+            "  📝 Placing HIP-3 perp limit SELL ({} on {} dex)",
+            asset_name.cyan(),
+            dex
         );
-        println!("  Placing spot limit SELL");
-        println!("  Token:    {}", spot_token.cyan());
+        println!("  Symbol:   {}", original_symbol.cyan());
+        println!("  Asset:    {}", asset_name);
         println!("  Size:     {:.6}", size);
         println!("  Price:    ${:.2}", price);
         println!(
@@ -292,31 +295,30 @@ async fn commodity_spot_sell(
         println!();
     }
 
-    let result = signing::place_spot_order(spot_token, false, price, size).await?;
+    let result = hip3::place_order(dex, asset_name, false, price, size).await?;
 
     let response = json!({
-        "action": "commodity_spot_sell",
+        "action": "hip3_perp_sell",
         "symbol": original_symbol,
-        "spotToken": spot_token,
+        "hip3Asset": asset_name,
+        "dex": dex,
         "size": format!("{:.6}", size),
         "price": format!("{:.2}", price),
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
-        "note": format!("{} trades as {}/USDC spot pair (no perp available)", original_symbol, spot_token),
-        "result": format!("{:?}", result),
+        "result": result,
     });
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&response)?);
     } else {
-        match result {
-            hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
-                println!("  ✅ Spot order placed!");
-                println!("  Response: {:?}", data);
-            }
-            hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
-                println!("  ❌ Order failed: {}", e);
+        if let Some(status) = result.get("status").and_then(|s| s.as_str()) {
+            if status == "ok" {
+                println!("  ✅ HIP-3 perp order placed!");
+            } else {
+                println!("  ❌ Order failed: {}", status);
             }
         }
+        println!("  Response: {}", serde_json::to_string_pretty(&result)?);
         println!();
     }
 

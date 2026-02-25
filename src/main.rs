@@ -2,6 +2,7 @@ mod binance;
 mod bridge;
 mod cli;
 mod coinbase;
+mod hip3;
 mod commands;
 mod config;
 mod format;

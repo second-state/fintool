@@ -357,13 +357,173 @@ async fn fetch_hl_perp(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         }
     }
 
-    // Not found in perps — check if it's a commodity with a spot pair
+    // Not found in main perps — check HIP-3 dexes (e.g. cash:SILVER, cash:GOLD)
+    if let Ok(data) = fetch_hip3_perp(client, symbol).await {
+        return Ok(data);
+    }
+
+    // Last resort — check if it's a commodity with a spot pair only
     let commodity_token = commodity_to_spot_token(symbol);
     if let Some(token) = commodity_token {
         return fetch_hl_commodity_as_perp(client, symbol, token).await;
     }
 
     anyhow::bail!("Symbol {} not found in Hyperliquid perps", symbol)
+}
+
+/// Map user-friendly names to HIP-3 dex:symbol pairs
+/// Returns (dex_name, asset_name_in_dex) e.g. ("cash", "cash:SILVER")
+fn hip3_symbol_map(symbol: &str) -> Vec<(&'static str, String)> {
+    let sym = symbol.to_uppercase();
+
+    // If already prefixed with dex name, use directly
+    if sym.contains(':') {
+        let parts: Vec<&str> = sym.splitn(2, ':').collect();
+        if parts.len() == 2 {
+            return vec![(
+                match parts[0].to_lowercase().as_str() {
+                    "cash" => "cash",
+                    "xyz" => "xyz",
+                    "flx" => "flx",
+                    "km" => "km",
+                    _ => return vec![],
+                },
+                sym.to_lowercase(),
+            )];
+        }
+    }
+
+    // Map common aliases to the most liquid HIP-3 dex
+    // cash (dreamcash) is the most liquid for commodities and stocks
+    let mapped = match sym.as_str() {
+        // Commodities
+        "SILVER" | "XAG" => Some("SILVER"),
+        "GOLD" | "XAU" => Some("GOLD"),
+        // US indices
+        "USA500" | "SP500" | "SPX" => Some("USA500"),
+        // Stocks available on cash dex
+        "TSLA" | "NVDA" | "GOOGL" | "AMZN" | "MSFT" | "META" | "INTC" | "HOOD" => {
+            Some(sym.as_str())
+        }
+        _ => None,
+    };
+
+    if let Some(asset) = mapped {
+        // Try cash dex first (most liquid), then others
+        vec![
+            ("cash", format!("cash:{}", asset)),
+            ("xyz", format!("xyz:{}", asset)),
+            ("km", format!("km:{}", asset)),
+        ]
+    } else {
+        vec![]
+    }
+}
+
+/// Fetch perp data from HIP-3 dexes (e.g. cash:SILVER, cash:GOLD)
+async fn fetch_hip3_perp(client: &reqwest::Client, symbol: &str) -> Result<Value> {
+    let candidates = hip3_symbol_map(symbol);
+    if candidates.is_empty() {
+        anyhow::bail!("No HIP-3 mapping for {}", symbol);
+    }
+
+    let url = config::info_url();
+
+    for (dex, asset_name) in &candidates {
+        let meta_resp: Value = client
+            .post(&url)
+            .json(&json!({"type": "metaAndAssetCtxs", "dex": dex}))
+            .send()
+            .await?
+            .json()
+            .await
+            .context("Failed to parse HIP-3 metaAndAssetCtxs")?;
+
+        if let (Some(universe), Some(ctxs)) = (
+            meta_resp
+                .get(0)
+                .and_then(|m| m.get("universe"))
+                .and_then(|u| u.as_array()),
+            meta_resp.get(1).and_then(|c| c.as_array()),
+        ) {
+            for (i, asset) in universe.iter().enumerate() {
+                let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                if name.eq_ignore_ascii_case(asset_name) {
+                    if let Some(ctx) = ctxs.get(i) {
+                        let funding = ctx
+                            .get("funding")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let open_interest = ctx
+                            .get("openInterest")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let volume = ctx
+                            .get("dayNtlVlm")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let mark_px = ctx
+                            .get("markPx")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let oracle_px = ctx
+                            .get("oraclePx")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let prev_day_px = ctx
+                            .get("prevDayPx")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let premium = ctx
+                            .get("premium")
+                            .and_then(|f| f.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let max_leverage = asset
+                            .get("maxLeverage")
+                            .and_then(|l| l.as_u64())
+                            .unwrap_or(0);
+                        let change_24h = calc_change(&mark_px, &prev_day_px);
+
+                        return Ok(json!({
+                            "symbol": symbol.to_uppercase(),
+                            "hip3Asset": name,
+                            "dex": dex,
+                            "markPx": mark_px,
+                            "oraclePx": oracle_px,
+                            "change24h": change_24h,
+                            "funding": funding,
+                            "premium": premium,
+                            "openInterest": open_interest,
+                            "volume24h": volume,
+                            "prevDayPx": prev_day_px,
+                            "maxLeverage": max_leverage,
+                            "source": format!("Hyperliquid HIP-3 ({})", dex),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    anyhow::bail!("Symbol {} not found in HIP-3 dexes", symbol)
+}
+
+/// Resolve a symbol to its HIP-3 dex asset name (for trading)
+/// Returns (dex_name, full_asset_name) e.g. ("cash", "cash:SILVER")
+pub fn resolve_hip3_asset(symbol: &str) -> Option<(String, String)> {
+    let candidates = hip3_symbol_map(symbol);
+    // Return the first candidate (most liquid dex)
+    candidates
+        .into_iter()
+        .next()
+        .map(|(dex, asset)| (dex.to_string(), asset))
 }
 
 /// Map commodity aliases to HL spot token names
