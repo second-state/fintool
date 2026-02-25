@@ -103,7 +103,10 @@ async fn withdraw_usdc_hl(
         return Ok(());
     }
 
-    eprintln!("Withdrawing {} USDC from Hyperliquid to Arbitrum...", amount);
+    eprintln!(
+        "Withdrawing {} USDC from Hyperliquid to Arbitrum...",
+        amount
+    );
 
     use ethers::signers::LocalWallet;
     use hyperliquid_rust_sdk::{BaseUrl, ExchangeClient};
@@ -161,7 +164,10 @@ async fn withdraw_usdc_hl_bridged(
     let cfg = config::load_hl_config()?;
 
     // Get Across quote for the Arbitrum → destination leg
-    eprintln!("Fetching Across bridge quote (Arbitrum → {})...", dest_chain.name());
+    eprintln!(
+        "Fetching Across bridge quote (Arbitrum → {})...",
+        dest_chain.name()
+    );
     let quote = bridge::get_across_quote_reverse(dest_chain, amount, &cfg.address).await?;
 
     let output_amount = quote
@@ -169,10 +175,7 @@ async fn withdraw_usdc_hl_bridged(
         .as_deref()
         .unwrap_or(&quote.input_amount);
     let fill_time = quote.expected_fill_time.unwrap_or(0);
-    let needs_approval = quote
-        .approval_txns
-        .as_ref()
-        .is_some_and(|a| !a.is_empty());
+    let needs_approval = quote.approval_txns.as_ref().is_some_and(|a| !a.is_empty());
 
     if dry_run {
         if json_out {
@@ -224,7 +227,8 @@ async fn withdraw_usdc_hl_bridged(
     // Step 1: Withdraw USDC from HL to Arbitrum
     eprintln!("Step 1: Withdrawing {} USDC from HL to Arbitrum...", amount);
 
-    let wallet: ethers::signers::LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let wallet: ethers::signers::LocalWallet =
+        cfg.private_key.parse().context("Invalid private key")?;
     let base_url = if cfg.testnet {
         hyperliquid_rust_sdk::BaseUrl::Testnet
     } else {
@@ -254,8 +258,8 @@ async fn withdraw_usdc_hl_bridged(
         dest_chain.name()
     );
 
-    let arb_provider =
-        Provider::<Http>::try_from(bridge::RPC_ARBITRUM).context("Failed to connect to Arbitrum RPC")?;
+    let arb_provider = Provider::<Http>::try_from(bridge::RPC_ARBITRUM)
+        .context("Failed to connect to Arbitrum RPC")?;
     let arb_wallet: LocalWallet = cfg
         .private_key
         .parse::<LocalWallet>()
@@ -357,11 +361,7 @@ async fn withdraw_usdc_hl_bridged(
             "Route:      ".dimmed(),
             dest_chain.name()
         );
-        println!(
-            "  {} {}",
-            "Destination:".dimmed(),
-            destination.cyan()
-        );
+        println!("  {} {}", "Destination:".dimmed(), destination.cyan());
         println!("  {} {}", "Bridge TX:  ".dimmed(), bridge_tx_hash.cyan());
         println!();
     }
@@ -406,8 +406,7 @@ async fn withdraw_unit(
 
     // Generate withdrawal address: hyperliquid → native chain
     let resp =
-        unit::generate_address("hyperliquid", chain, &asset_lower, &dst_addr, cfg.testnet)
-            .await?;
+        unit::generate_address("hyperliquid", chain, &asset_lower, &dst_addr, cfg.testnet).await?;
 
     let fees = unit::estimate_fees(cfg.testnet).await.ok();
 
@@ -534,23 +533,22 @@ async fn withdraw_binance(
         )
     })?;
 
-    let (api_key, api_secret) = config::binance_credentials()
-        .ok_or_else(|| anyhow::anyhow!("Binance API keys not configured in ~/.fintool/config.toml"))?;
+    let (api_key, api_secret) = config::binance_credentials().ok_or_else(|| {
+        anyhow::anyhow!("Binance API keys not configured in ~/.fintool/config.toml")
+    })?;
 
     // Map chain names to Binance network codes
-    let binance_network: Option<String> = network.map(|n| {
-        match n.to_lowercase().as_str() {
-            "ethereum" | "eth" | "mainnet" | "erc20" => "ETH".to_string(),
-            "base" => "BASE".to_string(),
-            "arbitrum" | "arb" => "ARBITRUM".to_string(),
-            "solana" | "sol" => "SOL".to_string(),
-            "bitcoin" | "btc" => "BTC".to_string(),
-            "bsc" | "bnb" => "BSC".to_string(),
-            "polygon" | "matic" => "MATIC".to_string(),
-            "optimism" | "op" => "OPTIMISM".to_string(),
-            "avalanche" | "avax" => "AVAXC".to_string(),
-            _ => n.to_uppercase(),
-        }
+    let binance_network: Option<String> = network.map(|n| match n.to_lowercase().as_str() {
+        "ethereum" | "eth" | "mainnet" | "erc20" => "ETH".to_string(),
+        "base" => "BASE".to_string(),
+        "arbitrum" | "arb" => "ARBITRUM".to_string(),
+        "solana" | "sol" => "SOL".to_string(),
+        "bitcoin" | "btc" => "BTC".to_string(),
+        "bsc" | "bnb" => "BSC".to_string(),
+        "polygon" | "matic" => "MATIC".to_string(),
+        "optimism" | "op" => "OPTIMISM".to_string(),
+        "avalanche" | "avax" => "AVAXC".to_string(),
+        _ => n.to_uppercase(),
     });
 
     if dry_run {
@@ -658,8 +656,9 @@ async fn withdraw_coinbase(
         )
     })?;
 
-    let (api_key, api_secret) = config::coinbase_credentials()
-        .ok_or_else(|| anyhow::anyhow!("Coinbase API keys not configured in ~/.fintool/config.toml"))?;
+    let (api_key, api_secret) = config::coinbase_credentials().ok_or_else(|| {
+        anyhow::anyhow!("Coinbase API keys not configured in ~/.fintool/config.toml")
+    })?;
 
     let client = reqwest::Client::new();
 

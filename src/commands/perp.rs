@@ -71,7 +71,17 @@ pub async fn buy(
 
     // Check if this is a HIP-3 asset (commodities, stocks)
     if let Some((dex, asset_name)) = resolve_hip3_asset(&symbol) {
-        return hip3_perp_buy(&dex, &asset_name, &symbol, price_f, size, amount_usdc, &cfg, json_output).await;
+        return hip3_perp_buy(
+            &dex,
+            &asset_name,
+            &symbol,
+            price_f,
+            size,
+            amount_usdc,
+            &cfg,
+            json_output,
+        )
+        .await;
     }
 
     if !json_output {

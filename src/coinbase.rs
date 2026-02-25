@@ -285,10 +285,7 @@ pub async fn create_deposit_address(
     account_id: &str,
 ) -> Result<serde_json::Value> {
     let ts = timestamp();
-    let path = format!(
-        "/v2/accounts/{}/addresses",
-        account_id
-    );
+    let path = format!("/v2/accounts/{}/addresses", account_id);
     let signature = sign_request(api_secret, &ts, "POST", &path, "{}");
     let url = format!("{}{}", BASE_URL, path);
 
