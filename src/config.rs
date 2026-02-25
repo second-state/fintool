@@ -36,10 +36,6 @@ pub struct ApiKeysConfig {
     pub cryptopanic_token: Option<String>,
     /// NewsAPI key for stock news (optional)
     pub newsapi_key: Option<String>,
-    /// Kalshi API key (for prediction market trading)
-    pub kalshi_api_key: Option<String>,
-    /// Kalshi API secret (for prediction market trading)
-    pub kalshi_api_secret: Option<String>,
     /// OpenAI API key for enriched quote analysis
     pub openai_api_key: Option<String>,
     /// OpenAI model for quote analysis (default: gpt-4.1-mini)

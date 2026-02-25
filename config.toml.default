@@ -20,11 +20,6 @@ testnet = false
 # openai_api_key = "sk-..."
 # openai_model = "gpt-4.1-mini"
 
-# Kalshi API credentials — enables prediction market trading
-# Sign up at https://kalshi.com
-# kalshi_api_key = "..."
-# kalshi_api_secret = "..."
-
 # CryptoPanic token — crypto news (optional, not currently used)
 # Free at https://cryptopanic.com/developers/api/
 # cryptopanic_token = "..."

@@ -1,6 +1,6 @@
 ---
 name: fintool
-description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. Deposit and withdraw across chains (Unit bridge, Across Protocol). LLM-enriched price quotes with trend analysis. Prediction markets (Polymarket + Kalshi). News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, check portfolio, or browse prediction markets."
+description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. Deposit and withdraw across chains (Unit bridge, Across Protocol). LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
 homepage: https://github.com/second-state/fintool
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
@@ -166,29 +166,7 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 - `EXPIRY` format: `YYYY-MM-DD` (e.g., `2026-03-28`)
 - Binance converts to: `BTC-260328-80000-C` internally
 
-### Workflow 4: Prediction Markets
-
-**Goal**: Browse and trade on prediction markets (Polymarket + Kalshi).
-
-**Step 1 — Browse markets:**
-```bash
-{baseDir}/scripts/fintool predict list
-{baseDir}/scripts/fintool predict search "election"
-{baseDir}/scripts/fintool predict search "BTC" --platform kalshi
-```
-
-**Step 2 — Get detailed quote:**
-```bash
-{baseDir}/scripts/fintool predict quote kalshi:TICKER
-{baseDir}/scripts/fintool predict quote polymarket:slug
-```
-
-**Step 3 — Trade (stub — requires platform-specific auth):**
-```bash
-{baseDir}/scripts/fintool predict buy kalshi:TICKER yes 10
-```
-
-### Workflow 5: Portfolio Overview
+### Workflow 4: Portfolio Overview
 
 **Goal**: Check current positions and balances across exchanges.
 
@@ -211,7 +189,7 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 {baseDir}/scripts/fintool cancel coinbase:uuid-here          # Coinbase
 ```
 
-### Workflow 6: Depositing Funds
+### Workflow 5: Depositing Funds
 
 **Goal**: Fund an exchange account with crypto from an external wallet or another chain.
 
@@ -249,7 +227,7 @@ Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 de
 {baseDir}/scripts/fintool deposit USDC --exchange coinbase
 ```
 
-### Workflow 7: Withdrawing Funds
+### Workflow 6: Withdrawing Funds
 
 **Goal**: Move assets from an exchange to an external wallet or another chain.
 
