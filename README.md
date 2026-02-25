@@ -375,18 +375,45 @@ When no OpenAI key is configured, returns merged raw data:
 
 Get the current **perpetual futures** price with funding rate, open interest, premium, and leverage info.
 
-**Supported exchanges:** Hyperliquid (default), Binance (via `--exchange binance`)
+**Supported exchanges:** Hyperliquid (default, including HIP-3 dexes), Binance (via `--exchange binance`)
+
+Fintool automatically searches across Hyperliquid's main perp universe and HIP-3 builder-deployed dexes (like `cash`/dreamcash) to find the most liquid market for any symbol.
 
 #### Examples
 
 ```bash
+# Crypto perps (main HL dex)
 fintool perp quote BTC
 fintool perp quote ETH
 fintool perp quote SOL --human
+
+# Commodity perps (HIP-3 cash dex)
+fintool perp quote SILVER        # silver ~$89/oz, 20x leverage
+fintool perp quote GOLD          # gold ~$5,184/oz, 20x leverage
+
+# Stock perps (HIP-3 cash dex)
+fintool perp quote TSLA          # Tesla stock perp
+fintool perp quote NVDA          # NVIDIA stock perp
+fintool perp quote GOOGL         # Alphabet stock perp
+
+# US index perps (HIP-3 cash dex)
+fintool perp quote USA500        # S&P 500 index perp
+
+# Binance
 fintool perp quote BTC --exchange binance
 ```
 
-#### JSON Schema
+#### Available HIP-3 Assets (cash dex)
+
+| Category | Symbols |
+|----------|---------|
+| Commodities | `SILVER`, `GOLD` |
+| US Stocks | `TSLA`, `NVDA`, `GOOGL`, `AMZN`, `MSFT`, `META`, `INTC`, `HOOD` |
+| Indices | `USA500` (S&P 500) |
+
+Aliases: `XAG` → SILVER, `XAU` → GOLD, `SP500`/`SPX` → USA500
+
+#### JSON Schema (main perps)
 
 ```json
 {
@@ -404,9 +431,31 @@ fintool perp quote BTC --exchange binance
 }
 ```
 
+#### JSON Schema (HIP-3 perps)
+
+```json
+{
+  "symbol": "SILVER",
+  "hip3Asset": "cash:SILVER",
+  "dex": "cash",
+  "markPx": "89.478",
+  "oraclePx": "89.425",
+  "change24h": "2.83",
+  "funding": "0.0000079076",
+  "premium": "0.0005093654",
+  "openInterest": "37801.7",
+  "volume24h": "37711686.30",
+  "prevDayPx": "87.015",
+  "maxLeverage": 20,
+  "source": "Hyperliquid HIP-3 (cash)"
+}
+```
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `symbol` | string | Asset symbol |
+| `symbol` | string | User-facing symbol |
+| `hip3Asset` | string | HIP-3 dex-qualified asset name (e.g. `cash:SILVER`) |
+| `dex` | string | HIP-3 dex name (e.g. `cash`) |
 | `markPx` | string | Current mark price (USD) |
 | `oraclePx` | string | Oracle price (USD) |
 | `change24h` | string | 24-hour price change (%) |
@@ -416,7 +465,7 @@ fintool perp quote BTC --exchange binance
 | `volume24h` | string | 24-hour notional volume (USD) |
 | `prevDayPx` | string | Previous day price (USD) |
 | `maxLeverage` | number | Maximum allowed leverage |
-| `source` | string | `"Hyperliquid"` or `"Binance"` |
+| `source` | string | `"Hyperliquid"`, `"Hyperliquid HIP-3 (cash)"`, or `"Binance"` |
 
 ---
 
@@ -559,13 +608,20 @@ fintool order sell BTC 0.01 67000 --exchange coinbase
 
 Place a **perpetual futures** limit buy (long) order.
 
-**Exchanges:** Hyperliquid, Binance (Coinbase doesn't support perps)
+**Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
 
 #### Examples
 
 ```bash
+# Crypto perps (main HL dex)
 fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
 fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
+
+# Commodity/stock perps (HIP-3 cash dex — auto-detected)
+fintool perp buy SILVER 1000 89.50   # long $1000 of silver at $89.50
+fintool perp buy GOLD 5000 5200      # long $5000 of gold at $5,200
+fintool perp buy TSLA 1000 410       # long $1000 of TSLA at $410
+fintool perp buy NVDA 2000 193       # long $2000 of NVDA at $193
 
 # Force Binance
 fintool perp buy BTC 100 65000 --exchange binance
@@ -577,13 +633,19 @@ fintool perp buy BTC 100 65000 --exchange binance
 
 Place a **perpetual futures** limit sell (short) order.
 
-**Exchanges:** Hyperliquid, Binance (Coinbase doesn't support perps)
+**Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
 
 #### Examples
 
 ```bash
+# Crypto perps
 fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
 fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
+
+# Commodity/stock perps (HIP-3)
+fintool perp sell SILVER 10 95    # short 10 silver at $95
+fintool perp sell GOLD 0.5 5300   # short 0.5 gold at $5,300
+fintool perp sell TSLA 5 420      # short 5 TSLA at $420
 
 # Force Binance
 fintool perp sell BTC 0.01 70000 --exchange binance
@@ -987,6 +1049,10 @@ fintool predict sell polymarket:some-market no 50 --min-price 90
 | Deposit/Withdraw — HL USDC | Hyperliquid Bridge2 | Wallet private key | Arbitrum ↔ Hyperliquid |
 | Deposit/Withdraw — Binance | Binance SAPI | API key + secret | `/sapi/v1/capital/` endpoints |
 | Deposit/Withdraw — Coinbase | Coinbase v2 API | API key + secret | `/v2/accounts/` endpoints |
+
+## Technical Notes
+
+- **[HIP-3 Implementation](docs/HIP3-IMPLEMENTATION.md)** — How fintool implements EIP-712 signing for Hyperliquid's builder-deployed perpetuals (commodities, stocks, indices). Covers asset index resolution, msgpack wire format, and the signing flow that bypasses the Rust SDK's limitations.
 
 ## Architecture
 
