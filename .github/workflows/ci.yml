@@ -41,22 +41,54 @@ jobs:
           ./target/release/fintool init
           test -f ~/.fintool/config.toml
 
-      - name: Smoke test - quote (no API key, should still return data)
+      - name: Configure OpenAI API key
         run: |
-          # Without OpenAI key, falls back to raw merged data
-          ./target/release/fintool quote BTC || true
-          ./target/release/fintool quote AAPL || true
-          ./target/release/fintool quote SP500 || true
-          ./target/release/fintool quote GOLD || true
+          sed -i 's/# openai_api_key = "sk-..."/openai_api_key = "${{ secrets.OPENAI_API_KEY }}"/' ~/.fintool/config.toml
+          sed -i 's/# openai_model = "gpt-4.1-mini"/openai_model = "gpt-4.1-mini"/' ~/.fintool/config.toml
 
-      - name: Smoke test - perp quote
-        run: ./target/release/fintool perp quote BTC || true
+      - name: Spot quote - crypto
+        run: |
+          ./target/release/fintool quote BTC
+          ./target/release/fintool quote ETH
 
-      - name: Smoke test - news
-        run: ./target/release/fintool news BTC || true
+      - name: Spot quote - commodity
+        run: |
+          ./target/release/fintool quote GOLD
+          ./target/release/fintool quote SILVER
 
-      - name: Smoke test - report
-        run: ./target/release/fintool report list AAPL || true
+      - name: Spot quote - stock
+        run: |
+          ./target/release/fintool quote AAPL
+          ./target/release/fintool quote TSLA
+
+      - name: Perp quote - crypto
+        run: |
+          ./target/release/fintool perp quote BTC
+          ./target/release/fintool perp quote ETH
+
+      - name: Perp quote - commodity
+        run: |
+          ./target/release/fintool perp quote GOLD
+          ./target/release/fintool perp quote SILVER
+
+      - name: Perp quote - stock
+        run: |
+          ./target/release/fintool perp quote TSLA
+          ./target/release/fintool perp quote NVDA
+
+      - name: News - crypto
+        run: ./target/release/fintool news BTC
+
+      - name: News - commodity
+        run: ./target/release/fintool news GOLD
+
+      - name: News - stock
+        run: ./target/release/fintool news AAPL
+
+      - name: Report - stock
+        run: |
+          ./target/release/fintool report list AAPL
+          ./target/release/fintool report annual AAPL
 
   lint:
     runs-on: ubuntu-latest
