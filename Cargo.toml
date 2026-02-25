@@ -2,7 +2,7 @@
 name = "fintool"
 version = "0.1.2"
 edition = "2021"
-description = "Financial trading CLI for crypto and stocks — spot/perp/options on Hyperliquid, Binance, and Coinbase"
+description = "Agentic trading CLI for crypto and stocks — spot/perp/options on Hyperliquid, Unit, Binance, and Coinbase"
 license = "MIT"
 repository = "https://github.com/second-state/fintool"
 homepage = "https://github.com/second-state/fintool"
