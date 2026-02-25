@@ -2,6 +2,7 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde_json::json;
 
+use crate::commands::quote::commodity_to_spot_token;
 use crate::{binance, config, signing};
 
 /// Resolve which exchange to use
@@ -67,6 +68,11 @@ pub async fn buy(
     let price_f: f64 = price.parse().context("Invalid price")?;
     let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
     let size = amount_f / price_f;
+
+    // Check if this is a commodity → route to spot order
+    if let Some(spot_token) = commodity_to_spot_token(&symbol) {
+        return commodity_spot_buy(spot_token, &symbol, price_f, size, &cfg, json_output).await;
+    }
 
     if !json_output {
         println!();
@@ -150,6 +156,11 @@ pub async fn sell(
     let size: f64 = amount.parse().context("Invalid amount")?;
     let price_f: f64 = price.parse().context("Invalid price")?;
 
+    // Check if this is a commodity → route to spot order
+    if let Some(spot_token) = commodity_to_spot_token(&symbol) {
+        return commodity_spot_sell(spot_token, &symbol, price_f, size, &cfg, json_output).await;
+    }
+
     if !json_output {
         println!();
         println!("  📝 Placing perp limit SELL (short)");
@@ -180,6 +191,126 @@ pub async fn sell(
         match result {
             hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
                 println!("  ✅ Perp order placed!");
+                println!("  Response: {:?}", data);
+            }
+            hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
+                println!("  ❌ Order failed: {}", e);
+            }
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+// ── Commodity spot order helpers ─────────────────────────────────────
+
+/// Route a commodity "perp buy" to a spot buy on HL
+async fn commodity_spot_buy(
+    spot_token: &str,
+    original_symbol: &str,
+    price: f64,
+    size: f64,
+    cfg: &config::HlConfig,
+    json_output: bool,
+) -> Result<()> {
+    if !json_output {
+        println!();
+        println!(
+            "  📝 {} trades as {}/USDC spot on Hyperliquid",
+            original_symbol,
+            spot_token
+        );
+        println!("  Placing spot limit BUY");
+        println!("  Token:    {}", spot_token.cyan());
+        println!("  Size:     {:.6}", size);
+        println!("  Price:    ${:.2}", price);
+        println!("  Total:    ${:.2}", price * size);
+        println!(
+            "  Network:  {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
+        println!();
+    }
+
+    let result = signing::place_spot_order(spot_token, true, price, size).await?;
+
+    let response = json!({
+        "action": "commodity_spot_buy",
+        "symbol": original_symbol,
+        "spotToken": spot_token,
+        "size": format!("{:.6}", size),
+        "price": format!("{:.2}", price),
+        "total_usdc": format!("{:.2}", price * size),
+        "network": if cfg.testnet { "testnet" } else { "mainnet" },
+        "note": format!("{} trades as {}/USDC spot pair (no perp available)", original_symbol, spot_token),
+        "result": format!("{:?}", result),
+    });
+
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&response)?);
+    } else {
+        match result {
+            hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
+                println!("  ✅ Spot order placed!");
+                println!("  Response: {:?}", data);
+            }
+            hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {
+                println!("  ❌ Order failed: {}", e);
+            }
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Route a commodity "perp sell" to a spot sell on HL
+async fn commodity_spot_sell(
+    spot_token: &str,
+    original_symbol: &str,
+    price: f64,
+    size: f64,
+    cfg: &config::HlConfig,
+    json_output: bool,
+) -> Result<()> {
+    if !json_output {
+        println!();
+        println!(
+            "  📝 {} trades as {}/USDC spot on Hyperliquid",
+            original_symbol,
+            spot_token
+        );
+        println!("  Placing spot limit SELL");
+        println!("  Token:    {}", spot_token.cyan());
+        println!("  Size:     {:.6}", size);
+        println!("  Price:    ${:.2}", price);
+        println!(
+            "  Network:  {}",
+            if cfg.testnet { "Testnet" } else { "Mainnet" }
+        );
+        println!();
+    }
+
+    let result = signing::place_spot_order(spot_token, false, price, size).await?;
+
+    let response = json!({
+        "action": "commodity_spot_sell",
+        "symbol": original_symbol,
+        "spotToken": spot_token,
+        "size": format!("{:.6}", size),
+        "price": format!("{:.2}", price),
+        "network": if cfg.testnet { "testnet" } else { "mainnet" },
+        "note": format!("{} trades as {}/USDC spot pair (no perp available)", original_symbol, spot_token),
+        "result": format!("{:?}", result),
+    });
+
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&response)?);
+    } else {
+        match result {
+            hyperliquid_rust_sdk::ExchangeResponseStatus::Ok(data) => {
+                println!("  ✅ Spot order placed!");
                 println!("  Response: {:?}", data);
             }
             hyperliquid_rust_sdk::ExchangeResponseStatus::Err(e) => {

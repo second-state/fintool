@@ -357,7 +357,139 @@ async fn fetch_hl_perp(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         }
     }
 
+    // Not found in perps — check if it's a commodity with a spot pair
+    let commodity_token = commodity_to_spot_token(symbol);
+    if let Some(token) = commodity_token {
+        return fetch_hl_commodity_as_perp(client, symbol, token).await;
+    }
+
     anyhow::bail!("Symbol {} not found in Hyperliquid perps", symbol)
+}
+
+/// Map commodity aliases to HL spot token names
+pub fn commodity_to_spot_token(symbol: &str) -> Option<&'static str> {
+    match symbol.to_uppercase().as_str() {
+        "SILVER" | "XAG" => Some("SLV"),
+        "GOLD" | "XAU" | "XAUT" => Some("XAUT0"),
+        "SLV" => Some("SLV"),
+        "XAUT0" => Some("XAUT0"),
+        "GLD" => Some("GLD"),
+        _ => None,
+    }
+}
+
+/// Fetch commodity spot data and format it like a perp quote
+async fn fetch_hl_commodity_as_perp(
+    client: &reqwest::Client,
+    original_symbol: &str,
+    token_name: &str,
+) -> Result<Value> {
+    let url = config::info_url();
+
+    let meta_resp: Value = client
+        .post(&url)
+        .json(&json!({"type": "spotMetaAndAssetCtxs"}))
+        .send()
+        .await?
+        .json()
+        .await
+        .context("Failed to parse spotMetaAndAssetCtxs")?;
+
+    let tokens = meta_resp
+        .get(0)
+        .and_then(|m| m.get("tokens"))
+        .and_then(|t| t.as_array())
+        .ok_or_else(|| anyhow::anyhow!("Failed to get spot tokens"))?;
+
+    let universe = meta_resp
+        .get(0)
+        .and_then(|m| m.get("universe"))
+        .and_then(|u| u.as_array())
+        .ok_or_else(|| anyhow::anyhow!("Failed to get spot universe"))?;
+
+    let ctxs = meta_resp
+        .get(1)
+        .and_then(|c| c.as_array())
+        .ok_or_else(|| anyhow::anyhow!("Failed to get spot contexts"))?;
+
+    // Find token index
+    let token_idx = tokens
+        .iter()
+        .find(|t| {
+            t.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| n.eq_ignore_ascii_case(token_name))
+                .unwrap_or(false)
+        })
+        .and_then(|t| t.get("index").and_then(|i| i.as_u64()))
+        .ok_or_else(|| anyhow::anyhow!("Token {} not found on HL spot", token_name))?;
+
+    // Find the pair with this token and USDC (index 0)
+    for (i, pair) in universe.iter().enumerate() {
+        if let Some(pair_tokens) = pair.get("tokens").and_then(|t| t.as_array()) {
+            let indices: Vec<u64> = pair_tokens.iter().filter_map(|t| t.as_u64()).collect();
+            if indices.contains(&token_idx) && indices.contains(&0) {
+                if let Some(ctx) = ctxs.get(i) {
+                    let mark_px = ctx
+                        .get("markPx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let prev_day_px = ctx
+                        .get("prevDayPx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let volume = ctx
+                        .get("dayNtlVlm")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let mid_px = ctx
+                        .get("midPx")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let supply = ctx
+                        .get("circulatingSupply")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let change_24h = calc_change(&mark_px, &prev_day_px);
+                    let pair_name = pair
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    return Ok(json!({
+                        "symbol": original_symbol,
+                        "spotToken": token_name,
+                        "spotPair": pair_name,
+                        "markPx": mark_px,
+                        "midPx": mid_px,
+                        "oraclePx": null,
+                        "change24h": change_24h,
+                        "funding": null,
+                        "premium": null,
+                        "openInterest": null,
+                        "volume24h": volume,
+                        "prevDayPx": prev_day_px,
+                        "circulatingSupply": supply,
+                        "maxLeverage": 1,
+                        "source": "Hyperliquid Spot (commodity)",
+                        "note": format!("{} trades as {}/USDC spot pair on Hyperliquid (no perp available)", original_symbol, token_name)
+                    }));
+                }
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "Commodity {} (token {}) not found as spot pair on Hyperliquid",
+        original_symbol,
+        token_name
+    )
 }
 
 async fn fetch_yahoo_quote(client: &reqwest::Client, symbol: &str) -> Result<Value> {
@@ -820,6 +952,17 @@ fn print_perp_quote(data: &Value) {
     println!("  Open Interest: {}", oi);
     println!("  24h Volume:    ${}", vol);
     println!("  Max Leverage:  {}x", max_lev);
-    println!("  Source:        {}", "Hyperliquid".yellow());
+    let source = data["source"].as_str().unwrap_or("Hyperliquid");
+    println!("  Source:        {}", source.yellow());
+    if let Some(note) = data["note"].as_str() {
+        println!("  ℹ️  {}", note.dimmed());
+    }
+    if let Some(token) = data["spotToken"].as_str() {
+        println!(
+            "  Spot Pair:     {}/USDC ({})",
+            token.cyan(),
+            data["spotPair"].as_str().unwrap_or("")
+        );
+    }
     println!();
 }
