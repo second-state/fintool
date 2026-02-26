@@ -516,12 +516,12 @@ fi
 info "Waiting 10 seconds for the order to fill..."
 sleep 10
 
-# ── Step 11: Withdraw ETH to Ethereum mainnet ─────────────────────────
+# ── Step 11: Withdraw ETH to Base ───────────────────────────────────
 
-log "Step 11: Withdraw ETH to Ethereum mainnet"
-info "Withdrawing the purchased ETH from Hyperliquid to Ethereum mainnet."
-info "Route: Hyperliquid → HyperUnit bridge → Ethereum L1"
-info "Estimated time: ~3 minutes"
+log "Step 11: Withdraw ETH to Base"
+info "Withdrawing the purchased ETH from Hyperliquid to Base."
+info "Route: Hyperliquid → Arbitrum → Across bridge → Base"
+info "Estimated time: ~5-6 minutes"
 
 if [[ -z "$ETH_PRICE" || "$ETH_PRICE" == "null" ]]; then
     done_step
@@ -529,11 +529,11 @@ if [[ -z "$ETH_PRICE" || "$ETH_PRICE" == "null" ]]; then
 else
     ETH_AMOUNT=$(echo "$ETH_PRICE" | awk '{printf "%.6f", 1.0 / $1}')
 
-    info "Withdrawing $ETH_AMOUNT ETH (~\$1) to your Ethereum address"
+    info "Withdrawing $ETH_AMOUNT ETH (~\$1) to your Base address"
 
-    run_fintool withdraw "$ETH_AMOUNT" ETH
+    run_fintool withdraw "$ETH_AMOUNT" ETH --network base
 
-    if check_fail "ETH withdrawal to Ethereum failed"; then
+    if check_fail "ETH withdrawal to Base failed"; then
         warn "ETH may still be on Hyperliquid — check manually."
     else
         ETH_WITHDRAW_JSON="$LAST_STDOUT"
@@ -544,11 +544,11 @@ else
         done_step
         info "Status:      ${ETH_WD_STATUS:-unknown}"
         info "Amount:      $ETH_AMOUNT ETH"
-        info "Destination: ${ETH_WD_DEST:-ethereum}"
+        info "Destination: ${ETH_WD_DEST:-base}"
         if [[ -n "$ETH_WD_ADDR" && "$ETH_WD_ADDR" != "null" ]]; then
             info "Address:     $ETH_WD_ADDR"
         fi
-        ok "ETH withdrawal to Ethereum mainnet submitted — $ETH_AMOUNT ETH"
+        ok "ETH withdrawal to Base submitted — $ETH_AMOUNT ETH"
     fi
 fi
 
