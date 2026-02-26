@@ -135,10 +135,9 @@ info "Requires ETH on Base for gas fees."
 run_fintool deposit USDC --amount 10 --from base
 
 if check_fail "Deposit \$10 USDC from Base to Hyperliquid failed"; then
-    warn "Deposit failed — subsequent trading steps may fail due to insufficient funds on HL."
-    DEPOSIT_OK=false
+    fail "Deposit is required for all subsequent steps — aborting."
+    exit 1
 else
-    DEPOSIT_OK=true
     DEPOSIT_JSON="$LAST_STDOUT"
     DEPOSIT_STATUS=$(echo "$DEPOSIT_JSON" | jq -r '.status // empty' 2>/dev/null || true)
     DEPOSIT_AMOUNT_IN=$(echo "$DEPOSIT_JSON" | jq -r '.amount_in // empty' 2>/dev/null || true)
