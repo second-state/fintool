@@ -258,6 +258,155 @@ async fn deposit_usdc_hl(
         source_wallet,
     ));
 
+    // Pre-flight: check ETH for gas on source chain and Arbitrum
+    eprintln!("Checking gas balances...");
+
+    let source_eth = bridge::get_eth_balance(source.rpc_url(), &cfg.address).await?;
+    let source_eth_f = ethers::utils::format_ether(source_eth);
+    eprintln!("  ETH on {}: {}", source.name(), source_eth_f);
+
+    let arb_eth = bridge::get_eth_balance(bridge::RPC_ARBITRUM, &cfg.address).await?;
+    let arb_eth_f = ethers::utils::format_ether(arb_eth);
+    eprintln!("  ETH on Arbitrum: {}", arb_eth_f);
+
+    // Need ~0.0001 ETH on Arbitrum for the final ERC-20 transfer to HL Bridge2
+    let min_arb = ethers::utils::parse_ether("0.0001").unwrap_or_default();
+    let need_arb_bridge = arb_eth < min_arb;
+
+    // Source chain needs: gas for USDC approval + bridge (~0.0005 ETH)
+    //   + if bridging ETH to Arb: 0.001 ETH value + gas for ETH bridge (~0.0003 ETH)
+    let min_source = if need_arb_bridge {
+        // 0.0005 gas for USDC txns + 0.001 ETH to bridge + 0.0003 gas for ETH bridge
+        ethers::utils::parse_ether("0.002").unwrap_or_default()
+    } else {
+        ethers::utils::parse_ether("0.0005").unwrap_or_default()
+    };
+    let min_source_f = ethers::utils::format_ether(min_source);
+
+    if source_eth < min_source {
+        if need_arb_bridge {
+            bail!(
+                "Insufficient ETH on {} for gas. Have {} ETH, need at least {} ETH.\n\
+                 This includes ~0.001 ETH to bridge to Arbitrum for the HL deposit step.\n\
+                 Send ETH to {} on {} to cover gas fees.",
+                source.name(),
+                source_eth_f,
+                min_source_f,
+                cfg.address,
+                source.name()
+            );
+        } else {
+            bail!(
+                "Insufficient ETH on {} for gas. Have {} ETH, need at least {} ETH.\n\
+                 Send ETH to {} on {} to cover gas fees.",
+                source.name(),
+                source_eth_f,
+                min_source_f,
+                cfg.address,
+                source.name()
+            );
+        }
+    }
+
+    if need_arb_bridge {
+        eprintln!(
+            "  Insufficient ETH on Arbitrum (have {}, need ~0.0001).",
+            arb_eth_f
+        );
+        eprintln!(
+            "  Bridging 0.001 ETH from {} to Arbitrum via Across...",
+            source.name()
+        );
+
+        // Bridge 0.001 ETH — above Across minimum (~$1), enough for many Arb txns
+        let eth_amount_wei = "1000000000000000"; // 0.001 ETH
+        let eth_quote = bridge::get_eth_bridge_quote(source, eth_amount_wei, &cfg.address).await?;
+
+        // Execute ETH bridge approval txns (if any)
+        if let Some(ref eth_approval_txns) = eth_quote.approval_txns {
+            for (i, atx) in eth_approval_txns.iter().enumerate() {
+                eprintln!(
+                    "    ETH bridge approval tx {}/{}...",
+                    i + 1,
+                    eth_approval_txns.len()
+                );
+                let tx = ethers::types::TransactionRequest::new()
+                    .to(atx
+                        .to
+                        .parse::<ethers::types::Address>()
+                        .context("Invalid ETH bridge approval address")?)
+                    .data(
+                        hex::decode(atx.data.strip_prefix("0x").unwrap_or(&atx.data))
+                            .context("Invalid ETH bridge approval data")?,
+                    )
+                    .chain_id(source.chain_id());
+
+                let pending = source_client
+                    .send_transaction(tx, None)
+                    .await
+                    .context("Failed to send ETH bridge approval tx")?;
+
+                let receipt = pending
+                    .await
+                    .context("ETH bridge approval tx failed")?
+                    .ok_or_else(|| anyhow::anyhow!("ETH bridge approval tx dropped"))?;
+
+                eprintln!("    ✅ Confirmed: {:?}", receipt.transaction_hash);
+            }
+        }
+
+        // Execute ETH bridge tx (sends native ETH via Across)
+        let eth_bridge_value = eth_quote
+            .swap_tx
+            .value
+            .as_ref()
+            .and_then(|v| ethers::types::U256::from_dec_str(v).ok())
+            .unwrap_or_default();
+
+        let eth_bridge_tx = ethers::types::TransactionRequest::new()
+            .to(eth_quote
+                .swap_tx
+                .to
+                .parse::<ethers::types::Address>()
+                .context("Invalid ETH bridge address")?)
+            .data(
+                hex::decode(
+                    eth_quote
+                        .swap_tx
+                        .data
+                        .strip_prefix("0x")
+                        .unwrap_or(&eth_quote.swap_tx.data),
+                )
+                .context("Invalid ETH bridge data")?,
+            )
+            .value(eth_bridge_value)
+            .chain_id(source.chain_id());
+
+        let pending = source_client
+            .send_transaction(eth_bridge_tx, None)
+            .await
+            .context("Failed to send ETH bridge tx")?;
+
+        let eth_receipt = pending
+            .await
+            .context("ETH bridge tx failed")?
+            .ok_or_else(|| anyhow::anyhow!("ETH bridge tx dropped"))?;
+
+        eprintln!(
+            "  ✅ ETH bridge tx confirmed: {:?}",
+            eth_receipt.transaction_hash
+        );
+
+        // Wait for Across relayer to deliver ETH on Arbitrum
+        let eth_fill_time = eth_quote.expected_fill_time.unwrap_or(0).max(10);
+        eprintln!(
+            "  Waiting for ETH to arrive on Arbitrum (~{}s)...",
+            eth_fill_time
+        );
+        tokio::time::sleep(tokio::time::Duration::from_secs(eth_fill_time)).await;
+        eprintln!("  ✅ ETH bridged to Arbitrum for gas");
+    }
+
     // Step 2: Approval txns (if needed)
     if let Some(ref approval_txns) = quote.approval_txns {
         for (i, atx) in approval_txns.iter().enumerate() {

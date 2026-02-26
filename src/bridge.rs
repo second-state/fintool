@@ -26,6 +26,11 @@ pub const USDC_ETHEREUM: &str = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 pub const USDC_BASE: &str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 pub const USDC_ARBITRUM: &str = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
 
+// WETH contract addresses (for ETH bridging via Across)
+pub const WETH_ETHEREUM: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+pub const WETH_BASE: &str = "0x4200000000000000000000000000000000000006";
+pub const WETH_ARBITRUM: &str = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+
 // HL Bridge2 on Arbitrum
 pub const HL_BRIDGE2_MAINNET: &str = "0x2df1c51e09aecf9cacb7bc98cb1742757f163df7";
 #[allow(dead_code)]
@@ -66,6 +71,13 @@ impl SourceChain {
         match self {
             Self::Ethereum => RPC_ETHEREUM,
             Self::Base => RPC_BASE,
+        }
+    }
+
+    pub fn weth_address(&self) -> &'static str {
+        match self {
+            Self::Ethereum => WETH_ETHEREUM,
+            Self::Base => WETH_BASE,
         }
     }
 
@@ -292,6 +304,53 @@ pub fn encode_erc20_transfer(to: &str, amount_raw: &str) -> Result<Vec<u8>> {
     let mut calldata = selector;
     calldata.extend_from_slice(&encoded);
     Ok(calldata)
+}
+
+// ── Gas balance checks ──────────────────────────────────────────────
+
+/// Check native ETH balance on a chain. Returns balance in wei.
+pub async fn get_eth_balance(rpc_url: &str, address: &str) -> Result<ethers::types::U256> {
+    let provider = ethers::providers::Provider::<ethers::providers::Http>::try_from(rpc_url)
+        .context("Failed to connect to RPC")?;
+    let addr: ethers::types::Address = address.parse().context("Invalid address")?;
+    provider
+        .get_balance(addr, None)
+        .await
+        .context("Failed to fetch ETH balance")
+}
+
+use ethers::providers::Middleware;
+
+/// Get Across quote to bridge native ETH from source chain to Arbitrum.
+pub async fn get_eth_bridge_quote(
+    source: SourceChain,
+    amount_wei: &str,
+    depositor: &str,
+) -> Result<AcrossSwapResponse> {
+    let url = format!("{}/swap/approval", ACROSS_API);
+    let resp = client()?
+        .get(&url)
+        .query(&[
+            ("tradeType", "exactInput"),
+            ("amount", amount_wei),
+            ("inputToken", source.weth_address()),
+            ("originChainId", &source.chain_id().to_string()),
+            ("outputToken", WETH_ARBITRUM),
+            ("destinationChainId", &ARBITRUM_CHAIN_ID.to_string()),
+            ("depositor", depositor),
+        ])
+        .send()
+        .await
+        .context("Failed to call Across API for ETH bridge")?;
+
+    let status = resp.status();
+    let body = resp.text().await?;
+
+    if !status.is_success() {
+        bail!("Across API error for ETH bridge ({}): {}", status, body);
+    }
+
+    serde_json::from_str(&body).context("Failed to parse Across ETH bridge response")
 }
 
 #[cfg(test)]
