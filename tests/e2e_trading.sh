@@ -4,7 +4,7 @@
 #
 # Prerequisites:
 #   - ~/.fintool/config.toml with:
-#     - Hyperliquid wallet (private_key) with >= $10 USDC on Base mainnet
+#     - Hyperliquid wallet (private_key) with >= $3 USDC on Base mainnet
 #     - Coinbase API keys (coinbase_api_key, coinbase_api_secret)
 #   - jq installed
 #
@@ -126,15 +126,15 @@ else
     fi
 fi
 
-# ── Step 3: Deposit $10 USDC from Base → Hyperliquid ──────────────────
+# ── Step 3: Deposit $3 USDC from Base → Hyperliquid ──────────────────
 
-log "Step 3: Deposit \$10 USDC from Base to Hyperliquid"
-info "Bridging \$10 USDC from Base mainnet → Arbitrum → Hyperliquid via Across Protocol."
+log "Step 3: Deposit \$3 USDC from Base to Hyperliquid"
+info "Bridging \$3 USDC from Base mainnet → Arbitrum → Hyperliquid via Across Protocol."
 info "This signs 3 transactions: USDC approval, Across bridge, HL Bridge2 deposit."
 info "Requires ETH on Base for gas fees."
-run_fintool deposit USDC --amount 10 --from base
+run_fintool deposit USDC --amount 3 --from base
 
-if check_fail "Deposit \$10 USDC from Base to Hyperliquid failed"; then
+if check_fail "Deposit \$3 USDC from Base to Hyperliquid failed"; then
     fail "Deposit is required for all subsequent steps — aborting."
     exit 1
 else
@@ -146,14 +146,14 @@ else
 
     done_step
     info "Status:           ${DEPOSIT_STATUS:-unknown}"
-    info "Amount sent:      ${DEPOSIT_AMOUNT_IN:-10} USDC"
+    info "Amount sent:      ${DEPOSIT_AMOUNT_IN:-3} USDC"
     info "Amount deposited: ${DEPOSIT_AMOUNT_OUT:-pending} USDC"
     if [[ -n "$DEPOSIT_BRIDGE_TX" && "$DEPOSIT_BRIDGE_TX" != "null" ]]; then
         info "Bridge TX:        $DEPOSIT_BRIDGE_TX"
     fi
 
     if [[ "$DEPOSIT_STATUS" == "completed" ]]; then
-        ok "Deposit completed — ${DEPOSIT_AMOUNT_OUT:-~10} USDC credited to Hyperliquid"
+        ok "Deposit completed — ${DEPOSIT_AMOUNT_OUT:-~3} USDC credited to Hyperliquid"
     else
         ok "Deposit submitted (status: ${DEPOSIT_STATUS:-unknown}) — waiting for confirmation"
     fi
