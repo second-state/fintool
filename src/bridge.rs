@@ -29,6 +29,7 @@ pub const USDC_ARBITRUM: &str = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
 // WETH contract addresses (for ETH bridging via Across)
 pub const WETH_ETHEREUM: &str = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 pub const WETH_BASE: &str = "0x4200000000000000000000000000000000000006";
+#[allow(dead_code)]
 pub const WETH_ARBITRUM: &str = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 
 // HL Bridge2 on Arbitrum
@@ -321,7 +322,10 @@ pub async fn get_eth_balance(rpc_url: &str, address: &str) -> Result<ethers::typ
 
 use ethers::providers::Middleware;
 
-/// Get Across quote to bridge native ETH from source chain to Arbitrum.
+/// Native ETH address (used as Across outputToken to receive native ETH)
+const NATIVE_ETH: &str = "0x0000000000000000000000000000000000000000";
+
+/// Get Across quote to bridge ETH from source chain to native ETH on Arbitrum.
 pub async fn get_eth_bridge_quote(
     source: SourceChain,
     amount_wei: &str,
@@ -335,7 +339,7 @@ pub async fn get_eth_bridge_quote(
             ("amount", amount_wei),
             ("inputToken", source.weth_address()),
             ("originChainId", &source.chain_id().to_string()),
-            ("outputToken", WETH_ARBITRUM),
+            ("outputToken", NATIVE_ETH),
             ("destinationChainId", &ARBITRUM_CHAIN_ID.to_string()),
             ("depositor", depositor),
         ])

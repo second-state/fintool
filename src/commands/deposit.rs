@@ -320,7 +320,36 @@ async fn deposit_usdc_hl(
 
         // Bridge 0.001 ETH — above Across minimum (~$1), enough for many Arb txns
         let eth_amount_wei = "1000000000000000"; // 0.001 ETH
+        let eth_amount_u256 = ethers::types::U256::from_dec_str(eth_amount_wei).unwrap_or_default();
         let eth_quote = bridge::get_eth_bridge_quote(source, eth_amount_wei, &cfg.address).await?;
+
+        // Step 0: Wrap native ETH → WETH (Across requires WETH, not native ETH)
+        eprintln!("    Wrapping 0.001 ETH → WETH...");
+        let weth_addr: ethers::types::Address = source
+            .weth_address()
+            .parse()
+            .context("Invalid WETH address")?;
+        // WETH deposit() selector = 0xd0e30db0
+        let wrap_tx = ethers::types::TransactionRequest::new()
+            .to(weth_addr)
+            .data(hex::decode("d0e30db0")?)
+            .value(eth_amount_u256)
+            .chain_id(source.chain_id());
+
+        let pending = source_client
+            .send_transaction(wrap_tx, None)
+            .await
+            .context("Failed to wrap ETH → WETH")?;
+
+        let wrap_receipt = pending
+            .await
+            .context("WETH wrap tx failed")?
+            .ok_or_else(|| anyhow::anyhow!("WETH wrap tx dropped"))?;
+
+        eprintln!(
+            "    ✅ WETH wrap confirmed: {:?}",
+            wrap_receipt.transaction_hash
+        );
 
         // Execute ETH bridge approval txns (if any)
         if let Some(ref eth_approval_txns) = eth_quote.approval_txns {
@@ -397,7 +426,7 @@ async fn deposit_usdc_hl(
             eth_receipt.transaction_hash
         );
 
-        // Wait for Across relayer to deliver ETH on Arbitrum
+        // Wait for Across relayer to deliver native ETH on Arbitrum
         let eth_fill_time = eth_quote.expected_fill_time.unwrap_or(0).max(10);
         eprintln!(
             "  Waiting for ETH to arrive on Arbitrum (~{}s)...",
