@@ -1,7 +1,7 @@
 # Hyperliquid workflows for fintool CLI
 
 The scripts calls the `fintool` CLI to perform common tasks on Hyperliquid and Unit.
-The `tests/show_status.sh" script can be called at anytime to review the current status
+The `tests/show_status.sh` script can be called at anytime to review the current status
 of your Hyperliquid account. The script calls the following three commands and aggregate the 
 results in a human readable format.
 
