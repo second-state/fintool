@@ -5,6 +5,12 @@ The `tests/show_status.sh` script can be called at anytime to review the current
 of your Hyperliquid account. The script calls the following three commands and aggregate the 
 results in a human readable format.
 
+```
+fintool positions
+fintool orders
+fintool balance
+```
+
 ## Deposit USDC from Base to Hyperliquid
 
 ### Run the script
