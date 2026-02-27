@@ -255,7 +255,9 @@ async fn withdraw_usdc_hl_bridged(
         .with_chain_id(bridge::ARBITRUM_CHAIN_ID);
     let arb_client = std::sync::Arc::new(SignerMiddleware::new(arb_provider, arb_wallet));
 
-    let usdc_addr: Address = bridge::USDC_ARBITRUM.parse().context("Invalid USDC address")?;
+    let usdc_addr: Address = bridge::USDC_ARBITRUM
+        .parse()
+        .context("Invalid USDC address")?;
     let user_addr: Address = cfg.address.parse().context("Invalid user address")?;
     // balanceOf(address) selector = 0x70a08231
     let balance_calldata = {
@@ -281,7 +283,10 @@ async fn withdraw_usdc_hl_bridged(
             }
         }
         let bal_f = arb_usdc_balance.as_u128() as f64 / 1e6;
-        eprintln!("  Checking Arbitrum USDC... ${:.2} (attempt {}/20)", bal_f, attempt);
+        eprintln!(
+            "  Checking Arbitrum USDC... ${:.2} (attempt {}/20)",
+            bal_f, attempt
+        );
         if arb_usdc_balance >= required {
             break;
         }

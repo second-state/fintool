@@ -154,39 +154,52 @@ async fn main() -> Result<()> {
             )
             .await
         }
-        Commands::Transfer { amount, direction, dex } => {
+        Commands::Transfer {
+            amount,
+            direction,
+            dex,
+        } => {
             if cli.exchange != "auto" && cli.exchange != "hyperliquid" {
                 anyhow::bail!(
                     "Transfer between perp and spot is only supported on Hyperliquid. Got --exchange {}",
                     cli.exchange
                 );
             }
-            config::load_hl_config().context(
-                "Hyperliquid wallet not configured. Transfer requires Hyperliquid."
-            )?;
-            let amount_f: f64 = amount.parse().map_err(|_| anyhow::anyhow!("Invalid amount: {}", amount))?;
+            config::load_hl_config()
+                .context("Hyperliquid wallet not configured. Transfer requires Hyperliquid.")?;
+            let amount_f: f64 = amount
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid amount: {}", amount))?;
 
             match direction.as_str() {
                 "to-perp" | "to-spot" => {
                     let to_perp = direction == "to-perp";
-                    let dir_label = if to_perp { "spot → perp" } else { "perp → spot" };
+                    let dir_label = if to_perp {
+                        "spot → perp"
+                    } else {
+                        "perp → spot"
+                    };
                     signing::class_transfer(amount_f, to_perp).await?;
                     if json {
-                        println!("{}", serde_json::json!({
-                            "action": "transfer",
-                            "amount": amount,
-                            "direction": direction,
-                            "status": "ok",
-                        }));
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "action": "transfer",
+                                "amount": amount,
+                                "direction": direction,
+                                "status": "ok",
+                            })
+                        );
                     } else {
                         println!("  Transferred ${} USDC ({})", amount, dir_label);
                     }
                 }
                 "to-dex" | "from-dex" => {
-                    let dex_name = dex.as_deref().ok_or_else(||
+                    let dex_name = dex.as_deref().ok_or_else(|| {
                         anyhow::anyhow!("--dex is required for {} (e.g. --dex cash)", direction)
-                    )?;
-                    let (collateral_token, token_name) = signing::get_dex_collateral_token(dex_name).await?;
+                    })?;
+                    let (collateral_token, token_name) =
+                        signing::get_dex_collateral_token(dex_name).await?;
                     let (source, dest, dir_label) = if direction == "to-dex" {
                         ("spot", dex_name, format!("spot → {} dex", dex_name))
                     } else {
@@ -194,14 +207,17 @@ async fn main() -> Result<()> {
                     };
                     signing::send_asset(amount_f, source, dest, &collateral_token).await?;
                     if json {
-                        println!("{}", serde_json::json!({
-                            "action": "transfer",
-                            "amount": amount,
-                            "direction": direction,
-                            "dex": dex_name,
-                            "token": token_name,
-                            "status": "ok",
-                        }));
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "action": "transfer",
+                                "amount": amount,
+                                "direction": direction,
+                                "dex": dex_name,
+                                "token": token_name,
+                                "status": "ok",
+                            })
+                        );
                     } else {
                         println!("  Transferred ${} {} ({})", amount, token_name, dir_label);
                     }

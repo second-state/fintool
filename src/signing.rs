@@ -260,15 +260,14 @@ pub async fn set_leverage(
 /// Transfer USDC between perp and spot accounts
 /// to_perp=true: spot → perp, to_perp=false: perp → spot
 pub async fn class_transfer(usdc: f64, to_perp: bool) -> Result<()> {
-    use ethers::types::{H256, U256};
     use ethers::abi::{encode, ParamType, Tokenizable};
-    use ethers::types::transaction::eip712::{
-        encode_eip712_type, make_type_hash, EIP712Domain,
-    };
+    use ethers::types::transaction::eip712::{encode_eip712_type, make_type_hash, EIP712Domain};
+    use ethers::types::{H256, U256};
     use ethers::utils::keccak256;
 
     let cfg = config::load_hl_config()?;
-    let wallet: ethers::signers::LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let wallet: ethers::signers::LocalWallet =
+        cfg.private_key.parse().context("Invalid private key")?;
     let is_mainnet = !cfg.testnet;
 
     let timestamp = std::time::SystemTime::now()
@@ -322,11 +321,14 @@ pub async fn class_transfer(usdc: f64, to_perp: bool) -> Result<()> {
     };
 
     let domain_separator = domain.separator();
-    let digest = keccak256([
-        &[0x19, 0x01],
-        domain_separator.as_ref(),
-        struct_hash.as_ref(),
-    ].concat());
+    let digest = keccak256(
+        [
+            &[0x19, 0x01],
+            domain_separator.as_ref(),
+            struct_hash.as_ref(),
+        ]
+        .concat(),
+    );
 
     let signature = wallet
         .sign_hash(H256::from(digest))
@@ -371,7 +373,10 @@ pub async fn class_transfer(usdc: f64, to_perp: bool) -> Result<()> {
     if !text.is_empty() {
         if let Ok(body) = serde_json::from_str::<Value>(&text) {
             if body.get("status").and_then(|s| s.as_str()) == Some("err") {
-                let msg = body.get("response").and_then(|r| r.as_str()).unwrap_or("unknown error");
+                let msg = body
+                    .get("response")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("unknown error");
                 anyhow::bail!("Class transfer rejected: {}", msg);
             }
         }
@@ -382,15 +387,14 @@ pub async fn class_transfer(usdc: f64, to_perp: bool) -> Result<()> {
 
 /// Enable unified account mode for HIP-3 dex margin sharing
 pub async fn set_abstraction(mode: &str) -> Result<()> {
-    use ethers::types::{H256, U256};
     use ethers::abi::{encode, ParamType, Tokenizable};
-    use ethers::types::transaction::eip712::{
-        encode_eip712_type, make_type_hash, EIP712Domain,
-    };
+    use ethers::types::transaction::eip712::{encode_eip712_type, make_type_hash, EIP712Domain};
+    use ethers::types::{H256, U256};
     use ethers::utils::keccak256;
 
     let cfg = config::load_hl_config()?;
-    let wallet: ethers::signers::LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let wallet: ethers::signers::LocalWallet =
+        cfg.private_key.parse().context("Invalid private key")?;
     let is_mainnet = !cfg.testnet;
 
     let timestamp = std::time::SystemTime::now()
@@ -446,11 +450,14 @@ pub async fn set_abstraction(mode: &str) -> Result<()> {
     };
 
     let domain_separator = domain.separator();
-    let digest = keccak256([
-        &[0x19, 0x01],
-        domain_separator.as_ref(),
-        struct_hash.as_ref(),
-    ].concat());
+    let digest = keccak256(
+        [
+            &[0x19, 0x01],
+            domain_separator.as_ref(),
+            struct_hash.as_ref(),
+        ]
+        .concat(),
+    );
 
     let signature = wallet
         .sign_hash(H256::from(digest))
@@ -495,7 +502,10 @@ pub async fn set_abstraction(mode: &str) -> Result<()> {
     if !text.is_empty() {
         if let Ok(body) = serde_json::from_str::<Value>(&text) {
             if body.get("status").and_then(|s| s.as_str()) == Some("err") {
-                let msg = body.get("response").and_then(|r| r.as_str()).unwrap_or("unknown error");
+                let msg = body
+                    .get("response")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("unknown error");
                 anyhow::bail!("Set abstraction rejected: {}", msg);
             }
         }
@@ -542,16 +552,24 @@ pub async fn get_dex_collateral_token(dex: &str) -> Result<(String, String)> {
     if let Some(tokens) = spot_meta.get("tokens").and_then(|t| t.as_array()) {
         for token in tokens {
             if token.get("index").and_then(|i| i.as_u64()) == Some(collateral_idx) {
-                let name = token.get("name").and_then(|n| n.as_str())
+                let name = token
+                    .get("name")
+                    .and_then(|n| n.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Token {} has no name", collateral_idx))?;
-                let token_id = token.get("tokenId").and_then(|t| t.as_str())
+                let token_id = token
+                    .get("tokenId")
+                    .and_then(|t| t.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Token {} has no tokenId", collateral_idx))?;
                 return Ok((format!("{}:{}", name, token_id), name.to_string()));
             }
         }
     }
 
-    anyhow::bail!("Collateral token (index {}) not found in spotMeta for dex '{}'", collateral_idx, dex)
+    anyhow::bail!(
+        "Collateral token (index {}) not found in spotMeta for dex '{}'",
+        collateral_idx,
+        dex
+    )
 }
 
 /// Transfer assets between dexes/spot using sendAsset
@@ -562,15 +580,14 @@ pub async fn send_asset(
     destination_dex: &str,
     token: &str,
 ) -> Result<()> {
-    use ethers::types::{H256, U256};
     use ethers::abi::{encode, ParamType, Tokenizable};
-    use ethers::types::transaction::eip712::{
-        encode_eip712_type, make_type_hash, EIP712Domain,
-    };
+    use ethers::types::transaction::eip712::{encode_eip712_type, make_type_hash, EIP712Domain};
+    use ethers::types::{H256, U256};
     use ethers::utils::keccak256;
 
     let cfg = config::load_hl_config()?;
-    let wallet: ethers::signers::LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let wallet: ethers::signers::LocalWallet =
+        cfg.private_key.parse().context("Invalid private key")?;
     let is_mainnet = !cfg.testnet;
 
     let timestamp = std::time::SystemTime::now()
@@ -637,11 +654,14 @@ pub async fn send_asset(
     };
 
     let domain_separator = domain.separator();
-    let digest = keccak256([
-        &[0x19, 0x01],
-        domain_separator.as_ref(),
-        struct_hash.as_ref(),
-    ].concat());
+    let digest = keccak256(
+        [
+            &[0x19, 0x01],
+            domain_separator.as_ref(),
+            struct_hash.as_ref(),
+        ]
+        .concat(),
+    );
 
     let signature = wallet
         .sign_hash(H256::from(digest))
@@ -686,7 +706,10 @@ pub async fn send_asset(
     if !text.is_empty() {
         if let Ok(body) = serde_json::from_str::<Value>(&text) {
             if body.get("status").and_then(|s| s.as_str()) == Some("err") {
-                let msg = body.get("response").and_then(|r| r.as_str()).unwrap_or("unknown error");
+                let msg = body
+                    .get("response")
+                    .and_then(|r| r.as_str())
+                    .unwrap_or("unknown error");
                 anyhow::bail!("Send asset rejected: {}", msg);
             }
         }

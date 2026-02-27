@@ -179,7 +179,11 @@ pub async fn sell(
         return hip3_perp_sell(&dex, &asset_name, &symbol, price_f, size, &cfg, json_output).await;
     }
 
-    let mode = if close { "CLOSE (reduce-only)" } else { "SELL (short)" };
+    let mode = if close {
+        "CLOSE (reduce-only)"
+    } else {
+        "SELL (short)"
+    };
     if !json_output {
         println!();
         println!("  📝 Placing perp limit {}", mode);
@@ -291,7 +295,10 @@ pub async fn set_leverage(
         if json_output {
             println!("{}", serde_json::to_string_pretty(&response)?);
         } else {
-            println!("  ✅ Leverage set to {}x ({}) for {}", leverage, margin_type, symbol);
+            println!(
+                "  ✅ Leverage set to {}x ({}) for {}",
+                leverage, margin_type, symbol
+            );
             println!();
         }
 
@@ -316,7 +323,10 @@ pub async fn set_leverage(
     } else {
         match &result {
             ExchangeResponseStatus::Ok(_) => {
-                println!("  ✅ Leverage set to {}x ({}) for {}", leverage, margin_type, symbol);
+                println!(
+                    "  ✅ Leverage set to {}x ({}) for {}",
+                    leverage, margin_type, symbol
+                );
             }
             ExchangeResponseStatus::Err(e) => {
                 bail!("Failed to set leverage: {}", e);
@@ -333,12 +343,14 @@ pub async fn set_mode(mode: &str, json_output: bool) -> Result<()> {
         "unified" | "unifiedaccount" => "unifiedAccount",
         "standard" => "standard",
         "disabled" => "disabled",
-        _ => bail!("Invalid mode: {}. Use 'unified', 'standard', or 'disabled'", mode),
+        _ => bail!(
+            "Invalid mode: {}. Use 'unified', 'standard', or 'disabled'",
+            mode
+        ),
     };
 
-    config::load_hl_config().context(
-        "Hyperliquid wallet not configured. Set-mode requires Hyperliquid."
-    )?;
+    config::load_hl_config()
+        .context("Hyperliquid wallet not configured. Set-mode requires Hyperliquid.")?;
 
     signing::set_abstraction(api_mode).await?;
 
@@ -362,9 +374,7 @@ pub async fn set_mode(mode: &str, json_output: bool) -> Result<()> {
 /// Parse the SDK ExchangeResponseStatus into (fill_status, json_value)
 fn parse_sdk_order_result(result: &ExchangeResponseStatus) -> (String, serde_json::Value) {
     match result {
-        ExchangeResponseStatus::Err(e) => {
-            (format!("error: {}", e), json!({"error": e}))
-        }
+        ExchangeResponseStatus::Err(e) => (format!("error: {}", e), json!({"error": e})),
         ExchangeResponseStatus::Ok(resp) => {
             if let Some(statuses) = resp.data.as_ref().map(|d| &d.statuses) {
                 if let Some(status) = statuses.first() {
@@ -373,14 +383,12 @@ fn parse_sdk_order_result(result: &ExchangeResponseStatus) -> (String, serde_jso
                             "filled".to_string(),
                             json!({"filled": {"totalSz": f.total_sz, "avgPx": f.avg_px, "oid": f.oid}}),
                         ),
-                        ExchangeDataStatus::Resting(r) => (
-                            "resting".to_string(),
-                            json!({"resting": {"oid": r.oid}}),
-                        ),
-                        ExchangeDataStatus::Error(e) => (
-                            format!("error: {}", e),
-                            json!({"error": e}),
-                        ),
+                        ExchangeDataStatus::Resting(r) => {
+                            ("resting".to_string(), json!({"resting": {"oid": r.oid}}))
+                        }
+                        ExchangeDataStatus::Error(e) => {
+                            (format!("error: {}", e), json!({"error": e}))
+                        }
                         _ => (
                             format!("{:?}", status).to_lowercase(),
                             json!(format!("{:?}", status)),

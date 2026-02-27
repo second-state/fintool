@@ -17,14 +17,12 @@ fn parse_sdk_order_result(result: &ExchangeResponseStatus) -> (String, serde_jso
                             "filled".to_string(),
                             json!({"filled": {"totalSz": f.total_sz, "avgPx": f.avg_px, "oid": f.oid}}),
                         ),
-                        ExchangeDataStatus::Resting(r) => (
-                            "resting".to_string(),
-                            json!({"resting": {"oid": r.oid}}),
-                        ),
-                        ExchangeDataStatus::Error(e) => (
-                            format!("error: {}", e),
-                            json!({"error": e}),
-                        ),
+                        ExchangeDataStatus::Resting(r) => {
+                            ("resting".to_string(), json!({"resting": {"oid": r.oid}}))
+                        }
+                        ExchangeDataStatus::Error(e) => {
+                            (format!("error: {}", e), json!({"error": e}))
+                        }
                         _ => (
                             format!("{:?}", status).to_lowercase(),
                             json!(format!("{:?}", status)),
@@ -336,7 +334,9 @@ pub async fn sell(
                 }
                 Err(e) => {
                     let msg = format!("{:#}", e);
-                    if !msg.contains("unified account is active") && !msg.contains("Action disabled") {
+                    if !msg.contains("unified account is active")
+                        && !msg.contains("Action disabled")
+                    {
                         eprintln!("  Warning: failed to transfer USDC back to perp: {}", e);
                     }
                 }

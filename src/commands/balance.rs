@@ -198,10 +198,7 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     }
 
     println!();
-    println!(
-        "  Account Value:   ${}",
-        account_value.green()
-    );
+    println!("  Account Value:   ${}", account_value.green());
     println!("  Margin Used:     ${}", total_margin);
     println!("  Notional:        ${}", notional);
     println!("  Withdrawable:    ${}", withdrawable);

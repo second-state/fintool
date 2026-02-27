@@ -148,7 +148,9 @@ pub async fn set_leverage(
     } else {
         println!(
             "\n  ✅ Binance leverage set to {}x for {}",
-            body.get("leverage").and_then(|v| v.as_u64()).unwrap_or(leverage as u64),
+            body.get("leverage")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(leverage as u64),
             symbol
         );
         if let Some(max_notional) = body.get("maxNotionalValue").and_then(|v| v.as_str()) {
