@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Unit**, **Binance**, and **Coinbase**. Supports crypto, stocks, and commodities. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command. Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
+A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**. Supports crypto, stocks, and commodities. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command (via [HyperUnit](https://docs.hyperunit.xyz) and [Across Protocol](https://across.to)). Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
 
 ## Install as an OpenClaw Skill
 
@@ -20,48 +20,155 @@ cargo build --release
 
 Or download a pre-built binary from [Releases](https://github.com/second-state/fintool/releases).
 
-## Quick Start
+## Quick Guides
+
+### Setup
 
 ```bash
-# Create config file
-fintool init
+fintool init                    # create config file
+vim ~/.fintool/config.toml      # add your wallet key and API keys
+```
 
-# Edit config with your keys
-vim ~/.fintool/config.toml
+### Deposit funds into the exchange
 
-# Get an enriched quote with trend analysis
+Bridge USDC from Base (or Ethereum) to Hyperliquid. You must bridge more than $5 USDC. Your Hyperliquid address is the same as your Base/Ethereum address. The command handles all bridging transactions automatically.
+
+```bash
+fintool deposit USDC --amount 15 --from base
+```
+
+The deposited USDC goes into the Hyperliquid perp margin account. To use it for spot trading as well, set the account to unified mode:
+
+```bash
+fintool perp set-mode unified
+```
+
+Check your balance:
+
+```bash
+fintool balance
+```
+
+### Withdraw funds from the exchange
+
+Withdraw USDC from Hyperliquid back to Base. The command reverses the deposit bridges (Hyperliquid → Arbitrum → Base).
+
+```bash
+fintool withdraw 10 USDC --network base
+```
+
+You can also withdraw to Arbitrum (default, fastest) or Ethereum:
+
+```bash
+fintool withdraw 10 USDC                      # → Arbitrum (~3-4 min)
+fintool withdraw 10 USDC --network ethereum    # → Ethereum (~5-7 min)
+```
+
+### Get price quotes and news
+
+Get an enriched spot price quote with trend analysis (uses Hyperliquid + Yahoo Finance + CoinGecko, merged by OpenAI):
+
+```bash
 fintool quote BTC
 fintool quote AAPL --human
+fintool quote SP500               # index alias
+fintool quote GOLD                # commodity alias
+```
 
-# Index and commodity aliases
-fintool quote SP500
-fintool quote GOLD
-fintool quote VIX
+Get a perpetual futures quote with funding rate, open interest, and leverage info:
 
-# Perp quotes with funding/OI
-fintool perp quote BTC
+```bash
+fintool perp quote ETH
+fintool perp quote SILVER         # HIP-3 commodity perp
+```
 
-# News
+Get the latest news headlines and SEC filings:
+
+```bash
 fintool news ETH
-
-# SEC filings
 fintool report annual AAPL
 fintool report list TSLA
+```
 
-# Spot trading (auto-selects exchange)
-fintool order buy TSLA 100 410
-fintool order sell TSLA 1 420
+### Spot buy and sell
 
-# Force specific exchange
+Get the current price, then place a limit buy order. The command below buys $12 worth of HYPE at a max price of $25/HYPE:
+
+```bash
+fintool quote HYPE
+fintool order buy HYPE 12 25.00
+```
+
+Check your balance, then sell. The command below sells 0.48 HYPE at a minimum price of $30/HYPE:
+
+```bash
+fintool balance
+fintool order sell HYPE 0.48 30.00
+```
+
+You can force a specific exchange with `--exchange`:
+
+```bash
 fintool order buy BTC 100 65000 --exchange coinbase
 fintool order buy BTC 100 65000 --exchange binance
+```
 
-# Perp trading
-fintool perp buy BTC 100 65000
-fintool perp sell BTC 0.01 70000
+### Open and close perp positions
 
-# Options trading (Binance only)
-fintool options buy BTC call 70000 260328 0.1 --exchange binance
+Get the perp quote, set leverage, and open a long position:
+
+```bash
+fintool perp quote ETH
+fintool perp leverage ETH 2
+fintool perp buy ETH 12 2100.00
+```
+
+Check positions and balance:
+
+```bash
+fintool positions
+fintool balance
+```
+
+Close the position with `--close` (reduce-only — won't open a new short):
+
+```bash
+fintool perp sell ETH 0.006 2150.00 --close
+```
+
+### Commodity perp on Hyperliquid (USDT0 conversion)
+
+The HIP-3 commodity/stock perp market on Hyperliquid (SILVER, GOLD, TSLA, etc.) uses USDT0 as collateral instead of USDC. You need to swap USDC → USDT0 first.
+
+**Buy USDT0 on the spot market and transfer to the HIP-3 dex:**
+
+```bash
+fintool order buy USDT0 30 1.002
+fintool transfer 30 to-dex --dex cash
+```
+
+**Trade the commodity perp:**
+
+```bash
+fintool perp quote SILVER
+fintool perp leverage SILVER 2
+fintool perp buy SILVER 12 89.00
+```
+
+**Close the position and convert back to USDC:**
+
+```bash
+fintool perp sell SILVER 0.14 91.00 --close
+fintool transfer 30 from-dex --dex cash
+fintool order sell USDT0 30 0.998
+```
+
+Check everything:
+
+```bash
+fintool positions
+fintool orders
+fintool balance
 ```
 
 ## Output Modes
@@ -95,7 +202,8 @@ The `--human` flag is global and works with any subcommand.
 | Spot Trading | ✅ | ✅ | ✅ |
 | Perpetual Futures | ✅ | ✅ | ❌ |
 | Options | ❌ | ✅ | ❌ |
-| Balance/Positions | ✅ | ✅ | ✅ |
+| Balance | ✅ | ✅ | ✅ |
+| Positions | ✅ | ✅ | ❌ |
 | Orders/Cancellation | ✅ | ✅ | ✅ |
 
 ### Global Exchange Flag
@@ -203,15 +311,18 @@ coinbase_api_secret = "..."
 | Command | Hyperliquid Wallet | Binance Keys | Coinbase Keys | OpenAI Key | Exchange Support |
 |---------|-------------------|--------------|---------------|------------|------------------|
 | `quote` | No | No | No | Optional (enriches) | N/A (read-only) |
-| `perp quote` | No | No | No | No | N/A (read-only) |
+| `perp quote` | No | No | No | No | Hyperliquid (read-only) |
 | `news`, `init` | No | No | No | No | N/A |
+| `address` | Yes | No | No | No | Hyperliquid |
 | `report` | No | No | No | No | N/A |
 | `order buy/sell` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `perp buy/sell` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
+| `perp leverage` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
+| `perp set-mode` | Yes | No | No | No | Hyperliquid only |
 | `orders` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `cancel` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
 | `balance` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
-| `positions` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
+| `positions` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
 | `options buy/sell` | No | Yes (Binance) | No | No | Binance only |
 | `deposit` (HL) | Yes | No | No | No | Hyperliquid |
 | `deposit` (Binance) | No | Yes | No | No | Binance |
@@ -220,6 +331,7 @@ coinbase_api_secret = "..."
 | `withdraw` (Binance) | No | Yes | No | No | Binance |
 | `withdraw` (Coinbase) | No | No | Yes | No | Coinbase |
 | `bridge-status` | Yes | No | No | No | Hyperliquid |
+| `transfer` | Yes | No | No | No | Hyperliquid only |
 
 ---
 
@@ -231,6 +343,17 @@ Create a default config file at `~/.fintool/config.toml`.
 
 ```bash
 fintool init
+```
+
+---
+
+### `fintool address`
+
+Print the configured Hyperliquid wallet address (derived from the private key in config).
+
+```bash
+fintool address          # {"address": "0x..."}
+fintool address --human  # 0x...
 ```
 
 ---
@@ -363,7 +486,7 @@ When no OpenAI key is configured, returns merged raw data:
 
 Get the current **perpetual futures** price with funding rate, open interest, premium, and leverage info.
 
-**Supported exchanges:** Hyperliquid (default, including HIP-3 dexes), Binance (via `--exchange binance`)
+**Supported exchanges:** Hyperliquid only (including HIP-3 dexes like `cash`/dreamcash)
 
 Fintool automatically searches across Hyperliquid's main perp universe and HIP-3 builder-deployed dexes (like `cash`/dreamcash) to find the most liquid market for any symbol.
 
@@ -386,9 +509,6 @@ fintool perp quote GOOGL         # Alphabet stock perp
 
 # US index perps (HIP-3 cash dex)
 fintool perp quote USA500        # S&P 500 index perp
-
-# Binance
-fintool perp quote BTC --exchange binance
 ```
 
 #### Available HIP-3 Assets (cash dex)
@@ -453,7 +573,7 @@ Aliases: `XAG` → SILVER, `XAU` → GOLD, `SP500`/`SPX` → USA500
 | `volume24h` | string | 24-hour notional volume (USD) |
 | `prevDayPx` | string | Previous day price (USD) |
 | `maxLeverage` | number | Maximum allowed leverage |
-| `source` | string | `"Hyperliquid"`, `"Hyperliquid HIP-3 (cash)"`, or `"Binance"` |
+| `source` | string | `"Hyperliquid"` or `"Hyperliquid HIP-3 (cash)"` |
 
 ---
 
@@ -617,11 +737,13 @@ fintool perp buy BTC 100 65000 --exchange binance
 
 ---
 
-### `fintool perp sell <SYMBOL> <AMOUNT> <PRICE>`
+### `fintool perp sell <SYMBOL> <AMOUNT> <PRICE> [--close]`
 
 Place a **perpetual futures** limit sell (short) order.
 
 **Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
+
+Use `--close` to close an existing long position (reduce-only order). Without `--close`, the order opens a new short position.
 
 #### Examples
 
@@ -630,6 +752,9 @@ Place a **perpetual futures** limit sell (short) order.
 fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
 fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
 
+# Close an existing long position (reduce-only)
+fintool perp sell ETH 0.5 2000 --close
+
 # Commodity/stock perps (HIP-3)
 fintool perp sell SILVER 10 95    # short 10 silver at $95
 fintool perp sell GOLD 0.5 5300   # short 0.5 gold at $5,300
@@ -637,6 +762,64 @@ fintool perp sell TSLA 5 420      # short 5 TSLA at $420
 
 # Force Binance
 fintool perp sell BTC 0.01 70000 --exchange binance
+```
+
+---
+
+### `fintool perp leverage <SYMBOL> <LEVERAGE> [--cross]`
+
+Set leverage for a perpetual futures asset.
+
+**Exchanges:** Hyperliquid (including HIP-3), Binance
+
+By default, uses isolated margin. Use `--cross` for cross margin (main perps only — HIP-3 dex perps only support isolated margin).
+
+#### Examples
+
+```bash
+# Crypto perps (main HL dex)
+fintool perp leverage ETH 5            # 5x isolated
+fintool perp leverage BTC 10 --cross   # 10x cross margin
+
+# HIP-3 perps (commodities, stocks — isolated only)
+fintool perp leverage SILVER 2
+fintool perp leverage TSLA 3
+
+# Binance
+fintool perp leverage ETH 5 --exchange binance
+```
+
+#### JSON Schema
+
+```json
+{
+  "action": "set_leverage",
+  "exchange": "hyperliquid",
+  "symbol": "ETH",
+  "leverage": 5,
+  "marginType": "isolated",
+  "network": "mainnet",
+  "result": "Ok(...)"
+}
+```
+
+---
+
+### `fintool perp set-mode <MODE>`
+
+Set the account abstraction mode on Hyperliquid. **Hyperliquid only.**
+
+| Mode | Description |
+|------|-------------|
+| `unified` | Single USDC balance shared across all perp dexes and spot |
+| `standard` | Separate balances per dex (default for new accounts) |
+| `disabled` | No abstraction |
+
+#### Examples
+
+```bash
+fintool perp set-mode unified    # share margin across all dexes
+fintool perp set-mode standard   # separate balances per dex
 ```
 
 ---
@@ -707,15 +890,14 @@ fintool balance --exchange coinbase
 
 ### `fintool positions`
 
-Show open positions with PnL.
+Show open positions with PnL. Includes HIP-3 dex positions on Hyperliquid.
 
-**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
+**Exchanges:** Hyperliquid, Binance (Coinbase is spot-only — no positions)
 
 ```bash
 fintool positions
 fintool positions --human
 fintool positions --exchange binance
-fintool positions --exchange coinbase
 ```
 
 ---
@@ -907,6 +1089,60 @@ fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
 
 ---
 
+### `fintool transfer <AMOUNT> <DIRECTION> [--dex <NAME>]`
+
+Transfer USDC between perp, spot, and HIP-3 dex accounts on Hyperliquid. **Hyperliquid only** — other exchanges will return an error.
+
+On Hyperliquid, perp margin, spot balances, and HIP-3 dex margins are separate pools. This command lets you move USDC between them.
+
+#### Directions
+
+| Direction | `--dex` | Effect |
+|-----------|---------|--------|
+| `to-spot` | — | Move USDC from main perp → spot |
+| `to-perp` | — | Move USDC from spot → main perp |
+| `to-dex` | required | Move collateral from spot → HIP-3 dex margin |
+| `from-dex` | required | Move collateral from HIP-3 dex margin → spot |
+
+#### HIP-3 Dex Names
+
+| Dex | Auto-Resolved Assets | Collateral |
+|-----|---------------------|------------|
+| `cash` | SILVER, GOLD, TSLA, NVDA, GOOGL, AMZN, MSFT, META, INTC, HOOD, USA500 | USDT0 |
+| `xyz` | (use `xyz:SYMBOL` prefix) | USDC |
+| `km` | (use `km:SYMBOL` prefix) | varies |
+| `flx` | (use `flx:SYMBOL` prefix) | varies |
+
+**Note:** `cash` dex assets are auto-resolved (e.g. `fintool transfer 10 to-dex --dex cash`). For other dexes, use the `dex:SYMBOL` prefix directly (e.g. `xyz:AAPL`).
+
+#### Examples
+
+```bash
+# Spot ↔ main perp
+fintool transfer 10 to-spot     # move $10 USDC from perp to spot
+fintool transfer 10 to-perp     # move $10 USDC from spot to perp
+
+# Spot ↔ HIP-3 dex (required for SILVER, GOLD, stocks)
+# Note: cash dex uses USDT0 collateral — swap USDC→USDT0 on spot first
+fintool transfer 10 to-dex --dex cash      # fund cash dex with USDT0
+fintool transfer 10 from-dex --dex cash    # withdraw USDT0 from cash dex to spot
+```
+
+#### JSON Schema
+
+```json
+{
+  "action": "transfer",
+  "amount": "10",
+  "direction": "to-dex",
+  "dex": "cash",
+  "token": "USDT0",
+  "status": "ok"
+}
+```
+
+---
+
 ### `fintool bridge-status`
 
 Show all HyperUnit bridge operations (deposits and withdrawals) for your configured wallet.
@@ -943,8 +1179,9 @@ fintool bridge-status --human
 | Command | Description | Exchanges |
 |---------|-------------|-----------|
 | `fintool init` | Create config file | N/A |
+| `fintool address` | Print wallet address | Hyperliquid |
 | `fintool quote <SYM>` | Multi-source price + LLM analysis | N/A (read-only) |
-| `fintool perp quote <SYM>` | Perp price + funding/OI/premium | Hyperliquid, Binance |
+| `fintool perp quote <SYM>` | Perp price + funding/OI/premium | Hyperliquid |
 | `fintool news <SYM>` | Latest news headlines | N/A |
 | `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
 | `fintool report list <SYM>` | List recent SEC filings | N/A |
@@ -952,15 +1189,19 @@ fintool bridge-status --human
 | `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance, Coinbase |
 | `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance, Coinbase |
 | `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long | Hyperliquid, Binance |
-| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short | Hyperliquid, Binance |
+| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short / close (`--close`) | Hyperliquid, Binance |
+| `fintool perp leverage <SYM> <N>` | Set perp leverage (incl. HIP-3) | Hyperliquid, Binance |
+| `fintool perp set-mode <MODE>` | Set account abstraction mode | Hyperliquid only |
 | `fintool orders [SYM]` | List open orders | Hyperliquid, Binance, Coinbase |
 | `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance, Coinbase |
 | `fintool balance` | Account balances | Hyperliquid, Binance, Coinbase |
-| `fintool positions` | Open positions + PnL | Hyperliquid, Binance, Coinbase |
+| `fintool positions` | Open positions + PnL (incl. HIP-3) | Hyperliquid, Binance |
 | `fintool options buy/sell ...` | Options trading | Binance only |
 | `fintool deposit <ASSET>` | Deposit to exchange | Hyperliquid, Binance, Coinbase |
 | `fintool withdraw <AMT> <ASSET>` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
 | `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
+| `fintool transfer <AMT> <DIR>` | Transfer USDC: perp ↔ spot ↔ dex | Hyperliquid only |
+
 ## Data Sources
 
 | Data | Source | Auth Required | Notes |
@@ -996,7 +1237,8 @@ fintool/
 │   ├── main.rs          # Entry point, command dispatch
 │   ├── cli.rs           # Clap CLI definitions (global --exchange flag)
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
-│   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
+│   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution, dex transfers
+│   ├── hip3.rs          # HIP-3 builder-deployed perps: EIP-712 signing, order/leverage for dex assets
 │   ├── binance.rs       # Binance API client (spot/futures/options, deposit/withdraw, HMAC-SHA256)
 │   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, deposit/withdraw, HMAC-SHA256)
 │   ├── bridge.rs        # Across Protocol cross-chain USDC bridge (Ethereum/Base ↔ Arbitrum)

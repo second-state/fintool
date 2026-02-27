@@ -244,20 +244,8 @@ async fn withdraw_usdc_hl_bridged(
 
     eprintln!("  ✅ HL withdrawal submitted. Waiting for USDC on Arbitrum (~4 min)...");
 
-    // Step 2: Wait for USDC to arrive on Arbitrum
+    // Step 2: Poll Arbitrum USDC balance until funds arrive
     // HL Bridge2 takes ~3-4 minutes
-    tokio::time::sleep(tokio::time::Duration::from_secs(240)).await;
-    eprintln!("  Checking Arbitrum balance...");
-
-    // Small extra wait for safety
-    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-
-    // Step 3: Bridge USDC from Arbitrum → destination via Across
-    eprintln!(
-        "Step 2: Bridging USDC from Arbitrum → {} via Across...",
-        dest_chain.name()
-    );
-
     let arb_provider = Provider::<Http>::try_from(bridge::RPC_ARBITRUM)
         .context("Failed to connect to Arbitrum RPC")?;
     let arb_wallet: LocalWallet = cfg
@@ -266,6 +254,66 @@ async fn withdraw_usdc_hl_bridged(
         .context("Invalid private key")?
         .with_chain_id(bridge::ARBITRUM_CHAIN_ID);
     let arb_client = std::sync::Arc::new(SignerMiddleware::new(arb_provider, arb_wallet));
+
+    let usdc_addr: Address = bridge::USDC_ARBITRUM
+        .parse()
+        .context("Invalid USDC address")?;
+    let user_addr: Address = cfg.address.parse().context("Invalid user address")?;
+    // balanceOf(address) selector = 0x70a08231
+    let balance_calldata = {
+        let mut data = vec![0x70, 0xa0, 0x82, 0x31];
+        data.extend_from_slice(&[0u8; 12]);
+        data.extend_from_slice(user_addr.as_bytes());
+        ethers::types::Bytes::from(data)
+    };
+
+    let mut arb_usdc_balance = U256::zero();
+    let required = ethers::utils::parse_units(amount, 6)
+        .context("Invalid amount")?
+        .into();
+
+    for attempt in 1..=20 {
+        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+        let call_tx = ethers::types::TransactionRequest::new()
+            .to(usdc_addr)
+            .data(balance_calldata.clone());
+        if let Ok(result) = arb_client.call(&call_tx.into(), None).await {
+            if result.len() >= 32 {
+                arb_usdc_balance = U256::from_big_endian(&result[..32]);
+            }
+        }
+        let bal_f = arb_usdc_balance.as_u128() as f64 / 1e6;
+        eprintln!(
+            "  Checking Arbitrum USDC... ${:.2} (attempt {}/20)",
+            bal_f, attempt
+        );
+        if arb_usdc_balance >= required {
+            break;
+        }
+    }
+
+    if arb_usdc_balance < required {
+        bail!(
+            "USDC did not arrive on Arbitrum after 10 minutes. Balance: {}, needed: {}",
+            arb_usdc_balance,
+            required
+        );
+    }
+
+    eprintln!("  ✅ USDC arrived on Arbitrum!");
+
+    // Step 3: Bridge USDC from Arbitrum → destination via Across
+    eprintln!(
+        "Step 2: Bridging USDC from Arbitrum → {} via Across...",
+        dest_chain.name()
+    );
+
+    // Get gas price with 50% buffer to avoid "max fee less than base fee" errors
+    let arb_gas_price = arb_client
+        .get_gas_price()
+        .await
+        .context("Failed to get Arbitrum gas price")?;
+    let arb_gas_price_buffered = arb_gas_price * 150 / 100;
 
     // Approval txns (if needed)
     if let Some(ref approval_txns) = quote.approval_txns {
@@ -277,7 +325,8 @@ async fn withdraw_usdc_hl_bridged(
                     hex::decode(atx.data.strip_prefix("0x").unwrap_or(&atx.data))
                         .context("Invalid data")?,
                 )
-                .chain_id(bridge::ARBITRUM_CHAIN_ID);
+                .chain_id(bridge::ARBITRUM_CHAIN_ID)
+                .gas_price(arb_gas_price_buffered);
 
             let pending = arb_client
                 .send_transaction(tx, None)
@@ -317,7 +366,8 @@ async fn withdraw_usdc_hl_bridged(
             .context("Invalid bridge data")?,
         )
         .value(bridge_value)
-        .chain_id(bridge::ARBITRUM_CHAIN_ID);
+        .chain_id(bridge::ARBITRUM_CHAIN_ID)
+        .gas_price(arb_gas_price_buffered);
 
     let pending = arb_client
         .send_transaction(bridge_tx, None)

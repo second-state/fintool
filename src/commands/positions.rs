@@ -156,6 +156,7 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     let client = reqwest::Client::new();
     let url = config::info_url();
 
+    // Query main perp positions
     let resp: Value = client
         .post(&url)
         .json(&json!({"type": "clearinghouseState", "user": cfg.address}))
@@ -164,10 +165,26 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
         .json()
         .await?;
 
-    let positions = resp["assetPositions"]
+    let mut positions = resp["assetPositions"]
         .as_array()
         .cloned()
         .unwrap_or_default();
+
+    // Also query HIP-3 dex positions (cash, xyz, km)
+    for dex in &["cash", "xyz", "km"] {
+        if let Ok(dex_resp) = client
+            .post(&url)
+            .json(&json!({"type": "clearinghouseState", "user": cfg.address, "dex": dex}))
+            .send()
+            .await
+        {
+            if let Ok(dex_val) = dex_resp.json::<Value>().await {
+                if let Some(dex_positions) = dex_val["assetPositions"].as_array() {
+                    positions.extend(dex_positions.iter().cloned());
+                }
+            }
+        }
+    }
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&positions)?);

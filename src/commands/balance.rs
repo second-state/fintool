@@ -147,7 +147,8 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     let client = reqwest::Client::new();
     let url = config::info_url();
 
-    let resp: Value = client
+    // Fetch perp clearinghouse state
+    let perp_resp: Value = client
         .post(&url)
         .json(&json!({"type": "clearinghouseState", "user": cfg.address}))
         .send()
@@ -155,48 +156,90 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
         .json()
         .await?;
 
+    // Fetch spot clearinghouse state
+    let spot_resp: Value = client
+        .post(&url)
+        .json(&json!({"type": "spotClearinghouseState", "user": cfg.address}))
+        .send()
+        .await?
+        .json()
+        .await?;
+
     if json_output {
-        println!("{}", serde_json::to_string_pretty(&resp)?);
+        let combined = json!({
+            "perp": perp_resp,
+            "spot": spot_resp,
+        });
+        println!("{}", serde_json::to_string_pretty(&combined)?);
         return Ok(());
     }
 
-    let margin = &resp["marginSummary"];
+    // ── Perp balance ──
+    let margin = &perp_resp["marginSummary"];
     let account_value = margin["accountValue"].as_str().unwrap_or("0");
     let total_margin = margin["totalMarginUsed"].as_str().unwrap_or("0");
-    let available = margin["totalNtlPos"].as_str().unwrap_or("0");
+    let notional = margin["totalNtlPos"].as_str().unwrap_or("0");
+    let withdrawable = perp_resp["withdrawable"].as_str().unwrap_or("0");
 
     println!();
-    println!("  💰 Account Balance");
+    println!("  💰 Perp Account");
     println!();
 
     let rows = vec![BalanceRow {
         asset: "USDC".to_string(),
         total: format!("${}", account_value),
-        available: format!("${}", available),
+        available: format!("${}", withdrawable),
         in_positions: format!("${}", total_margin),
     }];
 
-    let table = Table::new(rows).with(Style::rounded()).to_string();
+    let table = Table::new(&rows).with(Style::rounded()).to_string();
     for line in table.lines() {
         println!("  {}", line);
     }
 
-    // Cross margin details
-    if let Some(cross) = resp.get("crossMarginSummary") {
-        println!();
-        println!(
-            "  Account Value:   ${}",
-            cross["accountValue"].as_str().unwrap_or("-").green()
-        );
-        println!(
-            "  Total Margin:    ${}",
-            cross["totalMarginUsed"].as_str().unwrap_or("-")
-        );
-        println!(
-            "  Notional:        ${}",
-            cross["totalNtlPos"].as_str().unwrap_or("-")
-        );
+    println!();
+    println!("  Account Value:   ${}", account_value.green());
+    println!("  Margin Used:     ${}", total_margin);
+    println!("  Notional:        ${}", notional);
+    println!("  Withdrawable:    ${}", withdrawable);
+
+    // ── Spot balances ──
+    println!();
+    println!("  💰 Spot Account");
+    println!();
+
+    if let Some(balances) = spot_resp.get("balances").and_then(|b| b.as_array()) {
+        let mut spot_rows: Vec<BalanceRow> = Vec::new();
+        for bal in balances {
+            let coin = bal["coin"].as_str().unwrap_or("?");
+            let total = bal["total"].as_str().unwrap_or("0");
+            let hold = bal["hold"].as_str().unwrap_or("0");
+            let total_f: f64 = total.parse().unwrap_or(0.0);
+            let hold_f: f64 = hold.parse().unwrap_or(0.0);
+            let avail = total_f - hold_f;
+
+            if total_f > 0.0 {
+                spot_rows.push(BalanceRow {
+                    asset: coin.to_string(),
+                    total: total.to_string(),
+                    available: format!("{:.6}", avail),
+                    in_positions: hold.to_string(),
+                });
+            }
+        }
+
+        if spot_rows.is_empty() {
+            println!("  (no spot balances)");
+        } else {
+            let table = Table::new(&spot_rows).with(Style::rounded()).to_string();
+            for line in table.lines() {
+                println!("  {}", line);
+            }
+        }
+    } else {
+        println!("  (no spot balances)");
     }
+
     println!();
 
     Ok(())

@@ -23,6 +23,9 @@ pub enum Commands {
     /// Initialize config file at ~/.fintool/config.toml
     Init,
 
+    /// Print the configured wallet address
+    Address,
+
     /// Get spot price quote (Hyperliquid spot → Yahoo Finance fallback)
     Quote { symbol: String },
 
@@ -87,6 +90,17 @@ pub enum Commands {
         /// Show quote only, don't execute
         #[arg(long)]
         dry_run: bool,
+    },
+
+    /// Transfer USDC between perp and spot on Hyperliquid
+    Transfer {
+        /// Amount of USDC to transfer
+        amount: String,
+        /// Direction: "to-spot", "to-perp", "to-dex", or "from-dex"
+        direction: String,
+        /// Dex name for to-dex/from-dex (e.g. "cash" for SILVER/GOLD)
+        #[arg(long)]
+        dex: Option<String>,
     },
 
     /// Show bridge operation status (deposits/withdrawals via Unit)
@@ -166,6 +180,23 @@ pub enum PerpCmd {
         amount: String,
         /// Limit price
         price: String,
+        /// Close position only (reduce-only, won't open a new short)
+        #[arg(long)]
+        close: bool,
+    },
+    /// Set leverage for a perp asset
+    Leverage {
+        symbol: String,
+        /// Leverage multiplier (e.g. 5, 10, 20)
+        leverage: u32,
+        /// Use cross margin instead of isolated
+        #[arg(long)]
+        cross: bool,
+    },
+    /// Set account mode: unified (share margin across all dexes), standard, or disabled
+    SetMode {
+        /// Mode: "unified", "standard", or "disabled"
+        mode: String,
     },
 }
 

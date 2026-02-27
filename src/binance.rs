@@ -96,6 +96,72 @@ pub async fn spot_order(
     Ok(())
 }
 
+/// Set leverage for a futures symbol on Binance
+pub async fn set_leverage(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    symbol: &str,
+    leverage: u32,
+    json_output: bool,
+) -> Result<()> {
+    let timestamp = timestamp_ms();
+    let query_string = format!(
+        "symbol={}&leverage={}&timestamp={}",
+        symbol, leverage, timestamp
+    );
+    let signature = sign_request(api_secret, &query_string);
+    let url = format!(
+        "{}/fapi/v1/leverage?{}&signature={}",
+        FUTURES_BASE_URL, query_string, signature
+    );
+
+    let response = client
+        .post(&url)
+        .header("X-MBX-APIKEY", api_key)
+        .send()
+        .await
+        .context("Failed to send Binance set leverage request")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    let result = json!({
+        "exchange": "binance",
+        "action": "set_leverage",
+        "symbol": symbol,
+        "leverage": body.get("leverage").unwrap_or(&json!(leverage)),
+        "maxNotionalValue": body.get("maxNotionalValue").unwrap_or(&json!(null)),
+    });
+
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else {
+        println!(
+            "\n  ✅ Binance leverage set to {}x for {}",
+            body.get("leverage")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(leverage as u64),
+            symbol
+        );
+        if let Some(max_notional) = body.get("maxNotionalValue").and_then(|v| v.as_str()) {
+            println!("  Max notional: {}", max_notional);
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
 /// Place a futures limit order on Binance
 #[allow(clippy::too_many_arguments)]
 pub async fn futures_order(
