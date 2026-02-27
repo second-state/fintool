@@ -20,48 +20,155 @@ cargo build --release
 
 Or download a pre-built binary from [Releases](https://github.com/second-state/fintool/releases).
 
-## Quick Start
+## Quick Guides
+
+### Setup
 
 ```bash
-# Create config file
-fintool init
+fintool init                    # create config file
+vim ~/.fintool/config.toml      # add your wallet key and API keys
+```
 
-# Edit config with your keys
-vim ~/.fintool/config.toml
+### Deposit funds into the exchange
 
-# Get an enriched quote with trend analysis
+Bridge USDC from Base (or Ethereum) to Hyperliquid. You must bridge more than $5 USDC. Your Hyperliquid address is the same as your Base/Ethereum address. The command handles all bridging transactions automatically.
+
+```bash
+fintool deposit USDC --amount 15 --from base
+```
+
+The deposited USDC goes into the Hyperliquid perp margin account. To use it for spot trading as well, set the account to unified mode:
+
+```bash
+fintool perp set-mode unified
+```
+
+Check your balance:
+
+```bash
+fintool balance
+```
+
+### Withdraw funds from the exchange
+
+Withdraw USDC from Hyperliquid back to Base. The command reverses the deposit bridges (Hyperliquid → Arbitrum → Base).
+
+```bash
+fintool withdraw 10 USDC --network base
+```
+
+You can also withdraw to Arbitrum (default, fastest) or Ethereum:
+
+```bash
+fintool withdraw 10 USDC                      # → Arbitrum (~3-4 min)
+fintool withdraw 10 USDC --network ethereum    # → Ethereum (~5-7 min)
+```
+
+### Get price quotes and news
+
+Get an enriched spot price quote with trend analysis (uses Hyperliquid + Yahoo Finance + CoinGecko, merged by OpenAI):
+
+```bash
 fintool quote BTC
 fintool quote AAPL --human
+fintool quote SP500               # index alias
+fintool quote GOLD                # commodity alias
+```
 
-# Index and commodity aliases
-fintool quote SP500
-fintool quote GOLD
-fintool quote VIX
+Get a perpetual futures quote with funding rate, open interest, and leverage info:
 
-# Perp quotes with funding/OI
-fintool perp quote BTC
+```bash
+fintool perp quote ETH
+fintool perp quote SILVER         # HIP-3 commodity perp
+```
 
-# News
+Get the latest news headlines and SEC filings:
+
+```bash
 fintool news ETH
-
-# SEC filings
 fintool report annual AAPL
 fintool report list TSLA
+```
 
-# Spot trading (auto-selects exchange)
-fintool order buy TSLA 100 410
-fintool order sell TSLA 1 420
+### Spot buy and sell
 
-# Force specific exchange
+Get the current price, then place a limit buy order. The command below buys $12 worth of HYPE at a max price of $25/HYPE:
+
+```bash
+fintool quote HYPE
+fintool order buy HYPE 12 25.00
+```
+
+Check your balance, then sell. The command below sells 0.48 HYPE at a minimum price of $30/HYPE:
+
+```bash
+fintool balance
+fintool order sell HYPE 0.48 30.00
+```
+
+You can force a specific exchange with `--exchange`:
+
+```bash
 fintool order buy BTC 100 65000 --exchange coinbase
 fintool order buy BTC 100 65000 --exchange binance
+```
 
-# Perp trading
-fintool perp buy BTC 100 65000
-fintool perp sell BTC 0.01 70000
+### Open and close perp positions
 
-# Options trading (Binance only)
-fintool options buy BTC call 70000 260328 0.1 --exchange binance
+Get the perp quote, set leverage, and open a long position:
+
+```bash
+fintool perp quote ETH
+fintool perp leverage ETH 2
+fintool perp buy ETH 12 2100.00
+```
+
+Check positions and balance:
+
+```bash
+fintool positions
+fintool balance
+```
+
+Close the position with `--close` (reduce-only — won't open a new short):
+
+```bash
+fintool perp sell ETH 0.006 2150.00 --close
+```
+
+### Commodity perp on Hyperliquid (USDT0 conversion)
+
+The HIP-3 commodity/stock perp market on Hyperliquid (SILVER, GOLD, TSLA, etc.) uses USDT0 as collateral instead of USDC. You need to swap USDC → USDT0 first.
+
+**Buy USDT0 on the spot market and transfer to the HIP-3 dex:**
+
+```bash
+fintool order buy USDT0 30 1.002
+fintool transfer 30 to-dex --dex cash
+```
+
+**Trade the commodity perp:**
+
+```bash
+fintool perp quote SILVER
+fintool perp leverage SILVER 2
+fintool perp buy SILVER 12 89.00
+```
+
+**Close the position and convert back to USDC:**
+
+```bash
+fintool perp sell SILVER 0.14 91.00 --close
+fintool transfer 30 from-dex --dex cash
+fintool order sell USDT0 30 0.998
+```
+
+Check everything:
+
+```bash
+fintool positions
+fintool orders
+fintool balance
 ```
 
 ## Output Modes
