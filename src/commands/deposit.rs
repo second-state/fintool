@@ -226,7 +226,7 @@ async fn deposit_usdc_hl(
                 "Route:      ".dimmed(),
                 source.name()
             );
-            println!("  {} {}", "Bridge:     ".dimmed(), "Across Protocol");
+            println!("  {} Across Protocol", "Bridge:     ".dimmed());
             println!(
                 "  {} {}",
                 "Amount in:  ".dimmed(),
