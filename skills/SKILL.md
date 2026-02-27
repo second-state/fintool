@@ -1,6 +1,6 @@
 ---
 name: fintool
-description: "Financial trading CLI — spot/perp/options trading on Hyperliquid, Binance, Coinbase. Deposit and withdraw across chains (Unit bridge, Across Protocol). LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
+description: "Financial trading CLI — spot and perp trading on Hyperliquid, Binance, Coinbase. Deposit and withdraw across chains (Unit bridge, Across Protocol). LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
 homepage: https://github.com/second-state/fintool
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
@@ -36,7 +36,7 @@ cat ~/.fintool/config.toml 2>/dev/null
 
 2. **At least one exchange** — Required for trading commands.
    - **Hyperliquid**: `private_key` or `wallet_json` + `wallet_passcode` in `[wallet]` (spot + perps)
-   - **Binance**: `binance_api_key` + `binance_api_secret` in `[api_keys]` (spot + perps + options)
+   - **Binance**: `binance_api_key` + `binance_api_secret` in `[api_keys]` (spot + perps)
    - **Coinbase**: `coinbase_api_key` + `coinbase_api_secret` in `[api_keys]` (spot only)
    - If none configured: Ask the user which exchange they want to use and request the credentials.
 
@@ -48,7 +48,6 @@ cat ~/.fintool/config.toml 2>/dev/null
 |---------|-------------|---------|----------|
 | Spot orders | ✅ | ✅ | ✅ |
 | Perp orders | ✅ | ✅ | ❌ |
-| Options | ❌ | ✅ | ❌ |
 | Deposit | ✅ (Unit + Across) | ✅ (API) | ✅ (API) |
 | Withdraw | ✅ (Bridge2 + Unit + Across) | ✅ (API) | ✅ (API) |
 | Balance | ✅ | ✅ | ✅ |
@@ -56,7 +55,7 @@ cat ~/.fintool/config.toml 2>/dev/null
 | Cancel | ✅ | ✅ | ✅ |
 | Positions | ✅ | ✅ | ❌ |
 
-**Auto exchange priority**: Hyperliquid > Coinbase > Binance for spot/perp. Binance-only for options.
+**Auto exchange priority**: Hyperliquid > Coinbase > Binance for spot. Hyperliquid > Binance for perps.
 
 Use `--exchange hyperliquid|binance|coinbase` to force a specific exchange.
 
@@ -137,36 +136,16 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 {baseDir}/scripts/fintool orders
 ```
 
+**Step 6 — Close a position:**
+```bash
+# Close (reduce-only) — sells <SIZE> units without opening a new short
+{baseDir}/scripts/fintool perp sell <SYMBOL> <SIZE> <PRICE> --close
+```
+Use `--close` to ensure the order only reduces an existing long position. Without it, selling more than the position size would flip into a short.
+
 **Note**: Perps only available on Hyperliquid and Binance. If the user only has Coinbase configured, tell them perps are not supported on Coinbase.
 
-### Workflow 3: Options Trading
-
-**Goal**: Buy or sell options contracts.
-
-**IMPORTANT**: Options only work on Binance. If user tries with Hyperliquid or Coinbase, explain this and ask them to configure Binance credentials.
-
-**Step 1 — Research the underlying:**
-```bash
-{baseDir}/scripts/fintool quote <SYMBOL>
-{baseDir}/scripts/fintool news <SYMBOL>
-```
-
-**Step 2 — Place options trade:**
-```bash
-# Buy a call option
-{baseDir}/scripts/fintool options buy <SYMBOL> call <STRIKE> <EXPIRY> <SIZE>
-
-# Buy a put option
-{baseDir}/scripts/fintool options buy <SYMBOL> put <STRIKE> <EXPIRY> <SIZE>
-
-# Sell a call option
-{baseDir}/scripts/fintool options sell <SYMBOL> call <STRIKE> <EXPIRY> <SIZE>
-```
-
-- `EXPIRY` format: `YYYY-MM-DD` (e.g., `2026-03-28`)
-- Binance converts to: `BTC-260328-80000-C` internally
-
-### Workflow 4: Portfolio Overview
+### Workflow 3: Portfolio Overview
 
 **Goal**: Check current positions and balances across exchanges.
 
@@ -189,7 +168,7 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 {baseDir}/scripts/fintool cancel coinbase:uuid-here          # Coinbase
 ```
 
-### Workflow 5: Depositing Funds
+### Workflow 4: Depositing Funds
 
 **Goal**: Fund an exchange account with crypto from an external wallet or another chain.
 
@@ -227,7 +206,7 @@ Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 de
 {baseDir}/scripts/fintool deposit USDC --exchange coinbase
 ```
 
-### Workflow 6: Withdrawing Funds
+### Workflow 5: Withdrawing Funds
 
 **Goal**: Move assets from an exchange to an external wallet or another chain.
 
