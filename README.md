@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**. Supports crypto, stocks, and commodities. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command (via [HyperUnit](https://docs.hyperunit.xyz) and [Across Protocol](https://across.to)). Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
+A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**. Supports crypto, stocks, and commodities. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command. Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
 
 ## Install as an OpenClaw Skill
 
