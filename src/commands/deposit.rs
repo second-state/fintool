@@ -170,6 +170,17 @@ async fn deposit_usdc_hl(
 
     let source: SourceChain = from.parse()?;
 
+    // HL Bridge2 requires minimum 5 USDC — below this is lost forever
+    let amount_f: f64 = amount.parse().unwrap_or(0.0);
+    if amount_f < 5.0 {
+        bail!(
+            "HL Bridge2 requires a minimum deposit of 5 USDC.\n\
+             Amounts below 5 USDC are not credited and lost forever.\n\
+             You requested {} USDC. Please use --amount 5 or higher.",
+            amount
+        );
+    }
+
     // Step 1: Get Across bridge quote
     eprintln!("Fetching bridge quote from Across...");
     let quote = bridge::get_across_quote(source, amount, &cfg.address).await?;
@@ -528,12 +539,22 @@ async fn deposit_usdc_hl(
 
     // ERC-20 transfer USDC to HL Bridge2
     let transfer_data = bridge::encode_erc20_transfer(bridge::HL_BRIDGE2_MAINNET, output_amount)?;
+
+    // Query current gas price from Arbitrum and add 50% buffer to avoid
+    // "max fee per gas less than block base fee" errors
+    let arb_gas_price = arb_client
+        .get_gas_price()
+        .await
+        .context("Failed to fetch Arbitrum gas price")?;
+    let arb_gas_price_buffered = arb_gas_price * 150 / 100;
+
     let hl_deposit_tx = ethers::types::TransactionRequest::new()
         .to(bridge::USDC_ARBITRUM
             .parse::<ethers::types::Address>()
             .context("Invalid USDC address")?)
         .data(transfer_data)
-        .chain_id(bridge::ARBITRUM_CHAIN_ID);
+        .chain_id(bridge::ARBITRUM_CHAIN_ID)
+        .gas_price(arb_gas_price_buffered);
 
     let pending = arb_client
         .send_transaction(hl_deposit_tx, None)

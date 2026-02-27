@@ -74,6 +74,34 @@ impl Eip712 for Agent {
     }
 }
 
+/// Sign an Agent struct and return the signature as a JSON value.
+/// Reusable for any HL exchange action that needs EIP-712 Agent signing.
+#[allow(dead_code)]
+pub fn sign_agent(
+    source: String,
+    connection_id: H256,
+    wallet: &LocalWallet,
+) -> Result<serde_json::Value> {
+    let agent = Agent {
+        source,
+        connection_id,
+    };
+
+    let encoded = agent
+        .encode_eip712()
+        .map_err(|e| anyhow::anyhow!("EIP-712 encode failed: {:?}", e))?;
+
+    let signature = wallet
+        .sign_hash(H256::from(encoded))
+        .map_err(|e| anyhow::anyhow!("Signing failed: {:?}", e))?;
+
+    Ok(serde_json::json!({
+        "r": format!("0x{:064x}", signature.r),
+        "s": format!("0x{:064x}", signature.s),
+        "v": signature.v,
+    }))
+}
+
 // ── Msgpack order format (matches SDK wire format) ───────────────────
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -175,21 +203,33 @@ pub async fn resolve_hip3_asset(dex: &str, asset_name: &str) -> Result<(u32, u32
 
 // ── Format price/size like the SDK ───────────────────────────────────
 
-fn float_to_wire(val: f64, sz_decimals: u32) -> String {
-    // Match SDK: 5 significant figures, then round to appropriate decimals
-    let formatted = format!("{:.prec$}", val, prec = 5);
-    let parsed: f64 = formatted.parse().unwrap_or(val);
-    // For prices: 6 - sz_decimals decimal places (perps)
-    // For sizes: sz_decimals decimal places
-    format!("{:.prec$}", parsed, prec = sz_decimals as usize)
+/// Format a float for msgpack hashing — must match the SDK's float_to_string_for_hashing exactly.
+/// Formats to 8 decimal places, then strips trailing zeros and trailing dot.
+fn float_to_string_for_hashing(val: f64) -> String {
+    let result = format!("{:.8}", val);
+    result
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
 }
 
-fn price_to_wire(price: f64, sz_decimals: u32) -> String {
-    // Prices use (6 - szDecimals) significant decimals for perps
-    let max_decimals = if sz_decimals < 6 { 6 - sz_decimals } else { 0 };
-    let s = format!("{:.5}", price); // 5 sig figures first
-    let parsed: f64 = s.parse().unwrap_or(price);
-    format!("{:.prec$}", parsed, prec = max_decimals as usize)
+/// Format size for the wire — truncate to szDecimals first, then SDK-compatible format
+fn size_to_wire(val: f64, sz_decimals: u32) -> String {
+    let factor = 10f64.powi(sz_decimals as i32);
+    let truncated = (val * factor + 1e-9).floor() / factor;
+    float_to_string_for_hashing(truncated)
+}
+
+/// Format price for the wire — round to 5 sig figs (tick size), then SDK-compatible format
+fn price_to_wire(price: f64) -> String {
+    if price == 0.0 {
+        return "0".to_string();
+    }
+    let magnitude = price.abs().log10().floor() as i32;
+    let decimals = (4 - magnitude).max(0);
+    let factor = 10f64.powi(decimals);
+    let rounded = (price * factor).round() / factor;
+    float_to_string_for_hashing(rounded)
 }
 
 // ── Sign and submit order ────────────────────────────────────────────
@@ -215,8 +255,8 @@ pub async fn place_order(
         orders: vec![OrderWire {
             a: asset_index,
             b: is_buy,
-            p: price_to_wire(price, sz_decimals),
-            s: float_to_wire(size, sz_decimals),
+            p: price_to_wire(price),
+            s: size_to_wire(size, sz_decimals),
             r: false,
             t: OrderType {
                 limit: LimitType {
@@ -259,8 +299,8 @@ pub async fn place_order(
         "orders": [{
             "a": asset_index,
             "b": is_buy,
-            "p": price_to_wire(price, sz_decimals),
-            "s": float_to_wire(size, sz_decimals),
+            "p": price_to_wire(price),
+            "s": size_to_wire(size, sz_decimals),
             "r": false,
             "t": {
                 "limit": {
@@ -306,6 +346,144 @@ pub async fn place_order(
 
     if !status.is_success() {
         anyhow::bail!("HIP-3 order failed ({}): {:?}", status, body);
+    }
+
+    // Check top-level status: "err" means the API rejected the request
+    if body.get("status").and_then(|s| s.as_str()) == Some("err") {
+        let msg = body
+            .get("response")
+            .and_then(|r| r.as_str())
+            .unwrap_or("unknown error");
+        anyhow::bail!("HIP-3 order rejected: {}", msg);
+    }
+
+    // Check for errors in response.data.statuses[0] (order-level rejection)
+    if let Some(order_status) = body
+        .get("response")
+        .and_then(|r| r.get("data"))
+        .and_then(|d| d.get("statuses"))
+        .and_then(|s| s.as_array())
+        .and_then(|a| a.first())
+    {
+        if let Some(err) = order_status.get("error").and_then(|e| e.as_str()) {
+            anyhow::bail!("HIP-3 order rejected: {}", err);
+        }
+    }
+
+    Ok(body)
+}
+
+// ── Leverage ────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct LeverageAction {
+    #[serde(rename = "type")]
+    action_type: String,
+    asset: u32,
+    is_cross: bool,
+    leverage: u32,
+}
+
+/// Set leverage for a HIP-3 perp asset (e.g. cash:SILVER)
+pub async fn set_leverage(
+    dex: &str,
+    asset_name: &str,
+    leverage: u32,
+    is_cross: bool,
+) -> Result<Value> {
+    let cfg = config::load_hl_config()?;
+    let wallet: LocalWallet = cfg.private_key.parse().context("Invalid private key")?;
+    let is_mainnet = !cfg.testnet;
+
+    // Resolve asset index
+    let (asset_index, _sz_decimals) = resolve_hip3_asset(dex, asset_name).await?;
+
+    // Build action for msgpack hashing
+    let action = LeverageAction {
+        action_type: "updateLeverage".to_string(),
+        asset: asset_index,
+        is_cross,
+        leverage,
+    };
+
+    // Compute connection_id: keccak256(msgpack || timestamp_be || 0x00)
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_millis() as u64;
+
+    let mut bytes =
+        rmp_serde::to_vec_named(&action).context("Failed to msgpack serialize leverage action")?;
+    bytes.extend(timestamp.to_be_bytes());
+    bytes.push(0u8); // no vault address
+    let connection_id = H256(keccak256(bytes));
+
+    // EIP-712 sign
+    let source = if is_mainnet { "a" } else { "b" }.to_string();
+    let agent = Agent {
+        source,
+        connection_id,
+    };
+
+    let encoded = agent
+        .encode_eip712()
+        .map_err(|e| anyhow::anyhow!("EIP-712 encode failed: {:?}", e))?;
+
+    let signature = wallet
+        .sign_hash(H256::from(encoded))
+        .map_err(|e| anyhow::anyhow!("Signing failed: {:?}", e))?;
+
+    // Build JSON action for the API
+    let json_action = json!({
+        "type": "updateLeverage",
+        "asset": asset_index,
+        "isCross": is_cross,
+        "leverage": leverage,
+    });
+
+    let api_url = if is_mainnet {
+        "https://api.hyperliquid.xyz/exchange"
+    } else {
+        "https://api.hyperliquid-testnet.xyz/exchange"
+    };
+
+    let sig_json = json!({
+        "r": format!("0x{:064x}", signature.r),
+        "s": format!("0x{:064x}", signature.s),
+        "v": signature.v,
+    });
+
+    let payload = json!({
+        "action": json_action,
+        "nonce": timestamp,
+        "signature": sig_json,
+        "vaultAddress": null,
+    });
+
+    let http = reqwest::Client::builder()
+        .user_agent("fintool/0.1")
+        .build()?;
+
+    let resp = http
+        .post(api_url)
+        .json(&payload)
+        .send()
+        .await
+        .context("Failed to send HIP-3 leverage update")?;
+
+    let status = resp.status();
+    let body: Value = resp.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        anyhow::bail!("HIP-3 leverage update failed ({}): {:?}", status, body);
+    }
+
+    if body.get("status").and_then(|s| s.as_str()) == Some("err") {
+        let msg = body
+            .get("response")
+            .and_then(|r| r.as_str())
+            .unwrap_or("unknown error");
+        anyhow::bail!("HIP-3 leverage update rejected: {}", msg);
     }
 
     Ok(body)

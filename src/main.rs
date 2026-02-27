@@ -9,7 +9,7 @@ mod hip3;
 mod signing;
 mod unit;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, ReportCmd};
 
 #[tokio::main]
@@ -31,6 +31,15 @@ async fn main() -> Result<()> {
             }
             Err(e) => Err(e),
         },
+        Commands::Address => {
+            let address = signing::get_wallet_address().context("No wallet configured")?;
+            if json {
+                println!("{}", serde_json::json!({"address": address}));
+            } else {
+                println!("{}", address);
+            }
+            Ok(())
+        }
         Commands::Quote { symbol } => commands::quote::run_spot(&symbol, json).await,
         Commands::News { symbol } => commands::news::run(&symbol, json).await,
         Commands::Order(cmd) => match cmd {
@@ -64,7 +73,14 @@ async fn main() -> Result<()> {
                 symbol,
                 amount,
                 price,
-            } => commands::perp::sell(&symbol, &amount, &price, &cli.exchange, json).await,
+                close,
+            } => commands::perp::sell(&symbol, &amount, &price, close, &cli.exchange, json).await,
+            PerpCmd::Leverage {
+                symbol,
+                leverage,
+                cross,
+            } => commands::perp::set_leverage(&symbol, leverage, cross, &cli.exchange, json).await,
+            PerpCmd::SetMode { mode } => commands::perp::set_mode(&mode, json).await,
         },
         Commands::Options(cmd) => match cmd {
             OptionsCmd::Buy {
@@ -137,6 +153,65 @@ async fn main() -> Result<()> {
                 json,
             )
             .await
+        }
+        Commands::Transfer { amount, direction, dex } => {
+            if cli.exchange != "auto" && cli.exchange != "hyperliquid" {
+                anyhow::bail!(
+                    "Transfer between perp and spot is only supported on Hyperliquid. Got --exchange {}",
+                    cli.exchange
+                );
+            }
+            config::load_hl_config().context(
+                "Hyperliquid wallet not configured. Transfer requires Hyperliquid."
+            )?;
+            let amount_f: f64 = amount.parse().map_err(|_| anyhow::anyhow!("Invalid amount: {}", amount))?;
+
+            match direction.as_str() {
+                "to-perp" | "to-spot" => {
+                    let to_perp = direction == "to-perp";
+                    let dir_label = if to_perp { "spot → perp" } else { "perp → spot" };
+                    signing::class_transfer(amount_f, to_perp).await?;
+                    if json {
+                        println!("{}", serde_json::json!({
+                            "action": "transfer",
+                            "amount": amount,
+                            "direction": direction,
+                            "status": "ok",
+                        }));
+                    } else {
+                        println!("  Transferred ${} USDC ({})", amount, dir_label);
+                    }
+                }
+                "to-dex" | "from-dex" => {
+                    let dex_name = dex.as_deref().ok_or_else(||
+                        anyhow::anyhow!("--dex is required for {} (e.g. --dex cash)", direction)
+                    )?;
+                    let (collateral_token, token_name) = signing::get_dex_collateral_token(dex_name).await?;
+                    let (source, dest, dir_label) = if direction == "to-dex" {
+                        ("spot", dex_name, format!("spot → {} dex", dex_name))
+                    } else {
+                        (dex_name, "spot", format!("{} dex → spot", dex_name))
+                    };
+                    signing::send_asset(amount_f, source, dest, &collateral_token).await?;
+                    if json {
+                        println!("{}", serde_json::json!({
+                            "action": "transfer",
+                            "amount": amount,
+                            "direction": direction,
+                            "dex": dex_name,
+                            "token": token_name,
+                            "status": "ok",
+                        }));
+                    } else {
+                        println!("  Transferred ${} {} ({})", amount, token_name, dir_label);
+                    }
+                }
+                _ => anyhow::bail!(
+                    "Invalid direction: {}. Use 'to-spot', 'to-perp', 'to-dex', or 'from-dex'",
+                    direction
+                ),
+            }
+            Ok(())
         }
         Commands::BridgeStatus => commands::bridge_status::run(json).await,
         Commands::Report(cmd) => match cmd {
