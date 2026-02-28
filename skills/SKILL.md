@@ -138,10 +138,13 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 
 **Step 6 — Close a position:**
 ```bash
-# Close (reduce-only) — sells <SIZE> units without opening a new short
+# Close a long (reduce-only) — sells without opening a new short
 {baseDir}/scripts/fintool perp sell <SYMBOL> <SIZE> <PRICE> --close
+
+# Close a short (reduce-only) — buys without opening a new long
+{baseDir}/scripts/fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE> --close
 ```
-Use `--close` to ensure the order only reduces an existing long position. Without it, selling more than the position size would flip into a short.
+Use `--close` to ensure the order only reduces an existing position. Without it, the order could flip you into the opposite direction.
 
 **Note**: Perps only available on Hyperliquid and Binance. If the user only has Coinbase configured, tell them perps are not supported on Coinbase.
 

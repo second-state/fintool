@@ -712,11 +712,13 @@ fintool order sell BTC 0.01 67000 --exchange coinbase
 
 ---
 
-### `fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE>`
+### `fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE> [--close]`
 
 Place a **perpetual futures** limit buy (long) order.
 
 **Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
+
+Use `--close` to close an existing short position (reduce-only order). Without `--close`, the order opens a new long position.
 
 #### Examples
 
@@ -724,6 +726,9 @@ Place a **perpetual futures** limit buy (long) order.
 # Crypto perps (main HL dex)
 fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
 fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
+
+# Close an existing short position (reduce-only)
+fintool perp buy ETH 500 1800 --close
 
 # Commodity/stock perps (HIP-3 cash dex — auto-detected)
 fintool perp buy SILVER 1000 89.50   # long $1000 of silver at $89.50
@@ -1188,8 +1193,8 @@ fintool bridge-status --human
 | `fintool report get <SYM> <ACC>` | Fetch specific filing | N/A |
 | `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance, Coinbase |
 | `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance, Coinbase |
-| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long | Hyperliquid, Binance |
-| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short / close (`--close`) | Hyperliquid, Binance |
+| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long / close short (`--close`) | Hyperliquid, Binance |
+| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short / close long (`--close`) | Hyperliquid, Binance |
 | `fintool perp leverage <SYM> <N>` | Set perp leverage (incl. HIP-3) | Hyperliquid, Binance |
 | `fintool perp set-mode <MODE>` | Set account abstraction mode | Hyperliquid only |
 | `fintool orders [SYM]` | List open orders | Hyperliquid, Binance, Coinbase |
