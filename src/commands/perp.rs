@@ -35,6 +35,7 @@ pub async fn buy(
     symbol: &str,
     amount_usdc: &str,
     price: &str,
+    close: bool,
     exchange: &str,
     json_output: bool,
 ) -> Result<()> {
@@ -85,9 +86,14 @@ pub async fn buy(
         .await;
     }
 
+    let mode = if close {
+        "CLOSE (reduce-only)"
+    } else {
+        "BUY (long)"
+    };
     if !json_output {
         println!();
-        println!("  📝 Placing perp limit BUY (long)");
+        println!("  📝 Placing perp limit {}", mode);
         println!("  Symbol:   {}", symbol.cyan());
         println!("  Size:     {:.6}", size);
         println!("  Price:    ${}", price);
@@ -100,7 +106,7 @@ pub async fn buy(
     }
 
     // Perp orders use the symbol directly (e.g. "BTC")
-    let result = signing::place_perp_order(&symbol, true, price_f, size, false).await?;
+    let result = signing::place_perp_order(&symbol, true, price_f, size, close).await?;
 
     let (fill_status, result_json) = parse_sdk_order_result(&result);
 

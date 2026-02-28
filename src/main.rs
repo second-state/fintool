@@ -68,7 +68,10 @@ async fn main() -> Result<()> {
                 symbol,
                 amount_usdc,
                 price,
-            } => commands::perp::buy(&symbol, &amount_usdc, &price, &cli.exchange, json).await,
+                close,
+            } => {
+                commands::perp::buy(&symbol, &amount_usdc, &price, close, &cli.exchange, json).await
+            }
             PerpCmd::Sell {
                 symbol,
                 amount,

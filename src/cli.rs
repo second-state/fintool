@@ -172,6 +172,9 @@ pub enum PerpCmd {
         amount_usdc: String,
         /// Limit price
         price: String,
+        /// Close position only (reduce-only, won't open a new long)
+        #[arg(long)]
+        close: bool,
     },
     /// Place a perp limit sell (short) order
     Sell {
