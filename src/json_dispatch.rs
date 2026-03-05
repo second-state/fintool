@@ -225,8 +225,16 @@ pub async fn run(json_str: &str) -> Result<()> {
             size,
             exchange,
         } => {
-            commands::options::buy(&symbol, &option_type, &strike, &expiry, &size, &exchange, true)
-                .await
+            commands::options::buy(
+                &symbol,
+                &option_type,
+                &strike,
+                &expiry,
+                &size,
+                &exchange,
+                true,
+            )
+            .await
         }
         JsonCommand::OptionsSell {
             symbol,

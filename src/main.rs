@@ -65,16 +65,12 @@ async fn main() -> Result<()> {
                 symbol,
                 amount,
                 price,
-            } => {
-                commands::order::buy(&symbol, &amount, &price, &cli.exchange, json_output).await
-            }
+            } => commands::order::buy(&symbol, &amount, &price, &cli.exchange, json_output).await,
             OrderCmd::Sell {
                 symbol,
                 amount,
                 price,
-            } => {
-                commands::order::sell(&symbol, &amount, &price, &cli.exchange, json_output).await
-            }
+            } => commands::order::sell(&symbol, &amount, &price, &cli.exchange, json_output).await,
         },
         Commands::Orders { symbol } => {
             commands::orders::run(symbol.as_deref(), &cli.exchange, json_output).await
@@ -217,9 +213,7 @@ async fn main() -> Result<()> {
                 symbol,
                 accession,
                 output,
-            } => {
-                commands::report::get(&symbol, &accession, output.as_deref(), json_output).await
-            }
+            } => commands::report::get(&symbol, &accession, output.as_deref(), json_output).await,
         },
     };
 
@@ -234,9 +228,24 @@ use colored::Colorize;
 
 /// Known chain names for withdraw --to detection
 const KNOWN_CHAINS: &[&str] = &[
-    "base", "ethereum", "eth", "mainnet", "arbitrum", "arb",
-    "solana", "sol", "bitcoin", "btc", "bsc", "bnb",
-    "polygon", "matic", "optimism", "op", "avalanche", "avax",
+    "base",
+    "ethereum",
+    "eth",
+    "mainnet",
+    "arbitrum",
+    "arb",
+    "solana",
+    "sol",
+    "bitcoin",
+    "btc",
+    "bsc",
+    "bnb",
+    "polygon",
+    "matic",
+    "optimism",
+    "op",
+    "avalanche",
+    "avax",
 ];
 
 /// Resolve --to and --network for the withdraw command.

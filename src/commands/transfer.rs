@@ -14,8 +14,7 @@ pub async fn run(asset: &str, amount: &str, from: &str, to: &str, json_output: b
     let to_lower = to.to_lowercase();
 
     // Determine transfer type based on from/to
-    if (from_lower == "perp" && to_lower == "spot")
-        || (from_lower == "spot" && to_lower == "perp")
+    if (from_lower == "perp" && to_lower == "spot") || (from_lower == "spot" && to_lower == "perp")
     {
         // Perp ↔ spot transfer (USDC)
         let to_perp = to_lower == "perp";
@@ -43,8 +42,7 @@ pub async fn run(asset: &str, amount: &str, from: &str, to: &str, json_output: b
     } else if to_lower == "spot" && from_lower != "perp" {
         // From dex → spot
         let dex_name = &from_lower;
-        let (collateral_token, token_name) =
-            signing::get_dex_collateral_token(dex_name).await?;
+        let (collateral_token, token_name) = signing::get_dex_collateral_token(dex_name).await?;
         let dir_label = format!("{} dex → spot", dex_name);
         signing::send_asset(amount_f, dex_name, "spot", &collateral_token).await?;
         if json_output {
@@ -66,8 +64,7 @@ pub async fn run(asset: &str, amount: &str, from: &str, to: &str, json_output: b
     } else if from_lower == "spot" && to_lower != "perp" {
         // Spot → dex
         let dex_name = &to_lower;
-        let (collateral_token, token_name) =
-            signing::get_dex_collateral_token(dex_name).await?;
+        let (collateral_token, token_name) = signing::get_dex_collateral_token(dex_name).await?;
         let dir_label = format!("spot → {} dex", dex_name);
         signing::send_asset(amount_f, "spot", dex_name, &collateral_token).await?;
         if json_output {
@@ -91,7 +88,8 @@ pub async fn run(asset: &str, amount: &str, from: &str, to: &str, json_output: b
             "Invalid transfer: --from {} --to {}. One side must be 'spot'. \
              Use: --from spot --to perp, --from perp --to spot, \
              --from spot --to <dex>, or --from <dex> --to spot",
-            from, to
+            from,
+            to
         );
     }
     Ok(())

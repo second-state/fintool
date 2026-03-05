@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 #
-# Funding Rate Arbitrage Bot
+# Funding Rate Arbitrage Bot (Human CLI API)
+#
+# All fintool calls use the standard CLI interface (human-readable output).
+# Data extraction (prices, funding, positions, balances) queries the
+# Hyperliquid API directly via curl for reliable parsing.
+#
+# For the JSON API version, see bot_json.sh.
 #
 # Strategy: Buy spot + short perp on the asset with the highest positive
 # funding rate among liquid overlapping pairs. Collect hourly funding.
 # If funding turns negative, unwind and wait for the next opportunity.
 #
-# Usage: ./tests/funding_arb.sh [--dry-run] [--interval 3600]
+# Usage: ./bot.sh [--dry-run] [--interval 3600]
 #
-# Requires: fintool CLI, jq, curl, OPENAI_API_KEY env var
+# Requires: fintool CLI, jq, curl, python3, OPENAI_API_KEY env var
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -28,7 +34,6 @@ POSITION_PCT=90      # Use 90% of available USDC (keep 10% buffer)
 LOG_FILE="/tmp/funding_arb.log"
 
 # Assets available on both spot and perp (spot ticker -> perp ticker)
-# These are the liquid overlapping pairs from our research
 declare -A SPOT_TO_PERP=(
     ["HYPE"]="HYPE"
     ["PURR"]="PURR"
@@ -60,29 +65,51 @@ done
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log_msg() { echo "[$(ts)] $*" | tee -a "$LOG_FILE"; }
 
-# ── Hyperliquid API helpers ────────────────────────────────────────────
+# ── Hyperliquid API helpers ──────────────────────────────────────────
+
+hl_api() {
+    curl -s https://api.hyperliquid.xyz/info \
+        -X POST \
+        -H 'Content-Type: application/json' \
+        -d "$1"
+}
+
+# Get wallet address from fintool (human mode prints just the address)
+USER_ADDR=$($FINTOOL address 2>/dev/null)
 
 # Fetch funding rates and volume for all perps via Hyperliquid API
 fetch_all_funding() {
-    curl -s https://api.hyperliquid.xyz/info \
-        -X POST \
-        -H 'Content-Type: application/json' \
-        -d '{"type": "metaAndAssetCtxs"}'
+    hl_api '{"type": "metaAndAssetCtxs"}'
 }
 
 # Fetch spot orderbook depth for a given spot pair
-# Returns best bid/ask and depth
 fetch_spot_book() {
     local coin="$1"
-    curl -s https://api.hyperliquid.xyz/info \
-        -X POST \
-        -H 'Content-Type: application/json' \
-        -d "{\"type\": \"l2Book\", \"coin\": \"${coin}\"}"
+    hl_api "{\"type\": \"l2Book\", \"coin\": \"${coin}\"}"
+}
+
+# Get perp price for a symbol from metaAndAssetCtxs data
+# Usage: get_perp_price "$all_data" "ETH"
+get_perp_price() {
+    local data="$1" symbol="$2"
+    echo "$data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for u, c in zip(data[0]['universe'], data[1]):
+    if u['name'] == '$symbol':
+        print(c['markPx'])
+        break
+" 2>/dev/null
+}
+
+# Get spot mid price from allMids
+get_spot_price() {
+    local symbol="$1"
+    hl_api '{"type":"allMids"}' | jq -r --arg s "@${symbol}" '.[$s] // empty' 2>/dev/null
 }
 
 # ── OpenAI analysis ───────────────────────────────────────────────────
 
-# Ask OpenAI to analyze candidates and pick the best one
 analyze_with_openai() {
     local candidates_json="$1"
 
@@ -122,27 +149,22 @@ Respond in EXACTLY this JSON format, nothing else:
 
 # Check if we currently have any positions
 get_current_state() {
-    run_fintool positions
-    local positions="$LAST_STDOUT"
+    # Query Hyperliquid API for positions and balance
+    local perp_state spot_state
+    perp_state=$(hl_api "{\"type\":\"clearinghouseState\",\"user\":\"$USER_ADDR\"}")
+    spot_state=$(hl_api "{\"type\":\"spotClearinghouseState\",\"user\":\"$USER_ADDR\"}")
 
-    run_fintool balance
-    local balance="$LAST_STDOUT"
-
-    # Check if we have any perp positions
     local has_perp
-    has_perp=$(echo "$positions" | jq -r 'if type == "array" then (map(select(.size != "0" and .size != "0.0" and .size != null)) | length) else 0 end' 2>/dev/null || echo "0")
+    has_perp=$(echo "$perp_state" | jq '[.assetPositions[]? | select(.position.szi != "0" and .position.szi != "0.0")] | length' 2>/dev/null || echo "0")
 
-    # Get USDC balance
     local usdc
-    usdc=$(echo "$balance" | jq -r '
-        if type == "array" then
-            map(select(.coin == "USDC" or .asset == "USDC")) | .[0] | (.available // .free // .balance // "0")
-        elif type == "object" then
-            .USDC // .usdc // .available // "0"
-        else "0" end
-    ' 2>/dev/null || echo "0")
+    usdc=$(echo "$perp_state" | jq -r '.withdrawable // "0"' 2>/dev/null || echo "0")
 
-    echo "{\"has_positions\": $has_perp, \"usdc_available\": \"$usdc\", \"positions\": $positions, \"balance\": $balance}"
+    # Display human-readable positions and balance via fintool CLI
+    $FINTOOL positions 2>&1 | tee -a "$LOG_FILE"
+    $FINTOOL balance 2>&1 | tee -a "$LOG_FILE"
+
+    echo "{\"has_positions\": $has_perp, \"usdc_available\": \"$usdc\"}"
 }
 
 # Gather funding data for all candidate assets
@@ -200,7 +222,6 @@ for u, c in zip(universe, ctxs):
         # Fetch spot book for spread analysis
         local book spread_data
         book=$(fetch_spot_book "@${spot_ticker}")
-        # If spot ticker doesn't have @, try the raw name
         if echo "$book" | jq -e '.levels' >/dev/null 2>&1; then
             spread_data=$(echo "$book" | python3 -c "
 import json, sys
@@ -245,24 +266,26 @@ open_position() {
 
     log_msg "Opening position: spot=$spot_ticker perp=$perp_ticker amount=\$${usdc_amount} (${half} each side)"
 
-    # 1. Get current prices
-    run_fintool perp quote "$perp_ticker"
-    if check_fail "Perp quote for $perp_ticker failed"; then return 1; fi
-    local perp_price
-    perp_price=$(echo "$LAST_STDOUT" | jq -r '.markPx')
+    # 1. Get current prices from Hyperliquid API
+    local all_data perp_price spot_price
+    all_data=$(fetch_all_funding)
+    perp_price=$(get_perp_price "$all_data" "$perp_ticker")
+    spot_price=$(get_spot_price "$spot_ticker")
 
-    run_fintool quote "$spot_ticker"
-    if check_fail "Spot quote for $spot_ticker failed"; then return 1; fi
-    local spot_price
-    spot_price=$(echo "$LAST_STDOUT" | jq -r '.price // .markPx')
+    if [[ -z "$perp_price" || -z "$spot_price" ]]; then
+        log_msg "ERROR: Could not fetch prices for $perp_ticker/$spot_ticker"
+        return 1
+    fi
 
-    # 2. Calculate limit prices with slippage
+    log_msg "  Prices: spot=$spot_price perp=$perp_price"
+
+    # 2. Calculate limit prices with slippage and sizes
     local spot_limit perp_limit spot_size
     spot_limit=$(echo "$spot_price" | awk -v s="$SLIPPAGE_BPS" '{printf "%.6f", $1 * (1 + s/10000)}')
     perp_limit=$(echo "$perp_price" | awk -v s="$SLIPPAGE_BPS" '{printf "%.6f", $1 * (1 - s/10000)}')
     spot_size=$(echo "$half $spot_price" | awk '{printf "%.6f", $1 / $2}')
 
-    log_msg "  Spot: buy \$$half of $spot_ticker at limit \$$spot_limit"
+    log_msg "  Spot: buy $spot_size $spot_ticker at limit \$$spot_limit"
     log_msg "  Perp: sell (short) $spot_size $perp_ticker at limit \$$perp_limit"
 
     if $DRY_RUN; then
@@ -271,24 +294,20 @@ open_position() {
     fi
 
     # 3. Set leverage to 1x for the perp
-    run_fintool perp leverage "$perp_ticker" "$LEVERAGE" --cross
+    run_fintool perp leverage "$perp_ticker" --leverage "$LEVERAGE" --cross
     if check_fail "Set leverage failed"; then
         warn "Leverage setting failed, continuing anyway..."
     fi
 
-    # 4. Buy spot
-    run_fintool order buy "$spot_ticker" "$half" "$spot_limit"
+    # 4. Buy spot (--amount is in symbol units)
+    run_fintool order buy "$spot_ticker" --amount "$spot_size" --price "$spot_limit"
     if check_fail "Spot buy failed"; then return 1; fi
-    local spot_fill
-    spot_fill=$(echo "$LAST_STDOUT" | jq -r '.fillStatus // "unknown"')
-    log_msg "  Spot buy status: $spot_fill"
+    log_msg "  Spot buy submitted"
 
     # 5. Short perp (sell without --close opens a short)
-    run_fintool perp sell "$perp_ticker" "$spot_size" "$perp_limit"
+    run_fintool perp sell "$perp_ticker" --amount "$spot_size" --price "$perp_limit"
     if check_fail "Perp short failed"; then return 1; fi
-    local perp_fill
-    perp_fill=$(echo "$LAST_STDOUT" | jq -r '.fillStatus // "unknown"')
-    log_msg "  Perp short status: $perp_fill"
+    log_msg "  Perp short submitted"
 
     log_msg "  Position opened successfully"
     return 0
@@ -298,19 +317,20 @@ open_position() {
 close_all_positions() {
     log_msg "Closing all positions..."
 
-    run_fintool positions
-    if check_fail "Failed to get positions"; then return 1; fi
+    # Get positions from Hyperliquid API
+    local perp_state
+    perp_state=$(hl_api "{\"type\":\"clearinghouseState\",\"user\":\"$USER_ADDR\"}")
 
-    local positions="$LAST_STDOUT"
+    # Get all perp data for prices
+    local all_data
+    all_data=$(fetch_all_funding)
 
     # Close each perp position
-    echo "$positions" | jq -c '.[] | select(.size != "0" and .size != null)' 2>/dev/null | while read -r pos; do
-        local symbol size entry_price
-        symbol=$(echo "$pos" | jq -r '.coin // .symbol')
-        size=$(echo "$pos" | jq -r '.size // .positionSize')
-        entry_price=$(echo "$pos" | jq -r '.entryPx // .entryPrice')
+    echo "$perp_state" | jq -c '.assetPositions[]? | .position | select(.szi != "0" and .szi != "0.0" and .szi != null)' 2>/dev/null | while read -r pos; do
+        local symbol size
+        symbol=$(echo "$pos" | jq -r '.coin')
+        size=$(echo "$pos" | jq -r '.szi')
 
-        # Determine if long or short based on size sign
         local abs_size is_short
         abs_size=$(echo "$size" | awk '{print ($1 < 0) ? -$1 : $1}')
         is_short=$(echo "$size" | awk '{print ($1 < 0) ? "true" : "false"}')
@@ -321,10 +341,9 @@ close_all_positions() {
 
         log_msg "  Closing perp: $symbol size=$size"
 
-        # Get current price for limit
-        run_fintool perp quote "$symbol"
+        # Get current price from data already fetched
         local current_price
-        current_price=$(echo "$LAST_STDOUT" | jq -r '.markPx')
+        current_price=$(get_perp_price "$all_data" "$symbol")
 
         if $DRY_RUN; then
             log_msg "  [DRY RUN] Would close $symbol perp"
@@ -335,12 +354,12 @@ close_all_positions() {
             # Short position -> buy to close
             local close_limit
             close_limit=$(echo "$current_price" | awk -v s="$SLIPPAGE_BPS" '{printf "%.6f", $1 * (1 + s/10000)}')
-            run_fintool perp buy "$symbol" "$(echo "$abs_size $current_price" | awk '{printf "%.2f", $1 * $2}')" "$close_limit" --close
+            run_fintool perp buy "$symbol" --amount "$abs_size" --price "$close_limit" --close
         else
             # Long position -> sell to close
             local close_limit
             close_limit=$(echo "$current_price" | awk -v s="$SLIPPAGE_BPS" '{printf "%.6f", $1 * (1 - s/10000)}')
-            run_fintool perp sell "$symbol" "$abs_size" "$close_limit" --close
+            run_fintool perp sell "$symbol" --amount "$abs_size" --price "$close_limit" --close
         fi
 
         if check_fail "Failed to close perp $symbol"; then
@@ -351,24 +370,25 @@ close_all_positions() {
     done
 
     # Sell all spot holdings (except USDC)
-    run_fintool balance
-    echo "$LAST_STDOUT" | jq -c '.[] | select(.coin != "USDC" and .asset != "USDC" and (.coin // .asset) != null)' 2>/dev/null | while read -r holding; do
-        local coin amount
-        coin=$(echo "$holding" | jq -r '.coin // .asset')
-        amount=$(echo "$holding" | jq -r '.total // .balance // .available // "0"')
+    local spot_state
+    spot_state=$(hl_api "{\"type\":\"spotClearinghouseState\",\"user\":\"$USER_ADDR\"}")
 
-        if [[ -z "$coin" || "$coin" == "null" || "$amount" == "0" ]]; then
+    echo "$spot_state" | jq -c '.balances[]? | select(.coin != "USDC" and .coin != null)' 2>/dev/null | while read -r holding; do
+        local coin amount
+        coin=$(echo "$holding" | jq -r '.coin')
+        amount=$(echo "$holding" | jq -r '.total // "0"')
+
+        if [[ -z "$coin" || "$coin" == "null" || "$amount" == "0" || "$amount" == "0.0" ]]; then
             continue
         fi
 
         log_msg "  Selling spot: $coin amount=$amount"
 
-        # Get price for limit
-        run_fintool quote "$coin"
+        # Get price from allMids
         local price
-        price=$(echo "$LAST_STDOUT" | jq -r '.price // .markPx // "0"')
+        price=$(get_spot_price "$coin")
 
-        if [[ "$price" == "0" || "$price" == "null" ]]; then
+        if [[ -z "$price" || "$price" == "null" ]]; then
             warn "Cannot get price for $coin, skipping"
             continue
         fi
@@ -381,7 +401,7 @@ close_all_positions() {
             continue
         fi
 
-        run_fintool order sell "$coin" "$amount" "$sell_limit"
+        run_fintool order sell "$coin" --amount "$amount" --price "$sell_limit"
         if check_fail "Failed to sell $coin spot"; then
             warn "Could not sell $coin — manual intervention may be needed"
         else
@@ -394,13 +414,13 @@ close_all_positions() {
 
 # Check if current position's funding has turned negative
 check_current_funding() {
-    run_fintool positions
-    local positions="$LAST_STDOUT"
+    # Get positions from Hyperliquid API
+    local perp_state
+    perp_state=$(hl_api "{\"type\":\"clearinghouseState\",\"user\":\"$USER_ADDR\"}")
 
-    # Get the perp symbol we're short on
     local short_symbol
-    short_symbol=$(echo "$positions" | jq -r '
-        [.[] | select((.size // "0") != "0")] | .[0] | .coin // .symbol // empty
+    short_symbol=$(echo "$perp_state" | jq -r '
+        [.assetPositions[]? | .position | select(.szi != "0" and .szi != "0.0")] | .[0] | .coin // empty
     ' 2>/dev/null)
 
     if [[ -z "$short_symbol" || "$short_symbol" == "null" ]]; then
@@ -408,14 +428,25 @@ check_current_funding() {
         return
     fi
 
-    # Get current funding for that symbol
-    run_fintool perp quote "$short_symbol"
-    local funding
-    funding=$(echo "$LAST_STDOUT" | jq -r '.funding // "0"')
+    # Get funding from metaAndAssetCtxs
+    local all_data funding
+    all_data=$(fetch_all_funding)
+    funding=$(echo "$all_data" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+target = '$short_symbol'
+for u, c in zip(data[0]['universe'], data[1]):
+    if u['name'] == target:
+        print(c['funding'])
+        break
+" 2>/dev/null)
 
     log_msg "Current position: $short_symbol | Funding rate: $funding"
 
-    if (( $(echo "$funding < 0" | bc -l) )); then
+    # Display human-readable perp quote
+    $FINTOOL perp quote "$short_symbol" 2>&1 | tee -a "$LOG_FILE"
+
+    if (( $(echo "${funding:-0} < 0" | bc -l) )); then
         echo "negative"
     else
         echo "positive"
@@ -426,7 +457,7 @@ check_current_funding() {
 
 main() {
     log_msg "═══════════════════════════════════════════════════"
-    log_msg "  Funding Rate Arbitrage Bot"
+    log_msg "  Funding Rate Arbitrage Bot (Human CLI API)"
     log_msg "  Dry run: $DRY_RUN | Interval: ${CHECK_INTERVAL}s"
     log_msg "  Min funding: $MIN_FUNDING | Min volume: \$$MIN_VOLUME"
     log_msg "═══════════════════════════════════════════════════"
@@ -449,13 +480,13 @@ main() {
             funding_status=$(check_current_funding)
 
             if [[ "$funding_status" == "negative" ]]; then
-                log_msg "⚠️  Funding turned NEGATIVE — closing all positions"
+                log_msg "Funding turned NEGATIVE — closing all positions"
                 close_all_positions
             elif [[ "$funding_status" == "none" ]]; then
-                log_msg "⚠️  No perp position found but expected one — resetting"
+                log_msg "No perp position found but expected one — resetting"
                 close_all_positions
             else
-                log_msg "✅ Funding still positive — holding position"
+                log_msg "Funding still positive — holding position"
             fi
         else
             # ── No positions: look for opportunities ──

@@ -1,6 +1,16 @@
-# Funding Rate Arbitrage Bot 💰📊
+# Funding Rate Arbitrage Bot
 
 Delta-neutral funding rate arbitrage: **buy spot + short perp** on the Hyperliquid asset with the highest positive funding rate. Collect hourly funding payments while staying market-neutral.
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `bot.sh` | Uses the **human CLI API** — standard fintool commands with human-readable output |
+| `bot_json.sh` | Uses the **JSON API** — all fintool calls via `--json` with structured JSON output |
+| `README.md` | This file |
+
+Both scripts implement the same strategy. Choose `bot.sh` for readable logs and terminal output, or `bot_json.sh` for programmatic/agent-driven execution.
 
 ## Strategy
 
@@ -69,18 +79,19 @@ export OPENAI_API_KEY=sk-...             # default: from ~/.fintool/config.toml
 
 ```bash
 # Dry run — scans and logs what it would do, no trades
-./funding_arb.sh --dry-run
+./bot.sh --dry-run            # human CLI version
+./bot_json.sh --dry-run       # JSON API version
 
 # Live trading
-./funding_arb.sh
+./bot.sh
 
 # Custom check interval (e.g., every 30 min)
-./funding_arb.sh --interval 1800
+./bot.sh --interval 1800
 ```
 
 ## Configuration
 
-Tunable parameters at the top of `funding_arb.sh`:
+Tunable parameters at the top of `bot.sh` / `bot_json.sh`:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
