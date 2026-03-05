@@ -157,6 +157,7 @@ async fn deposit_usdc_hl(
         anyhow::anyhow!(
             "USDC deposits require --amount.\n\
              Usage: fintool deposit USDC --amount 100 --from ethereum"
+
         )
     })?;
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Buy $1 TSLA on Coinbase
+# Buy ~$1 TSLA on Coinbase
 #
 # Usage: ./tests/buy_tsla.sh
 #
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
-log "Buy \$1 TSLA on Coinbase"
+log "Buy ~\$1 TSLA on Coinbase"
 info "Fetching TSLA price, then placing a spot limit buy on Coinbase."
 
 run_fintool quote TSLA
@@ -30,9 +30,9 @@ TSLA_SIZE=$(echo "$TSLA_PRICE" | awk '{printf "%.6f", 1.0 / $1}')
 
 info "TSLA price:       \$$TSLA_PRICE"
 info "Limit buy price:  \$$TSLA_LIMIT (+1%)"
-info "Estimated size:   $TSLA_SIZE shares"
+info "Buy size:         $TSLA_SIZE shares"
 
-run_fintool order buy TSLA 1 "$TSLA_LIMIT" --exchange coinbase
+run_fintool order buy TSLA --amount "$TSLA_SIZE" --price "$TSLA_LIMIT" --exchange coinbase
 
 if check_fail "TSLA spot buy on Coinbase failed"; then
     exit 1

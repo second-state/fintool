@@ -53,7 +53,7 @@ SELL_LIMIT=$(echo "$HYPE_PRICE" | awk '{printf "%.4f", $1 * 0.995}')
 info "Current price: \$$HYPE_PRICE"
 info "Sell limit:    \$$SELL_LIMIT (-0.5% buffer)"
 
-run_fintool order sell HYPE "$SELL_SIZE" "$SELL_LIMIT"
+run_fintool order sell HYPE --amount "$SELL_SIZE" --price "$SELL_LIMIT"
 
 if check_fail "HYPE spot sell failed"; then
     warn "Tokens may still be held — check manually with 'fintool balance'"

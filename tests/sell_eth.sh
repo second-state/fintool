@@ -49,7 +49,7 @@ SELL_LIMIT=$(echo "$SELL_PRICE" | awk '{printf "%.2f", $1 * 0.995}')
 info "Current mark: \$$SELL_PRICE"
 info "Sell limit:   \$$SELL_LIMIT (-0.5% buffer)"
 
-run_fintool perp sell ETH "$SELL_SIZE" "$SELL_LIMIT" --close
+run_fintool perp sell ETH --amount "$SELL_SIZE" --price "$SELL_LIMIT" --close
 
 if check_fail "ETH perp sell failed"; then
     warn "Position may still be open — check manually with 'fintool positions'"

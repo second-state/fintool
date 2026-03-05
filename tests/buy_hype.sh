@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Buy $12 HYPE spot on Hyperliquid
+# Buy ~$12 HYPE spot on Hyperliquid
 #
 # Usage: ./tests/buy_hype.sh
 #
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
-log "Buy \$12 HYPE spot on Hyperliquid"
+log "Buy ~\$12 HYPE spot on Hyperliquid"
 info "Fetching HYPE spot price, then placing a limit buy at +0.5% above mark."
 
 run_fintool quote HYPE
@@ -26,13 +26,13 @@ if [[ -z "$HYPE_PRICE" || "$HYPE_PRICE" == "null" ]]; then
 fi
 
 BUY_LIMIT=$(echo "$HYPE_PRICE" | awk '{printf "%.4f", $1 * 1.005}')
-BUY_SIZE=$(echo "$BUY_LIMIT" | awk '{printf "%.4f", 12.0 / $1}')
+BUY_SIZE=$(echo "$HYPE_PRICE" | awk '{printf "%.4f", 12.0 / $1}')
 
 info "HYPE price:      \$$HYPE_PRICE"
 info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
-info "Estimated size:  $BUY_SIZE HYPE"
+info "Buy size:        $BUY_SIZE HYPE"
 
-run_fintool order buy HYPE 12 "$BUY_LIMIT"
+run_fintool order buy HYPE --amount "$BUY_SIZE" --price "$BUY_LIMIT"
 
 if check_fail "HYPE spot buy failed"; then
     exit 1

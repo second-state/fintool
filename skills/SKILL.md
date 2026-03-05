@@ -13,7 +13,7 @@ A CLI tool for market intelligence and trading across multiple exchanges.
 
 - **Binary**: `{baseDir}/scripts/fintool`
 - **Config**: `~/.fintool/config.toml`
-- **Output**: JSON by default, `--human` for colored terminal output
+- **Output**: Human-readable colored output by default. Use `--json` for programmatic JSON mode
 
 ## Setup Check (MANDATORY — do this FIRST)
 
@@ -85,14 +85,14 @@ Returns: up to 10 recent headlines from Google News RSS.
 
 **Step 3 — Place the trade:**
 ```bash
-# Buy: spend $<AMOUNT> at max price $<PRICE>
-{baseDir}/scripts/fintool order buy <SYMBOL> <AMOUNT_USDC> <MAX_PRICE>
+# Buy: buy <SIZE> units at max price $<PRICE>
+{baseDir}/scripts/fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE>
 
-# Sell: sell <AMOUNT> units at min price $<PRICE>
-{baseDir}/scripts/fintool order sell <SYMBOL> <AMOUNT> <MIN_PRICE>
+# Sell: sell <SIZE> units at min price $<PRICE>
+{baseDir}/scripts/fintool order sell <SYMBOL> --amount <SIZE> --price <PRICE>
 
 # Force a specific exchange:
-{baseDir}/scripts/fintool order buy <SYMBOL> <AMOUNT> <PRICE> --exchange binance
+{baseDir}/scripts/fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE> --exchange binance
 ```
 
 **Step 4 — Verify:**
@@ -123,11 +123,11 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 
 **Step 4 — Place the trade:**
 ```bash
-# Long: spend $<AMOUNT> at limit price $<PRICE>
-{baseDir}/scripts/fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE>
+# Long: buy <SIZE> units at limit price $<PRICE>
+{baseDir}/scripts/fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE>
 
 # Short: sell <SIZE> units at limit price $<PRICE>
-{baseDir}/scripts/fintool perp sell <SYMBOL> <SIZE> <PRICE>
+{baseDir}/scripts/fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE>
 ```
 
 **Step 5 — Monitor:**
@@ -139,10 +139,10 @@ Returns: mark price, oracle price, funding rate, open interest, premium, max lev
 **Step 6 — Close a position:**
 ```bash
 # Close a long (reduce-only) — sells without opening a new short
-{baseDir}/scripts/fintool perp sell <SYMBOL> <SIZE> <PRICE> --close
+{baseDir}/scripts/fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE> --close
 
 # Close a short (reduce-only) — buys without opening a new long
-{baseDir}/scripts/fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE> --close
+{baseDir}/scripts/fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE> --close
 ```
 Use `--close` to ensure the order only reduces an existing position. Without it, the order could flip you into the opposite direction.
 
@@ -215,35 +215,35 @@ Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 de
 
 **Hyperliquid — USDC to Arbitrum (default, ~3-4 min):**
 ```bash
-{baseDir}/scripts/fintool withdraw 100 USDC
-{baseDir}/scripts/fintool withdraw 100 USDC --to 0xOtherAddress
+{baseDir}/scripts/fintool withdraw USDC --amount 100
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0xOtherAddress
 ```
 
 **Hyperliquid — USDC to Ethereum or Base (chained bridge, ~5-7 min):**
 ```bash
-{baseDir}/scripts/fintool withdraw 100 USDC --network ethereum
-{baseDir}/scripts/fintool withdraw 100 USDC --network base
-{baseDir}/scripts/fintool withdraw 100 USDC --network ethereum --dry-run
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to ethereum
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to base
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to ethereum --dry-run
 ```
 Automatically chains: HL Bridge2 → Arbitrum → Across bridge → destination.
 
 **Hyperliquid — ETH/BTC/SOL to native chain (via HyperUnit):**
 ```bash
-{baseDir}/scripts/fintool withdraw 0.5 ETH
-{baseDir}/scripts/fintool withdraw 0.01 BTC --to bc1q...
-{baseDir}/scripts/fintool withdraw 1 SOL --to SomeSolanaAddress
+{baseDir}/scripts/fintool withdraw ETH --amount 0.5
+{baseDir}/scripts/fintool withdraw BTC --amount 0.01 --to bc1q...
+{baseDir}/scripts/fintool withdraw SOL --amount 1 --to SomeSolanaAddress
 ```
 
 **Binance:**
 ```bash
-{baseDir}/scripts/fintool withdraw 100 USDC --to 0x... --exchange binance --network ethereum
-{baseDir}/scripts/fintool withdraw 0.5 ETH --to 0x... --exchange binance --network arbitrum
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0x... --exchange binance --network ethereum
+{baseDir}/scripts/fintool withdraw ETH --amount 0.5 --to 0x... --exchange binance --network arbitrum
 ```
 
 **Coinbase:**
 ```bash
-{baseDir}/scripts/fintool withdraw 100 USDC --to 0x... --exchange coinbase
-{baseDir}/scripts/fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
+{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0x... --exchange coinbase
+{baseDir}/scripts/fintool withdraw ETH --amount 0.5 --to 0x... --exchange coinbase --network base
 ```
 
 **Track HyperUnit bridge operations:**
@@ -272,4 +272,5 @@ Common indices and commodities have convenient aliases:
 - **Always quote before trading** — The enriched quote gives trend/momentum context that helps with timing.
 - **Check news before large trades** — Headlines can explain sudden price moves.
 - **Use `--exchange` when ambiguous** — If the user has multiple exchanges, explicitly select one to avoid confusion.
-- **JSON output is default** — Parse it programmatically. Use `--human` only when showing to the user in terminal.
+- **Use `--json` for programmatic access** — `fintool --json '{"command":"quote","symbol":"BTC"}'` always outputs JSON. Normal CLI output is human-readable.
+- **Amount is in symbol units** — `--amount 0.1` on ETH means 0.1 ETH, not $0.10. Calculate the size from the price quote.

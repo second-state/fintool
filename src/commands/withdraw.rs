@@ -1,4 +1,4 @@
-//! `fintool withdraw <amount> <asset> --to <addr>` — withdraw from exchange
+//! `fintool withdraw <asset> --amount <amt> --to <dest>` — withdraw from exchange
 //!
 //! For Hyperliquid (default):
 //!   - USDC: HL SDK withdraw_from_bridge (HL → Arbitrum, ~3-4 min)
@@ -447,7 +447,7 @@ async fn withdraw_unit(
             if asset_lower == "btc" {
                 bail!(
                     "BTC withdrawals require --to <bitcoin_address>.\n\
-                     Usage: fintool withdraw 0.01 BTC --to bc1q..."
+                     Usage: fintool withdraw BTC --amount 0.01 --to bc1q..."
                 );
             }
             cfg.address.clone()
@@ -579,7 +579,7 @@ async fn withdraw_binance(
     let to = to.ok_or_else(|| {
         anyhow::anyhow!(
             "Binance withdrawals require --to <address>.\n\
-             Usage: fintool withdraw 100 USDC --to 0x... --exchange binance"
+             Usage: fintool withdraw USDC --amount 100 --to 0x... --exchange binance"
         )
     })?;
 
@@ -702,7 +702,7 @@ async fn withdraw_coinbase(
     let to = to.ok_or_else(|| {
         anyhow::anyhow!(
             "Coinbase withdrawals require --to <address>.\n\
-             Usage: fintool withdraw 100 USDC --to 0x... --exchange coinbase"
+             Usage: fintool withdraw USDC --amount 100 --to 0x... --exchange coinbase"
         )
     })?;
 

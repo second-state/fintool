@@ -52,7 +52,7 @@ SELL_LIMIT=$(echo "$SELL_PRICE" | awk '{printf "%.4f", $1 * 0.995}')
 info "Current mark: \$$SELL_PRICE"
 info "Sell limit:   \$$SELL_LIMIT (-0.5% buffer)"
 
-run_fintool perp sell SILVER "$SELL_SIZE" "$SELL_LIMIT" --close
+run_fintool perp sell SILVER --amount "$SELL_SIZE" --price "$SELL_LIMIT" --close
 
 if check_fail "SILVER perp sell failed"; then
     warn "Position may still be open — check manually with 'fintool positions'"
@@ -90,9 +90,9 @@ TRANSFER_AMT=$(echo "$CASH_WITHDRAWABLE" | awk '{v = int($1 * 100) / 100; if (v 
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from cash dex to spot..."
-    run_fintool transfer "$TRANSFER_AMT" from-dex --dex cash
+    run_fintool transfer USDT0 --amount "$TRANSFER_AMT" --from cash --to spot
     if check_fail "USDT0 transfer from cash dex failed"; then
-        warn "USDT0 may still be in cash dex. Use: fintool transfer <amount> from-dex --dex cash"
+        warn "USDT0 may still be in cash dex. Use: fintool transfer USDT0 --amount <amount> --from cash --to spot"
     else
         ok "Transferred $TRANSFER_AMT USDT0 from cash dex to spot"
     fi
@@ -114,9 +114,9 @@ SELL_AMT=$(echo "$SPOT_USDT0 $USDT0_HOLD" | awk '{v = int(($1 - $2) * 100) / 100
 
 if [[ "$SELL_AMT" != "0" && "$SELL_AMT" != "0.00" ]]; then
     info "Swapping $SELL_AMT USDT0 → USDC on spot..."
-    run_fintool order sell USDT0 "$SELL_AMT" 0.998
+    run_fintool order sell USDT0 --amount "$SELL_AMT" --price 0.998
     if check_fail "USDT0 → USDC spot swap failed"; then
-        warn "USDT0 still in spot. Sell manually: fintool order sell USDT0 $SELL_AMT 0.998"
+        warn "USDT0 still in spot. Sell manually: fintool order sell USDT0 --amount $SELL_AMT --price 0.998"
     else
         SWAP_FILL=$(echo "$LAST_STDOUT" | jq -r '.fillStatus // empty' 2>/dev/null || true)
         info "USDT0→USDC swap fill: $SWAP_FILL"

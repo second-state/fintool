@@ -17,7 +17,7 @@ log "Withdraw USDC and ETH from Hyperliquid to Base"
 info "Route: Hyperliquid → HL Bridge2 → Arbitrum → Across bridge → Base"
 
 info "── Withdraw $USDC_AMOUNT USDC ──"
-run_fintool withdraw "$USDC_AMOUNT" USDC --network base
+run_fintool withdraw USDC --amount "$USDC_AMOUNT" --to base
 
 if check_fail "USDC withdrawal to Base failed"; then
     warn "USDC withdrawal failed — funds remain on Hyperliquid."
@@ -33,7 +33,7 @@ if awk "BEGIN{exit !(${ETH_AMOUNT:-0} > 0)}"; then
     sleep 5
 
     info "── Withdraw $ETH_AMOUNT ETH ──"
-    run_fintool withdraw "$ETH_AMOUNT" ETH --network base
+    run_fintool withdraw ETH --amount "$ETH_AMOUNT" --to base
 
     if check_fail "ETH withdrawal to Base failed"; then
         warn "ETH withdrawal failed — funds remain on Hyperliquid."

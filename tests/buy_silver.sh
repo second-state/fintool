@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Buy $12 SILVER perp on Hyperliquid
+# Buy ~$12 SILVER perp on Hyperliquid
 #
 # The cash dex uses USDT0 as collateral, so we need to:
 # 1. Swap USDC → USDT0 on spot
@@ -14,10 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
-log "Buy \$12 SILVER perp on Hyperliquid"
+log "Buy ~\$12 SILVER perp on Hyperliquid"
 
 info "Setting SILVER leverage to 2x..."
-run_fintool perp leverage SILVER 2
+run_fintool perp leverage SILVER --leverage 2
 if check_fail "SILVER set leverage failed"; then
     exit 1
 fi
@@ -35,7 +35,7 @@ SWAP_AMT=$(echo "$SPOT_USDC" | awk '{v = int($1 * 100) / 100; if (v > 0.5) print
 
 if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
     info "Swapping \$$SWAP_AMT USDC → USDT0 on spot (cash dex collateral)..."
-    run_fintool order buy USDT0 "$SWAP_AMT" 1.002
+    run_fintool order buy USDT0 --amount "$SWAP_AMT" --price 1.002
     if check_fail "USDC → USDT0 spot swap failed"; then
         exit 1
     fi
@@ -54,7 +54,7 @@ TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v > 0) pr
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from spot to cash dex..."
-    run_fintool transfer "$TRANSFER_AMT" to-dex --dex cash
+    run_fintool transfer USDT0 --amount "$TRANSFER_AMT" --from spot --to cash
     if check_fail "USDT0 transfer to cash dex failed"; then
         exit 1
     fi
@@ -80,13 +80,13 @@ if [[ -z "$SILVER_PRICE" || "$SILVER_PRICE" == "null" ]]; then
 fi
 
 BUY_LIMIT=$(echo "$SILVER_PRICE" | awk '{printf "%.4f", $1 * 1.005}')
-BUY_SIZE=$(echo "$BUY_LIMIT" | awk '{printf "%.4f", 12.0 / $1}')
+BUY_SIZE=$(echo "$SILVER_PRICE" | awk '{printf "%.4f", 12.0 / $1}')
 
 info "Mark price:      \$$SILVER_PRICE"
 info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
-info "Estimated size:  $BUY_SIZE oz"
+info "Buy size:        $BUY_SIZE oz"
 
-run_fintool perp buy SILVER 12 "$BUY_LIMIT"
+run_fintool perp buy SILVER --amount "$BUY_SIZE" --price "$BUY_LIMIT"
 
 if check_fail "SILVER perp buy failed"; then
     exit 1

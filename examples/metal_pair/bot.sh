@@ -207,13 +207,11 @@ close_position() {
     if (( $(echo "$pos_size > 0" | bc -l) )); then
       local close_price=$(echo "$pos_price * 0.95" | bc -l | xargs printf "%.2f")
       log "Closing LONG $symbol: sell $abs_size @ $close_price --close"
-      $FINTOOL perp sell "$symbol" "$abs_size" "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
+      $FINTOOL perp sell "$symbol" --amount "$abs_size" --price "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
     else
       local close_price=$(echo "$pos_price * 1.05" | bc -l | xargs printf "%.2f")
-      # perp buy takes AMOUNT_USDC, so convert asset units to dollar value
-      local buy_usdc=$(echo "$abs_size * $close_price" | bc -l | xargs printf "%.2f")
-      log "Closing SHORT $symbol: buy \$${buy_usdc} ($abs_size units) @ $close_price --close"
-      $FINTOOL perp buy "$symbol" "$buy_usdc" "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
+      log "Closing SHORT $symbol: buy $abs_size @ $close_price --close"
+      $FINTOOL perp buy "$symbol" --amount "$abs_size" --price "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
     fi
     sleep 3
   else
@@ -239,16 +237,13 @@ sleep 5
 log "Normalizing USDT0 balance to \$${TARGET_USDT0}..."
 
 # Transfer all USDT0 from HIP-3 dex back to spot first
-# (Get dex balance — may show as cash dex balance)
-# Check spot USDT0 balance (after closing positions, USDT0 may still be in dex)
-# Transfer any remaining USDT0 from dex — use a large number; it will transfer whatever is available
-$FINTOOL transfer 999999 from-dex --dex cash 2>&1 | tee -a "$LOG_FILE" || true
+$FINTOOL transfer USDT0 --amount 999999 --from cash --to spot 2>&1 | tee -a "$LOG_FILE" || true
 sleep 3
 DEX_USDT0="0"
 
 if (( $(echo "${DEX_USDT0:-0} > 0.01" | bc -l) )); then
   log "Transferring $DEX_USDT0 USDT0 from HIP-3 dex back to spot..."
-  $FINTOOL transfer "$DEX_USDT0" from-dex --dex cash 2>&1 | tee -a "$LOG_FILE"
+  $FINTOOL transfer USDT0 --amount "$DEX_USDT0" --from cash --to spot 2>&1 | tee -a "$LOG_FILE"
   sleep 3
 fi
 
@@ -270,7 +265,7 @@ if (( $(echo "$USDT0_DIFF > 1" | bc -l) )); then
   # Too much USDT0 — sell excess for USDC
   SELL_AMOUNT=$(printf "%.0f" "$(echo "$USDT0_DIFF" | bc -l)")
   log "Excess USDT0: selling $SELL_AMOUNT USDT0 → USDC"
-  $FINTOOL order sell USDT0 "$SELL_AMOUNT" 0.998 2>&1 | tee -a "$LOG_FILE"
+  $FINTOOL order sell USDT0 --amount "$SELL_AMOUNT" --price 0.998 2>&1 | tee -a "$LOG_FILE"
   sleep 5
 
 elif (( $(echo "$USDT0_DIFF < -1" | bc -l) )); then
@@ -286,7 +281,7 @@ elif (( $(echo "$USDT0_DIFF < -1" | bc -l) )); then
   fi
 
   log "Buying $BUY_AMOUNT USDT0 with USDC"
-  $FINTOOL order buy USDT0 "$BUY_AMOUNT" 1.003 2>&1 | tee -a "$LOG_FILE"
+  $FINTOOL order buy USDT0 --amount "$BUY_AMOUNT" --price 1.003 2>&1 | tee -a "$LOG_FILE"
   sleep 5
 
 else
@@ -295,15 +290,15 @@ fi
 
 # Transfer exactly $TARGET_USDT0 to HIP-3 dex for trading
 log "Transferring \$${TARGET_USDT0} USDT0 to HIP-3 dex..."
-$FINTOOL transfer "$TARGET_USDT0" to-dex --dex cash 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL transfer USDT0 --amount "$TARGET_USDT0" --from spot --to cash 2>&1 | tee -a "$LOG_FILE"
 sleep 3
 
 ###############################################################################
 # Step 8: Set leverage and open positions
 ###############################################################################
 log "Setting leverage to ${LEVERAGE}x..."
-$FINTOOL perp leverage "$LONG_METAL" "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
-$FINTOOL perp leverage "$SHORT_METAL" "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL perp leverage "$LONG_METAL" --leverage "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL perp leverage "$SHORT_METAL" --leverage "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
 
 # Get current prices for limit orders (use aggressive limits to fill quickly)
 if [[ "$LONG_METAL" == "GOLD" ]]; then
@@ -319,14 +314,16 @@ LONG_LIMIT=$(echo "$LONG_PRICE * 1.005" | bc -l | xargs printf "%.2f")
 # Short: sell at slightly below market (aggressive fill)
 SHORT_LIMIT=$(echo "$SHORT_PRICE * 0.995" | bc -l | xargs printf "%.2f")
 
-# Each leg: $50 notional @ 2x leverage = $25 margin. Two legs = $50 total margin = all USDT0.
-log "Opening LONG $LONG_METAL: \$${POSITION_SIZE_USD} notional @ limit $LONG_LIMIT (margin: \$$(echo "$POSITION_SIZE_USD / $LEVERAGE" | bc))"
-$FINTOOL perp buy "$LONG_METAL" "$POSITION_SIZE_USD" "$LONG_LIMIT" 2>&1 | tee -a "$LOG_FILE"
-
-# perp sell takes SIZE in asset units, not dollars — convert notional to units
+# Calculate sizes in asset units from dollar notional
+LONG_SIZE=$(echo "$POSITION_SIZE_USD / $LONG_PRICE" | bc -l | xargs printf "%.4f")
 SHORT_SIZE=$(echo "$POSITION_SIZE_USD / $SHORT_PRICE" | bc -l | xargs printf "%.4f")
+
+# Each leg: $50 notional @ 2x leverage = $25 margin. Two legs = $50 total margin = all USDT0.
+log "Opening LONG $LONG_METAL: ${LONG_SIZE} units (\$${POSITION_SIZE_USD} notional) @ limit $LONG_LIMIT (margin: \$$(echo "$POSITION_SIZE_USD / $LEVERAGE" | bc))"
+$FINTOOL perp buy "$LONG_METAL" --amount "$LONG_SIZE" --price "$LONG_LIMIT" 2>&1 | tee -a "$LOG_FILE"
+
 log "Opening SHORT $SHORT_METAL: ${SHORT_SIZE} units (\$${POSITION_SIZE_USD} notional) @ limit $SHORT_LIMIT (margin: \$$(echo "$POSITION_SIZE_USD / $LEVERAGE" | bc))"
-$FINTOOL perp sell "$SHORT_METAL" "$SHORT_SIZE" "$SHORT_LIMIT" 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL perp sell "$SHORT_METAL" --amount "$SHORT_SIZE" --price "$SHORT_LIMIT" 2>&1 | tee -a "$LOG_FILE"
 
 sleep 5
 
@@ -334,8 +331,8 @@ sleep 5
 # Step 9: Verify positions
 ###############################################################################
 log "Verifying positions..."
-$FINTOOL positions --human 2>&1 | tee -a "$LOG_FILE"
-$FINTOOL balance --human 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL positions 2>&1 | tee -a "$LOG_FILE"
+$FINTOOL balance 2>&1 | tee -a "$LOG_FILE"
 
 log "=== Bot Complete ==="
 log "Summary: LONG $LONG_METAL / SHORT $SHORT_METAL | \$${POSITION_SIZE_USD}/leg | ${LEVERAGE}x leverage"

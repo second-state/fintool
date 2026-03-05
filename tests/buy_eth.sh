@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Buy $12 ETH perp on Hyperliquid
+# Buy 0.006 ETH perp on Hyperliquid (~$12 at $2000/ETH)
 #
 # Usage: ./tests/buy_eth.sh
 #
@@ -9,10 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
-log "Buy \$12 ETH perp on Hyperliquid"
+log "Buy ~\$12 ETH perp on Hyperliquid"
 
 info "Setting ETH leverage to 2x..."
-run_fintool perp leverage ETH 2
+run_fintool perp leverage ETH --leverage 2
 if check_fail "ETH set leverage failed"; then
     exit 1
 fi
@@ -33,13 +33,13 @@ if [[ -z "$ETH_PRICE" || "$ETH_PRICE" == "null" ]]; then
 fi
 
 BUY_LIMIT=$(echo "$ETH_PRICE" | awk '{printf "%.2f", $1 * 1.005}')
-BUY_SIZE=$(echo "$BUY_LIMIT" | awk '{printf "%.6f", 12.0 / $1}')
+BUY_SIZE=$(echo "$ETH_PRICE" | awk '{printf "%.6f", 12.0 / $1}')
 
 info "Mark price:      \$$ETH_PRICE"
 info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
-info "Estimated size:  $BUY_SIZE ETH"
+info "Buy size:        $BUY_SIZE ETH"
 
-run_fintool perp buy ETH 12 "$BUY_LIMIT"
+run_fintool perp buy ETH --amount "$BUY_SIZE" --price "$BUY_LIMIT"
 
 if check_fail "ETH perp buy failed"; then
     exit 1

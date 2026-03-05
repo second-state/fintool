@@ -10,4 +10,5 @@ pub mod perp;
 pub mod positions;
 pub mod quote;
 pub mod report;
+pub mod transfer;
 pub mod withdraw;
