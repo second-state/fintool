@@ -31,9 +31,10 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
     }
 }
 
+/// Perp limit buy — amount is in symbol units (e.g. 0.1 ETH)
 pub async fn buy(
     symbol: &str,
-    amount_usdc: &str,
+    amount: &str,
     price: &str,
     close: bool,
     exchange: &str,
@@ -47,8 +48,7 @@ pub async fn buy(
 
         let symbol = format!("{}USDT", symbol.to_uppercase());
         let price_f: f64 = price.parse().context("Invalid price")?;
-        let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
-        let size = amount_f / price_f;
+        let size: f64 = amount.parse().context("Invalid amount")?;
 
         let client = reqwest::Client::new();
         return binance::futures_order(
@@ -68,8 +68,8 @@ pub async fn buy(
     let cfg = config::load_hl_config()?;
     let symbol = symbol.to_uppercase();
     let price_f: f64 = price.parse().context("Invalid price")?;
-    let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
-    let size = amount_f / price_f;
+    let size: f64 = amount.parse().context("Invalid amount")?;
+    let total_usdc = size * price_f;
 
     // Check if this is a HIP-3 asset (commodities, stocks)
     if let Some((dex, asset_name)) = resolve_hip3_asset(&symbol) {
@@ -79,7 +79,7 @@ pub async fn buy(
             &symbol,
             price_f,
             size,
-            amount_usdc,
+            total_usdc,
             &cfg,
             json_output,
         )
@@ -95,9 +95,9 @@ pub async fn buy(
         println!();
         println!("  📝 Placing perp limit {}", mode);
         println!("  Symbol:   {}", symbol.cyan());
-        println!("  Size:     {:.6}", size);
+        println!("  Size:     {}", amount);
         println!("  Price:    ${}", price);
-        println!("  Total:    ${}", amount_usdc);
+        println!("  Total:    ${:.2}", total_usdc);
         println!(
             "  Network:  {}",
             if cfg.testnet { "Testnet" } else { "Mainnet" }
@@ -117,9 +117,9 @@ pub async fn buy(
     let response = json!({
         "action": "perp_buy",
         "symbol": symbol,
-        "size": format!("{:.6}", size),
+        "size": amount,
         "price": price,
-        "total_usdc": amount_usdc,
+        "total_usdc": format!("{:.2}", total_usdc),
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
         "fillStatus": fill_status,
         "result": result_json,
@@ -438,7 +438,7 @@ async fn hip3_perp_buy(
     original_symbol: &str,
     price: f64,
     size: f64,
-    amount_usdc: &str,
+    total_usdc: f64,
     cfg: &config::HlConfig,
     json_output: bool,
 ) -> Result<()> {
@@ -453,7 +453,7 @@ async fn hip3_perp_buy(
         println!("  Asset:    {}", asset_name);
         println!("  Size:     {:.6}", size);
         println!("  Price:    ${:.2}", price);
-        println!("  Total:    ${}", amount_usdc);
+        println!("  Total:    ${:.2}", total_usdc);
         println!(
             "  Network:  {}",
             if cfg.testnet { "Testnet" } else { "Mainnet" }
@@ -472,7 +472,7 @@ async fn hip3_perp_buy(
         "dex": dex,
         "size": format!("{:.6}", size),
         "price": format!("{:.2}", price),
-        "total_usdc": amount_usdc,
+        "total_usdc": format!("{:.2}", total_usdc),
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
         "fillStatus": fill_status,
         "result": result,

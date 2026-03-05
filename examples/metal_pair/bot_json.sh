@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
 #
-# Metal Pairs Trading Bot — GOLD vs SILVER (Human CLI API)
+# Metal Pairs Trading Bot — GOLD vs SILVER (JSON API)
 #
-# All fintool calls use the standard CLI interface (human-readable output).
-# Data extraction (prices, funding, positions) uses the Hyperliquid API
-# directly via curl for reliable parsing.
-#
-# For the JSON API version, see bot_json.sh.
+# Same strategy as bot.sh but uses fintool's --json input mode for all calls.
+# All fintool output is JSON, parsed with jq.
 #
 # Strategy: Long one metal, short the other (equal notional) based on:
 #   1. News sentiment (which metal is more talked about and in what direction)
 #   2. 24h price momentum (which is trending harder)
 #   3. Funding rates (pay vs receive)
 #
-# Runs daily via cron. Uses fintool CLI for Hyperliquid HIP-3 perps.
+# Runs daily via cron. Uses fintool --json for Hyperliquid HIP-3 perps.
 #
 # Prerequisites:
 #   - fintool binary (set FINTOOL below)
@@ -41,15 +38,8 @@ OPENAI_API_KEY="${OPENAI_API_KEY:-$(grep openai_api_key ~/.fintool/config.toml 2
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
-# Helper: query Hyperliquid info API for structured data extraction
-hl_api() {
-  curl -s https://api.hyperliquid.xyz/info \
-    -H 'Content-Type: application/json' \
-    -d "$1"
-}
-
-# Get wallet address from fintool (human mode prints just the address)
-USER_ADDR=$($FINTOOL address 2>/dev/null)
+# Helper: call fintool in JSON mode
+ft() { $FINTOOL --json "$1" 2>/dev/null; }
 
 ###############################################################################
 # Step 1: Search news for GOLD and SILVER
@@ -62,7 +52,7 @@ search_news() {
     | jq -r '.results[] | "\(.title) — \(.description // "")"' 2>/dev/null || echo "No results"
 }
 
-log "=== Metal Pairs Bot Starting ==="
+log "=== Metal Pairs Bot Starting (JSON API) ==="
 
 log "Fetching GOLD news..."
 GOLD_NEWS=$(search_news "gold+commodity+price+market")
@@ -115,38 +105,39 @@ GOLD_SENTIMENT=$(echo "$SENTIMENT_JSON" | jq -r '.gold_sentiment // 0')
 SILVER_SENTIMENT=$(echo "$SENTIMENT_JSON" | jq -r '.silver_sentiment // 0')
 
 ###############################################################################
-# Step 3: Get 24h pricing data via Hyperliquid API
+# Step 3: Get 24h pricing data and trends
 ###############################################################################
-log "Fetching price data..."
+log "Fetching price quotes..."
 
-# Get HIP-3 cash dex metadata + asset contexts (includes markPx, prevDayPx, funding)
-CASH_META=$(hl_api '{"type":"metaAndAssetCtxs","dex":"cash"}')
+GOLD_QUOTE=$(ft '{"command":"quote","symbol":"GOLD"}')
+SILVER_QUOTE=$(ft '{"command":"quote","symbol":"SILVER"}')
 
-# Parse GOLD data from the cash dex
-GOLD_IDX=$(echo "$CASH_META" | jq -r '.[0].universe | to_entries[] | select(.value.name == "GOLD") | .key')
-GOLD_PERP_PRICE=$(echo "$CASH_META" | jq -r ".[1][$GOLD_IDX].markPx // \"0\"")
-GOLD_PREV_PRICE=$(echo "$CASH_META" | jq -r ".[1][$GOLD_IDX].prevDayPx // \"0\"")
-GOLD_FUNDING=$(echo "$CASH_META" | jq -r ".[1][$GOLD_IDX].funding // \"0\"")
-GOLD_CHANGE=$(echo "$GOLD_PERP_PRICE $GOLD_PREV_PRICE" | awk '{if ($2 > 0) printf "%.2f", (($1 - $2) / $2) * 100; else print "0"}')
+GOLD_CHANGE=$(echo "$GOLD_QUOTE" | jq -r '.change_24h_pct // .change24h // 0')
+SILVER_CHANGE=$(echo "$SILVER_QUOTE" | jq -r '.change_24h_pct // .change24h // 0')
+GOLD_PRICE=$(echo "$GOLD_QUOTE" | jq -r '.price // 0')
+SILVER_PRICE=$(echo "$SILVER_QUOTE" | jq -r '.price // 0')
 
-# Parse SILVER data from the cash dex
-SILVER_IDX=$(echo "$CASH_META" | jq -r '.[0].universe | to_entries[] | select(.value.name == "SILVER") | .key')
-SILVER_PERP_PRICE=$(echo "$CASH_META" | jq -r ".[1][$SILVER_IDX].markPx // \"0\"")
-SILVER_PREV_PRICE=$(echo "$CASH_META" | jq -r ".[1][$SILVER_IDX].prevDayPx // \"0\"")
-SILVER_FUNDING=$(echo "$CASH_META" | jq -r ".[1][$SILVER_IDX].funding // \"0\"")
-SILVER_CHANGE=$(echo "$SILVER_PERP_PRICE $SILVER_PREV_PRICE" | awk '{if ($2 > 0) printf "%.2f", (($1 - $2) / $2) * 100; else print "0"}')
-
-# Display quotes using fintool CLI (human-readable output in log)
-log "Displaying GOLD quote..."
-$FINTOOL perp quote GOLD 2>&1 | tee -a "$LOG_FILE"
-log "Displaying SILVER quote..."
-$FINTOOL perp quote SILVER 2>&1 | tee -a "$LOG_FILE"
-
-log "GOLD:   price=$GOLD_PERP_PRICE  24h_change=${GOLD_CHANGE}%  funding=$GOLD_FUNDING"
-log "SILVER: price=$SILVER_PERP_PRICE  24h_change=${SILVER_CHANGE}%  funding=$SILVER_FUNDING"
+log "GOLD:   price=$GOLD_PRICE  24h_change=${GOLD_CHANGE}%"
+log "SILVER: price=$SILVER_PRICE  24h_change=${SILVER_CHANGE}%"
 
 ###############################################################################
-# Step 4: Decision — which to long, which to short
+# Step 4: Get funding rates
+###############################################################################
+log "Fetching perp funding rates..."
+
+GOLD_PERP=$(ft '{"command":"perp_quote","symbol":"GOLD"}')
+SILVER_PERP=$(ft '{"command":"perp_quote","symbol":"SILVER"}')
+
+GOLD_FUNDING=$(echo "$GOLD_PERP" | jq -r '.funding // 0')
+SILVER_FUNDING=$(echo "$SILVER_PERP" | jq -r '.funding // 0')
+GOLD_PERP_PRICE=$(echo "$GOLD_PERP" | jq -r '.markPx // 0')
+SILVER_PERP_PRICE=$(echo "$SILVER_PERP" | jq -r '.markPx // 0')
+
+log "GOLD   funding_rate=$GOLD_FUNDING  perp_price=$GOLD_PERP_PRICE"
+log "SILVER funding_rate=$SILVER_FUNDING  perp_price=$SILVER_PERP_PRICE"
+
+###############################################################################
+# Step 5: Decision — which to long, which to short
 ###############################################################################
 log "Computing trading decision..."
 
@@ -201,33 +192,32 @@ fi
 log "Decision: LONG $LONG_METAL / SHORT $SHORT_METAL (confidence: $CONFIDENCE)"
 
 ###############################################################################
-# Step 5: Close ALL existing positions — return to clean USDT0 state
+# Step 6: Close ALL existing positions — return to clean USDT0 state
 ###############################################################################
 log "Closing all existing positions..."
 
-# Query positions from Hyperliquid API for data extraction
-POS_DATA=$(hl_api "{\"type\":\"clearinghouseState\",\"user\":\"$USER_ADDR\",\"dex\":\"cash\"}")
+POSITIONS=$(ft '{"command":"positions"}')
 
 close_position() {
   local symbol="$1"
   local pos_size
 
-  pos_size=$(echo "$POS_DATA" | jq -r --arg s "$symbol" \
-    '.assetPositions[]? | .position | select(.coin == $s) | .szi // "0"' 2>/dev/null | head -1)
+  pos_size=$(echo "$POSITIONS" | jq -r --arg s "$symbol" \
+    '.[] | .position | select(.coin == $s or .coin == ("cash:" + $s)) | .szi // "0"' 2>/dev/null | head -1)
 
   if [[ -n "$pos_size" && "$pos_size" != "0" && "$pos_size" != "0.0" && "$pos_size" != "null" ]]; then
     local abs_size=$(echo "$pos_size" | sed 's/^-//')
-    local pos_price=$(echo "$POS_DATA" | jq -r --arg s "$symbol" \
-      '.assetPositions[]? | .position | select(.coin == $s) | .entryPx // "0"' 2>/dev/null | head -1)
+    local pos_price=$(echo "$POSITIONS" | jq -r --arg s "$symbol" \
+      '.[] | .position | select(.coin == $s or .coin == ("cash:" + $s)) | .entryPx // "0"' 2>/dev/null | head -1)
 
     if (( $(echo "$pos_size > 0" | bc -l) )); then
       local close_price=$(echo "$pos_price * 0.95" | bc -l | xargs printf "%.2f")
       log "Closing LONG $symbol: sell $abs_size @ $close_price --close"
-      $FINTOOL perp sell "$symbol" --amount "$abs_size" --price "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
+      ft "{\"command\":\"perp_sell\",\"symbol\":\"$symbol\",\"amount\":\"$abs_size\",\"price\":\"$close_price\",\"close\":true}" | tee -a "$LOG_FILE"
     else
       local close_price=$(echo "$pos_price * 1.05" | bc -l | xargs printf "%.2f")
       log "Closing SHORT $symbol: buy $abs_size @ $close_price --close"
-      $FINTOOL perp buy "$symbol" --amount "$abs_size" --price "$close_price" --close 2>&1 | tee -a "$LOG_FILE"
+      ft "{\"command\":\"perp_buy\",\"symbol\":\"$symbol\",\"amount\":\"$abs_size\",\"price\":\"$close_price\",\"close\":true}" | tee -a "$LOG_FILE"
     fi
     sleep 3
   else
@@ -242,7 +232,7 @@ close_position "SILVER"
 sleep 5
 
 ###############################################################################
-# Step 6: Normalize USDT0 balance to exactly $TARGET_USDT0
+# Step 7: Normalize USDT0 balance to exactly $TARGET_USDT0
 #
 # After closing positions, all margin is freed as USDT0 in the HIP-3 dex.
 # We transfer everything back to spot, then adjust to hit the target:
@@ -253,18 +243,23 @@ sleep 5
 log "Normalizing USDT0 balance to \$${TARGET_USDT0}..."
 
 # Transfer all USDT0 from HIP-3 dex back to spot first
-$FINTOOL transfer USDT0 --amount 999999 --from cash --to spot 2>&1 | tee -a "$LOG_FILE" || true
+ft '{"command":"transfer","asset":"USDT0","amount":"999999","from":"cash","to":"spot"}' | tee -a "$LOG_FILE" || true
 sleep 3
+DEX_USDT0="0"
 
-# Query spot USDT0 and perp USDC balances from Hyperliquid API
-SPOT_STATE=$(hl_api "{\"type\":\"spotClearinghouseState\",\"user\":\"$USER_ADDR\"}")
-PERP_STATE=$(hl_api "{\"type\":\"clearinghouseState\",\"user\":\"$USER_ADDR\"}")
+if (( $(echo "${DEX_USDT0:-0} > 0.01" | bc -l) )); then
+  log "Transferring $DEX_USDT0 USDT0 from HIP-3 dex back to spot..."
+  ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":\"$DEX_USDT0\",\"from\":\"cash\",\"to\":\"spot\"}" | tee -a "$LOG_FILE"
+  sleep 3
+fi
 
-USDT0_BALANCE=$(echo "$SPOT_STATE" | jq -r '
-  [.balances[]? | select(.coin == "USDT0") | .total // "0" | tonumber] | add // 0
+# Now check spot USDT0 and USDC balances
+BALANCE=$(ft '{"command":"balance"}')
+USDT0_BALANCE=$(echo "$BALANCE" | jq -r '
+  [.spot.balances[]? | select(.coin == "USDT0") | .total // 0] | add // 0
 ' 2>/dev/null || echo "0")
-USDC_BALANCE=$(echo "$PERP_STATE" | jq -r '
-  .marginSummary.accountValue // .withdrawable // "0"
+USDC_BALANCE=$(echo "$BALANCE" | jq -r '
+  .perp.marginSummary.accountValue // .perp.withdrawable // 0
 ' 2>/dev/null || echo "0")
 
 log "Current balances — USDT0: $USDT0_BALANCE, USDC: $USDC_BALANCE"
@@ -276,7 +271,7 @@ if (( $(echo "$USDT0_DIFF > 1" | bc -l) )); then
   # Too much USDT0 — sell excess for USDC
   SELL_AMOUNT=$(printf "%.0f" "$(echo "$USDT0_DIFF" | bc -l)")
   log "Excess USDT0: selling $SELL_AMOUNT USDT0 → USDC"
-  $FINTOOL order sell USDT0 --amount "$SELL_AMOUNT" --price 0.998 2>&1 | tee -a "$LOG_FILE"
+  ft "{\"command\":\"order_sell\",\"symbol\":\"USDT0\",\"amount\":\"$SELL_AMOUNT\",\"price\":\"0.998\"}" | tee -a "$LOG_FILE"
   sleep 5
 
 elif (( $(echo "$USDT0_DIFF < -1" | bc -l) )); then
@@ -287,12 +282,12 @@ elif (( $(echo "$USDT0_DIFF < -1" | bc -l) )); then
   if (( $(echo "$USDC_BALANCE < $BUY_AMOUNT" | bc -l) )); then
     BRIDGE_AMOUNT=$(printf "%.0f" "$(echo "$BUY_AMOUNT - $USDC_BALANCE + 10" | bc -l)")
     log "Insufficient USDC ($USDC_BALANCE). Bridging $BRIDGE_AMOUNT USDC from Base..."
-    $FINTOOL deposit USDC --amount "$BRIDGE_AMOUNT" --from base 2>&1 | tee -a "$LOG_FILE"
+    ft "{\"command\":\"deposit\",\"asset\":\"USDC\",\"amount\":\"$BRIDGE_AMOUNT\",\"from\":\"base\"}" | tee -a "$LOG_FILE"
     sleep 10
   fi
 
   log "Buying $BUY_AMOUNT USDT0 with USDC"
-  $FINTOOL order buy USDT0 --amount "$BUY_AMOUNT" --price 1.003 2>&1 | tee -a "$LOG_FILE"
+  ft "{\"command\":\"order_buy\",\"symbol\":\"USDT0\",\"amount\":\"$BUY_AMOUNT\",\"price\":\"1.003\"}" | tee -a "$LOG_FILE"
   sleep 5
 
 else
@@ -301,15 +296,15 @@ fi
 
 # Transfer exactly $TARGET_USDT0 to HIP-3 dex for trading
 log "Transferring \$${TARGET_USDT0} USDT0 to HIP-3 dex..."
-$FINTOOL transfer USDT0 --amount "$TARGET_USDT0" --from spot --to cash 2>&1 | tee -a "$LOG_FILE"
+ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":\"$TARGET_USDT0\",\"from\":\"spot\",\"to\":\"cash\"}" | tee -a "$LOG_FILE"
 sleep 3
 
 ###############################################################################
-# Step 7: Set leverage and open positions
+# Step 8: Set leverage and open positions
 ###############################################################################
 log "Setting leverage to ${LEVERAGE}x..."
-$FINTOOL perp leverage "$LONG_METAL" --leverage "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
-$FINTOOL perp leverage "$SHORT_METAL" --leverage "$LEVERAGE" 2>&1 | tee -a "$LOG_FILE"
+ft "{\"command\":\"perp_leverage\",\"symbol\":\"$LONG_METAL\",\"leverage\":$LEVERAGE}" | tee -a "$LOG_FILE"
+ft "{\"command\":\"perp_leverage\",\"symbol\":\"$SHORT_METAL\",\"leverage\":$LEVERAGE}" | tee -a "$LOG_FILE"
 
 # Get current prices for limit orders (use aggressive limits to fill quickly)
 if [[ "$LONG_METAL" == "GOLD" ]]; then
@@ -331,20 +326,40 @@ SHORT_SIZE=$(echo "$POSITION_SIZE_USD / $SHORT_PRICE" | bc -l | xargs printf "%.
 
 # Each leg: $50 notional @ 2x leverage = $25 margin. Two legs = $50 total margin = all USDT0.
 log "Opening LONG $LONG_METAL: ${LONG_SIZE} units (\$${POSITION_SIZE_USD} notional) @ limit $LONG_LIMIT (margin: \$$(echo "$POSITION_SIZE_USD / $LEVERAGE" | bc))"
-$FINTOOL perp buy "$LONG_METAL" --amount "$LONG_SIZE" --price "$LONG_LIMIT" 2>&1 | tee -a "$LOG_FILE"
+ft "{\"command\":\"perp_buy\",\"symbol\":\"$LONG_METAL\",\"amount\":\"$LONG_SIZE\",\"price\":\"$LONG_LIMIT\"}" | tee -a "$LOG_FILE"
 
 log "Opening SHORT $SHORT_METAL: ${SHORT_SIZE} units (\$${POSITION_SIZE_USD} notional) @ limit $SHORT_LIMIT (margin: \$$(echo "$POSITION_SIZE_USD / $LEVERAGE" | bc))"
-$FINTOOL perp sell "$SHORT_METAL" --amount "$SHORT_SIZE" --price "$SHORT_LIMIT" 2>&1 | tee -a "$LOG_FILE"
+ft "{\"command\":\"perp_sell\",\"symbol\":\"$SHORT_METAL\",\"amount\":\"$SHORT_SIZE\",\"price\":\"$SHORT_LIMIT\"}" | tee -a "$LOG_FILE"
 
 sleep 5
 
 ###############################################################################
-# Step 8: Verify positions
+# Step 9: Verify positions
 ###############################################################################
 log "Verifying positions..."
-$FINTOOL positions 2>&1 | tee -a "$LOG_FILE"
-$FINTOOL balance 2>&1 | tee -a "$LOG_FILE"
+ft '{"command":"positions"}' | jq . | tee -a "$LOG_FILE"
+ft '{"command":"balance"}' | jq . | tee -a "$LOG_FILE"
 
 log "=== Bot Complete ==="
 log "Summary: LONG $LONG_METAL / SHORT $SHORT_METAL | \$${POSITION_SIZE_USD}/leg | ${LEVERAGE}x leverage"
 log "Reasoning: $REASONING"
+
+# Output summary JSON for programmatic consumption
+cat <<EOF
+{
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "action": "$ACTION",
+  "long": "$LONG_METAL",
+  "short": "$SHORT_METAL",
+  "position_size_usd": $POSITION_SIZE_USD,
+  "leverage": $LEVERAGE,
+  "confidence": $CONFIDENCE,
+  "gold_24h_change": $GOLD_CHANGE,
+  "silver_24h_change": $SILVER_CHANGE,
+  "gold_sentiment": $GOLD_SENTIMENT,
+  "silver_sentiment": $SILVER_SENTIMENT,
+  "gold_funding": $GOLD_FUNDING,
+  "silver_funding": $SILVER_FUNDING,
+  "reasoning": "$REASONING"
+}
+EOF

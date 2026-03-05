@@ -65,11 +65,11 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
     }
 }
 
-/// Spot limit buy — price is the maximum price you'll pay per unit
+/// Spot limit buy — amount is in symbol units, price is the maximum price per unit
 pub async fn buy(
     symbol: &str,
-    amount_usdc: &str,
-    max_price: &str,
+    amount: &str,
+    price: &str,
     exchange: &str,
     json_output: bool,
 ) -> Result<()> {
@@ -79,9 +79,8 @@ pub async fn buy(
         let (api_key, api_secret) = config::coinbase_credentials()
             .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured. Add coinbase_api_key and coinbase_api_secret to ~/.fintool/config.toml"))?;
 
-        let price_f: f64 = max_price.parse().context("Invalid max price")?;
-        let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
-        let size = amount_f / price_f;
+        let price_f: f64 = price.parse().context("Invalid price")?;
+        let size: f64 = amount.parse().context("Invalid amount")?;
 
         let client = reqwest::Client::new();
         return coinbase::spot_order(
@@ -102,9 +101,8 @@ pub async fn buy(
             .ok_or_else(|| anyhow::anyhow!("Binance API credentials not configured. Add binance_api_key and binance_api_secret to ~/.fintool/config.toml"))?;
 
         let symbol = format!("{}USDT", symbol.to_uppercase());
-        let price_f: f64 = max_price.parse().context("Invalid max price")?;
-        let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
-        let size = amount_f / price_f;
+        let price_f: f64 = price.parse().context("Invalid price")?;
+        let size: f64 = amount.parse().context("Invalid amount")?;
 
         let client = reqwest::Client::new();
         return binance::spot_order(
@@ -123,16 +121,16 @@ pub async fn buy(
     // Hyperliquid logic
     let cfg = config::load_hl_config()?;
     let symbol = symbol.to_uppercase();
-    let price_f: f64 = max_price.parse().context("Invalid max price")?;
-    let amount_f: f64 = amount_usdc.parse().context("Invalid amount")?;
-    let size = amount_f / price_f;
+    let price_f: f64 = price.parse().context("Invalid price")?;
+    let size: f64 = amount.parse().context("Invalid amount")?;
+    let total_usdc = size * price_f;
 
     // Transfer USDC from perp to spot (required for spot buys in standard mode).
     // In unified mode, USDC is already shared — transfer will be rejected, which is fine.
-    match signing::class_transfer(amount_f, false).await {
+    match signing::class_transfer(total_usdc, false).await {
         Ok(()) => {
             if !json_output {
-                eprintln!("  Transferred ${} USDC from perp → spot", amount_usdc);
+                eprintln!("  Transferred ${:.2} USDC from perp → spot", total_usdc);
             }
         }
         Err(e) => {
@@ -149,9 +147,9 @@ pub async fn buy(
         println!();
         println!("  📝 Placing spot limit BUY");
         println!("  Symbol:    {}", symbol.cyan());
-        println!("  Size:      {:.6}", size);
-        println!("  Max Price: ${}", max_price);
-        println!("  Total:     ${}", amount_usdc);
+        println!("  Size:      {}", amount);
+        println!("  Price:     ${}", price);
+        println!("  Total:     ${:.2}", total_usdc);
         println!(
             "  Network:   {}",
             if cfg.testnet { "Testnet" } else { "Mainnet" }
@@ -170,9 +168,9 @@ pub async fn buy(
     let response = json!({
         "action": "spot_buy",
         "symbol": symbol,
-        "size": format!("{:.6}", size),
-        "maxPrice": max_price,
-        "total_usdc": amount_usdc,
+        "size": amount,
+        "price": price,
+        "total_usdc": format!("{:.2}", total_usdc),
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
         "fillStatus": fill_status,
         "result": result_json,
@@ -195,11 +193,11 @@ pub async fn buy(
     Ok(())
 }
 
-/// Spot limit sell — price is the minimum price you'll accept per unit
+/// Spot limit sell — amount is in symbol units, price is the minimum price per unit
 pub async fn sell(
     symbol: &str,
     amount: &str,
-    min_price: &str,
+    price: &str,
     exchange: &str,
     json_output: bool,
 ) -> Result<()> {
@@ -210,7 +208,7 @@ pub async fn sell(
             .ok_or_else(|| anyhow::anyhow!("Coinbase API credentials not configured. Add coinbase_api_key and coinbase_api_secret to ~/.fintool/config.toml"))?;
 
         let size: f64 = amount.parse().context("Invalid amount")?;
-        let price_f: f64 = min_price.parse().context("Invalid min price")?;
+        let price_f: f64 = price.parse().context("Invalid price")?;
 
         let client = reqwest::Client::new();
         return coinbase::spot_order(
@@ -232,7 +230,7 @@ pub async fn sell(
 
         let symbol = format!("{}USDT", symbol.to_uppercase());
         let size: f64 = amount.parse().context("Invalid amount")?;
-        let price_f: f64 = min_price.parse().context("Invalid min price")?;
+        let price_f: f64 = price.parse().context("Invalid price")?;
 
         let client = reqwest::Client::new();
         return binance::spot_order(
@@ -253,14 +251,14 @@ pub async fn sell(
     let client = reqwest::Client::new();
     let symbol = symbol.to_uppercase();
     let size: f64 = amount.parse().context("Invalid amount")?;
-    let price_f: f64 = min_price.parse().context("Invalid min price")?;
+    let price_f: f64 = price.parse().context("Invalid price")?;
 
     if !json_output {
         println!();
         println!("  📝 Placing spot limit SELL");
         println!("  Symbol:    {}", symbol.cyan());
         println!("  Size:      {}", amount);
-        println!("  Min Price: ${}", min_price);
+        println!("  Price:     ${}", price);
         println!(
             "  Network:   {}",
             if cfg.testnet { "Testnet" } else { "Mainnet" }
@@ -280,7 +278,7 @@ pub async fn sell(
         "action": "spot_sell",
         "symbol": symbol,
         "size": amount,
-        "minPrice": min_price,
+        "price": price,
         "network": if cfg.testnet { "testnet" } else { "mainnet" },
         "fillStatus": fill_status,
         "result": result_json,

@@ -7,11 +7,12 @@ use clap::{Parser, Subcommand};
 )]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 
-    /// Human-friendly colored output (default is JSON)
-    #[arg(long, global = true)]
-    pub human: bool,
+    /// JSON mode: pass a JSON command string for programmatic use (always outputs JSON).
+    /// Example: fintool --json '{"command":"quote","symbol":"BTC"}'
+    #[arg(long)]
+    pub json: Option<String>,
 
     /// Exchange to use: hyperliquid, binance, or auto (default: auto)
     #[arg(long, global = true, default_value = "auto")]
@@ -77,11 +78,12 @@ pub enum Commands {
 
     /// Withdraw from exchange to external address
     Withdraw {
-        /// Amount to withdraw (e.g. 0.5)
-        amount: String,
         /// Asset: ETH, BTC, SOL, USDC, etc.
         asset: String,
-        /// Destination address (required for BTC, Binance, Coinbase; optional for ETH/SOL on HL)
+        /// Amount to withdraw (e.g. 10)
+        #[arg(long)]
+        amount: String,
+        /// Destination: chain name (base, ethereum) or address (0x...)
         #[arg(long)]
         to: Option<String>,
         /// Network for Binance/Coinbase (e.g. ethereum, base, arbitrum, solana)
@@ -92,15 +94,19 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Transfer USDC between perp and spot on Hyperliquid
+    /// Transfer assets between perp, spot, and HIP-3 dex accounts on Hyperliquid
     Transfer {
-        /// Amount of USDC to transfer
-        amount: String,
-        /// Direction: "to-spot", "to-perp", "to-dex", or "from-dex"
-        direction: String,
-        /// Dex name for to-dex/from-dex (e.g. "cash" for SILVER/GOLD)
+        /// Asset to transfer (e.g. USDC, USDT0)
+        asset: String,
+        /// Amount to transfer
         #[arg(long)]
-        dex: Option<String>,
+        amount: String,
+        /// Source: spot, perp, or a HIP-3 dex name (e.g. cash)
+        #[arg(long)]
+        from: String,
+        /// Destination: spot, perp, or a HIP-3 dex name (e.g. cash)
+        #[arg(long)]
+        to: String,
     },
 
     /// Show bridge operation status (deposits/withdrawals via Unit)
@@ -146,18 +152,22 @@ pub enum OrderCmd {
     /// Place a spot limit buy order (price is the maximum price you'll pay)
     Buy {
         symbol: String,
-        /// Amount in USDC to spend
-        amount_usdc: String,
+        /// Amount of the asset to buy (in symbol units, e.g. 1.0 HYPE)
+        #[arg(long)]
+        amount: String,
         /// Maximum price per unit (limit price)
-        max_price: String,
+        #[arg(long)]
+        price: String,
     },
     /// Place a spot limit sell order (price is the minimum price you'll accept)
     Sell {
         symbol: String,
-        /// Amount of the asset to sell
+        /// Amount of the asset to sell (in symbol units)
+        #[arg(long)]
         amount: String,
         /// Minimum price per unit (limit price)
-        min_price: String,
+        #[arg(long)]
+        price: String,
     },
 }
 
@@ -168,9 +178,11 @@ pub enum PerpCmd {
     /// Place a perp limit buy (long) order
     Buy {
         symbol: String,
-        /// Amount in USDC
-        amount_usdc: String,
+        /// Size in asset units (e.g. 0.1 ETH)
+        #[arg(long)]
+        amount: String,
         /// Limit price
+        #[arg(long)]
         price: String,
         /// Close position only (reduce-only, won't open a new long)
         #[arg(long)]
@@ -179,9 +191,11 @@ pub enum PerpCmd {
     /// Place a perp limit sell (short) order
     Sell {
         symbol: String,
-        /// Size in asset units
+        /// Size in asset units (e.g. 0.006 ETH)
+        #[arg(long)]
         amount: String,
         /// Limit price
+        #[arg(long)]
         price: String,
         /// Close position only (reduce-only, won't open a new short)
         #[arg(long)]
@@ -191,6 +205,7 @@ pub enum PerpCmd {
     Leverage {
         symbol: String,
         /// Leverage multiplier (e.g. 5, 10, 20)
+        #[arg(long)]
         leverage: u32,
         /// Use cross margin instead of isolated
         #[arg(long)]

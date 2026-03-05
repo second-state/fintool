@@ -1,6 +1,16 @@
-# Metal Pairs Trading Bot 🥇🥈
+# Metal Pairs Trading Bot
 
 Daily pairs trading bot: **long one metal, short the other** (GOLD vs SILVER) on Hyperliquid HIP-3 perps.
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `bot.sh` | Uses the **human CLI API** — standard fintool commands with human-readable output |
+| `bot_json.sh` | Uses the **JSON API** — all fintool calls via `--json` with structured JSON output |
+| `README.md` | This file |
+
+Both scripts implement the same strategy. Choose `bot.sh` for readable logs and terminal output, or `bot_json.sh` for programmatic/agent-driven execution.
 
 ## Strategy
 
@@ -8,7 +18,7 @@ Each day the bot:
 
 1. **Searches news** via Brave API for GOLD and SILVER headlines
 2. **Analyzes sentiment** via OpenAI — which metal is more bullish/bearish
-3. **Checks 24h price momentum** via fintool quotes
+3. **Checks 24h price momentum** via Hyperliquid perp data
 4. **Checks funding rates** on Hyperliquid perps
 5. **Decides** which to long and which to short (or HOLD if signals are flat)
 6. **Closes** all existing positions — returns everything to USDT0
@@ -55,17 +65,46 @@ export OPENAI_API_KEY=...               # default: from ~/.fintool/config.toml
 ### 4. Run manually
 
 ```bash
-./bot.sh
+./bot.sh          # human CLI — readable terminal output
+./bot_json.sh     # JSON API — structured JSON output
 ```
 
 ### 5. Schedule daily via cron
 
 ```bash
-# Run at 9:00 AM CT every day
-0 9 * * * cd /Users/michaelyuan/clawd/metal-pairs-bot && ./bot.sh >> logs/cron.log 2>&1
+# Run at 9:00 AM CT every day (human CLI version)
+0 9 * * * cd /path/to/metal-pairs-bot && ./bot.sh >> logs/cron.log 2>&1
+
+# Or use the JSON API version for programmatic log parsing
+0 9 * * * cd /path/to/metal-pairs-bot && ./bot_json.sh >> logs/cron.log 2>&1
 ```
 
-Or via OpenClaw cron for agent-managed execution.
+## API Differences
+
+### bot.sh (Human CLI)
+
+Uses standard fintool commands. Action output is human-readable (colored, formatted). Data extraction (prices, funding rates, positions) queries the Hyperliquid API directly via curl.
+
+```bash
+# Actions use fintool CLI
+$FINTOOL perp buy GOLD --amount 0.01 --price 5200
+$FINTOOL transfer USDT0 --amount 50 --from spot --to cash
+$FINTOOL positions
+
+# Data extraction uses Hyperliquid API
+curl -s https://api.hyperliquid.xyz/info -d '{"type":"metaAndAssetCtxs","dex":"cash"}'
+```
+
+### bot_json.sh (JSON API)
+
+All fintool calls use `--json`. Output is always structured JSON, parsed with jq.
+
+```bash
+# All calls use --json
+ft '{"command":"perp_buy","symbol":"GOLD","amount":"0.01","price":"5200"}'
+ft '{"command":"transfer","asset":"USDT0","amount":"50","from":"spot","to":"cash"}'
+ft '{"command":"positions"}'
+```
 
 ## Logs
 

@@ -54,14 +54,14 @@ fintool balance
 Withdraw USDC from Hyperliquid back to Base. The command reverses the deposit bridges (Hyperliquid → Arbitrum → Base).
 
 ```bash
-fintool withdraw 10 USDC --network base
+fintool withdraw USDC --amount 10 --to base
 ```
 
 You can also withdraw to Arbitrum (default, fastest) or Ethereum:
 
 ```bash
-fintool withdraw 10 USDC                      # → Arbitrum (~3-4 min)
-fintool withdraw 10 USDC --network ethereum    # → Ethereum (~5-7 min)
+fintool withdraw USDC --amount 10                      # → Arbitrum (~3-4 min)
+fintool withdraw USDC --amount 10 --to ethereum         # → Ethereum (~5-7 min)
 ```
 
 ### Get price quotes and news
@@ -70,7 +70,7 @@ Get an enriched spot price quote with trend analysis (uses Hyperliquid + Yahoo F
 
 ```bash
 fintool quote BTC
-fintool quote AAPL --human
+fintool quote AAPL
 fintool quote SP500               # index alias
 fintool quote GOLD                # commodity alias
 ```
@@ -92,25 +92,25 @@ fintool report list TSLA
 
 ### Spot buy and sell
 
-Get the current price, then place a limit buy order. The command below buys $12 worth of HYPE at a max price of $25/HYPE:
+Get the current price, then place a limit buy order. The command below buys 1.0 HYPE at a max price of $25/HYPE:
 
 ```bash
 fintool quote HYPE
-fintool order buy HYPE 12 25.00
+fintool order buy HYPE --amount 1.0 --price 25.00
 ```
 
 Check your balance, then sell. The command below sells 0.48 HYPE at a minimum price of $30/HYPE:
 
 ```bash
 fintool balance
-fintool order sell HYPE 0.48 30.00
+fintool order sell HYPE --amount 0.48 --price 30.00
 ```
 
 You can force a specific exchange with `--exchange`:
 
 ```bash
-fintool order buy BTC 100 65000 --exchange coinbase
-fintool order buy BTC 100 65000 --exchange binance
+fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
+fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
 ```
 
 ### Open and close perp positions
@@ -119,8 +119,8 @@ Get the perp quote, set leverage, and open a long position:
 
 ```bash
 fintool perp quote ETH
-fintool perp leverage ETH 2
-fintool perp buy ETH 12 2100.00
+fintool perp leverage ETH --leverage 2
+fintool perp buy ETH --amount 0.006 --price 2100.00
 ```
 
 Check positions and balance:
@@ -133,7 +133,7 @@ fintool balance
 Close the position with `--close` (reduce-only — won't open a new short):
 
 ```bash
-fintool perp sell ETH 0.006 2150.00 --close
+fintool perp sell ETH --amount 0.006 --price 2150.00 --close
 ```
 
 ### Commodity perp on Hyperliquid (USDT0 conversion)
@@ -143,24 +143,24 @@ The HIP-3 commodity/stock perp market on Hyperliquid (SILVER, GOLD, TSLA, etc.) 
 **Buy USDT0 on the spot market and transfer to the HIP-3 dex:**
 
 ```bash
-fintool order buy USDT0 30 1.002
-fintool transfer 30 to-dex --dex cash
+fintool order buy USDT0 --amount 30 --price 1.002
+fintool transfer USDT0 --amount 30 --from spot --to cash
 ```
 
 **Trade the commodity perp:**
 
 ```bash
 fintool perp quote SILVER
-fintool perp leverage SILVER 2
-fintool perp buy SILVER 12 89.00
+fintool perp leverage SILVER --leverage 2
+fintool perp buy SILVER --amount 0.13 --price 89.00
 ```
 
 **Close the position and convert back to USDC:**
 
 ```bash
-fintool perp sell SILVER 0.14 91.00 --close
-fintool transfer 30 from-dex --dex cash
-fintool order sell USDT0 30 0.998
+fintool perp sell SILVER --amount 0.14 --price 91.00 --close
+fintool transfer USDT0 --amount 30 --from cash --to spot
+fintool order sell USDT0 --amount 30 --price 0.998
 ```
 
 Check everything:
@@ -173,21 +173,21 @@ fintool balance
 
 ## Output Modes
 
-**JSON (default):** Machine-readable output for scripting and piping.
+**Human-readable (default):** Colored, formatted terminal output.
 
 ```bash
 fintool quote BTC
-fintool quote BTC | jq '.price'
+fintool balance
 ```
 
-**Human-friendly:** Colored, formatted terminal output.
+**JSON mode:** Pass a full command as JSON for programmatic use. Output is always JSON.
 
 ```bash
-fintool quote BTC --human
-fintool --human balance
+fintool --json '{"command":"quote","symbol":"BTC"}'
+fintool --json '{"command":"balance"}'
 ```
 
-The `--human` flag is global and works with any subcommand.
+See [JSON Mode](#json-mode) for the full schema.
 
 ---
 
@@ -240,16 +240,16 @@ When `--exchange auto` (default):
 
 ```bash
 # Auto routing (uses configured exchange with priority)
-fintool order buy BTC 100 65000
+fintool order buy BTC --amount 0.002 --price 65000
 
 # Force Hyperliquid
-fintool order buy BTC 100 65000 --exchange hyperliquid
+fintool order buy BTC --amount 0.002 --price 65000 --exchange hyperliquid
 
 # Force Binance
-fintool order buy BTC 100 65000 --exchange binance
+fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
 
 # Force Coinbase (uses BTC-USD internally)
-fintool order buy BTC 100 65000 --exchange coinbase
+fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
 
 # Options require Binance
 fintool options buy BTC call 70000 260328 0.1 --exchange binance
@@ -352,8 +352,7 @@ fintool init
 Print the configured Hyperliquid wallet address (derived from the private key in config).
 
 ```bash
-fintool address          # {"address": "0x..."}
-fintool address --human  # 0x...
+fintool address          # 0x...
 ```
 
 ---
@@ -401,7 +400,7 @@ fintool quote AAPL         # stock — Yahoo Finance
 fintool quote SP500        # index alias
 fintool quote GOLD         # commodity alias
 fintool quote USD1         # stablecoin
-fintool quote ETH --human  # colored terminal output
+fintool quote ETH
 ```
 
 #### JSON Schema — Enriched (with OpenAI)
@@ -496,7 +495,7 @@ Fintool automatically searches across Hyperliquid's main perp universe and HIP-3
 # Crypto perps (main HL dex)
 fintool perp quote BTC
 fintool perp quote ETH
-fintool perp quote SOL --human
+fintool perp quote SOL
 
 # Commodity perps (HIP-3 cash dex)
 fintool perp quote SILVER        # silver ~$89/oz, 20x leverage
@@ -586,7 +585,7 @@ Get the latest news headlines via Google News RSS.
 ```bash
 fintool news ETH
 fintool news TSLA
-fintool news AAPL --human
+fintool news AAPL
 ```
 
 #### JSON Schema
@@ -635,15 +634,15 @@ Fetch a specific filing by accession number.
 fintool report annual AAPL
 fintool report quarterly TSLA --output tsla_10q.txt
 fintool report list MSFT
-fintool report list AAPL --human
+fintool report list AAPL
 fintool report get AAPL 0000320193-24-000123
 ```
 
 ---
 
-### `fintool order buy <SYMBOL> <AMOUNT_USDC> <MAX_PRICE>`
+### `fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE>`
 
-Place a **spot** limit buy order. The price is the **maximum price** you're willing to pay per unit. Size is calculated as `AMOUNT_USDC / MAX_PRICE`.
+Place a **spot** limit buy order. `--amount` is in symbol units (e.g. 1.0 HYPE). `--price` is the **maximum price** you're willing to pay per unit.
 
 **Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
 
@@ -655,13 +654,13 @@ The symbol is auto-resolved:
 #### Examples
 
 ```bash
-fintool order buy TSLA 1 410      # buy $1 of TSLA at max $410
-fintool order buy HYPE 100 25     # buy $100 of HYPE at max $25
-fintool order buy BTC 50 66000    # buy $50 of BTC spot at max $66,000
+fintool order buy TSLA --amount 0.01 --price 410     # buy 0.01 TSLA at max $410
+fintool order buy HYPE --amount 1.0 --price 25.00    # buy 1.0 HYPE at max $25
+fintool order buy BTC --amount 0.001 --price 66000   # buy 0.001 BTC at max $66,000
 
 # Force specific exchange
-fintool order buy BTC 100 65000 --exchange binance
-fintool order buy BTC 100 65000 --exchange coinbase
+fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
+fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
 ```
 
 #### JSON Schema
@@ -669,10 +668,10 @@ fintool order buy BTC 100 65000 --exchange coinbase
 ```json
 {
   "action": "spot_buy",
-  "symbol": "TSLA",
-  "size": "0.002439",
-  "maxPrice": "410",
-  "total_usdc": "1",
+  "symbol": "HYPE",
+  "size": "1.0",
+  "price": "25.00",
+  "total_usdc": "25.00",
   "network": "mainnet",
   "result": "Ok(...)"
 }
@@ -680,21 +679,21 @@ fintool order buy BTC 100 65000 --exchange coinbase
 
 ---
 
-### `fintool order sell <SYMBOL> <AMOUNT> <MIN_PRICE>`
+### `fintool order sell <SYMBOL> --amount <SIZE> --price <PRICE>`
 
-Place a **spot** limit sell order. The price is the **minimum price** you'll accept per unit.
+Place a **spot** limit sell order. `--amount` is in symbol units. `--price` is the **minimum price** you'll accept per unit.
 
 **Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
 
 #### Examples
 
 ```bash
-fintool order sell TSLA 1 420     # sell 1 TSLA at minimum $420
-fintool order sell HYPE 10 30     # sell 10 HYPE at minimum $30
+fintool order sell TSLA --amount 1 --price 420       # sell 1 TSLA at minimum $420
+fintool order sell HYPE --amount 10 --price 30.00    # sell 10 HYPE at minimum $30
 
 # Force specific exchange
-fintool order sell BTC 0.01 67000 --exchange binance
-fintool order sell BTC 0.01 67000 --exchange coinbase
+fintool order sell BTC --amount 0.01 --price 67000 --exchange binance
+fintool order sell BTC --amount 0.01 --price 67000 --exchange coinbase
 ```
 
 #### JSON Schema
@@ -704,7 +703,7 @@ fintool order sell BTC 0.01 67000 --exchange coinbase
   "action": "spot_sell",
   "symbol": "TSLA",
   "size": "1",
-  "minPrice": "420",
+  "price": "420",
   "network": "mainnet",
   "result": "Ok(...)"
 }
@@ -712,9 +711,9 @@ fintool order sell BTC 0.01 67000 --exchange coinbase
 
 ---
 
-### `fintool perp buy <SYMBOL> <AMOUNT_USDC> <PRICE> [--close]`
+### `fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE> [--close]`
 
-Place a **perpetual futures** limit buy (long) order.
+Place a **perpetual futures** limit buy (long) order. `--amount` is in symbol units (e.g. 0.1 ETH).
 
 **Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
 
@@ -724,27 +723,27 @@ Use `--close` to close an existing short position (reduce-only order). Without `
 
 ```bash
 # Crypto perps (main HL dex)
-fintool perp buy BTC 100 65000    # long $100 of BTC at $65,000
-fintool perp buy ETH 500 1800     # long $500 of ETH at $1,800
+fintool perp buy BTC --amount 0.002 --price 65000     # long 0.002 BTC at $65,000
+fintool perp buy ETH --amount 0.1 --price 1800        # long 0.1 ETH at $1,800
 
 # Close an existing short position (reduce-only)
-fintool perp buy ETH 500 1800 --close
+fintool perp buy ETH --amount 0.1 --price 1800 --close
 
 # Commodity/stock perps (HIP-3 cash dex — auto-detected)
-fintool perp buy SILVER 1000 89.50   # long $1000 of silver at $89.50
-fintool perp buy GOLD 5000 5200      # long $5000 of gold at $5,200
-fintool perp buy TSLA 1000 410       # long $1000 of TSLA at $410
-fintool perp buy NVDA 2000 193       # long $2000 of NVDA at $193
+fintool perp buy SILVER --amount 11.2 --price 89.50   # long 11.2 oz silver at $89.50
+fintool perp buy GOLD --amount 1.0 --price 5200       # long 1.0 oz gold at $5,200
+fintool perp buy TSLA --amount 2.5 --price 410        # long 2.5 TSLA at $410
+fintool perp buy NVDA --amount 10 --price 193         # long 10 NVDA at $193
 
 # Force Binance
-fintool perp buy BTC 100 65000 --exchange binance
+fintool perp buy BTC --amount 0.002 --price 65000 --exchange binance
 ```
 
 ---
 
-### `fintool perp sell <SYMBOL> <AMOUNT> <PRICE> [--close]`
+### `fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE> [--close]`
 
-Place a **perpetual futures** limit sell (short) order.
+Place a **perpetual futures** limit sell (short) order. `--amount` is in symbol units.
 
 **Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
 
@@ -754,24 +753,24 @@ Use `--close` to close an existing long position (reduce-only order). Without `-
 
 ```bash
 # Crypto perps
-fintool perp sell BTC 0.01 70000  # short 0.01 BTC at $70,000
-fintool perp sell ETH 1 2000      # short 1 ETH at $2,000
+fintool perp sell BTC --amount 0.01 --price 70000    # short 0.01 BTC at $70,000
+fintool perp sell ETH --amount 1 --price 2000        # short 1 ETH at $2,000
 
 # Close an existing long position (reduce-only)
-fintool perp sell ETH 0.5 2000 --close
+fintool perp sell ETH --amount 0.5 --price 2000 --close
 
 # Commodity/stock perps (HIP-3)
-fintool perp sell SILVER 10 95    # short 10 silver at $95
-fintool perp sell GOLD 0.5 5300   # short 0.5 gold at $5,300
-fintool perp sell TSLA 5 420      # short 5 TSLA at $420
+fintool perp sell SILVER --amount 10 --price 95      # short 10 silver at $95
+fintool perp sell GOLD --amount 0.5 --price 5300     # short 0.5 gold at $5,300
+fintool perp sell TSLA --amount 5 --price 420        # short 5 TSLA at $420
 
 # Force Binance
-fintool perp sell BTC 0.01 70000 --exchange binance
+fintool perp sell BTC --amount 0.01 --price 70000 --exchange binance
 ```
 
 ---
 
-### `fintool perp leverage <SYMBOL> <LEVERAGE> [--cross]`
+### `fintool perp leverage <SYMBOL> --leverage <N> [--cross]`
 
 Set leverage for a perpetual futures asset.
 
@@ -783,15 +782,15 @@ By default, uses isolated margin. Use `--cross` for cross margin (main perps onl
 
 ```bash
 # Crypto perps (main HL dex)
-fintool perp leverage ETH 5            # 5x isolated
-fintool perp leverage BTC 10 --cross   # 10x cross margin
+fintool perp leverage ETH --leverage 5              # 5x isolated
+fintool perp leverage BTC --leverage 10 --cross     # 10x cross margin
 
 # HIP-3 perps (commodities, stocks — isolated only)
-fintool perp leverage SILVER 2
-fintool perp leverage TSLA 3
+fintool perp leverage SILVER --leverage 2
+fintool perp leverage TSLA --leverage 3
 
 # Binance
-fintool perp leverage ETH 5 --exchange binance
+fintool perp leverage ETH --leverage 5 --exchange binance
 ```
 
 #### JSON Schema
@@ -838,7 +837,6 @@ List open orders (both spot and perp). Optionally filter by symbol.
 ```bash
 fintool orders
 fintool orders BTC
-fintool orders --human
 fintool orders --exchange binance
 fintool orders --exchange coinbase
 ```
@@ -886,7 +884,6 @@ Show account balances and margin summary.
 
 ```bash
 fintool balance
-fintool balance --human
 fintool balance --exchange binance
 fintool balance --exchange coinbase
 ```
@@ -901,7 +898,6 @@ Show open positions with PnL. Includes HIP-3 dex positions on Hyperliquid.
 
 ```bash
 fintool positions
-fintool positions --human
 fintool positions --exchange binance
 ```
 
@@ -1016,30 +1012,30 @@ fintool deposit BTC --exchange coinbase
 
 ---
 
-### `fintool withdraw <AMOUNT> <ASSET>`
+### `fintool withdraw <ASSET> --amount <AMT>`
 
 Withdraw assets from an exchange to an external address. Executes by default; use `--dry-run` for quote-only.
 
 #### Hyperliquid (default)
 
-**USDC** — Withdraws via HL Bridge2. Default destination is Arbitrum; use `--network` for Ethereum or Base (chained via Across).
+**USDC** — Withdraws via HL Bridge2. Default destination is Arbitrum; use `--to` with a chain name for Ethereum or Base (chained via Across).
 
 ```bash
 # USDC → Arbitrum (direct, ~3-4 min)
-fintool withdraw 100 USDC
-fintool withdraw 100 USDC --to 0xOtherAddress
+fintool withdraw USDC --amount 100
+fintool withdraw USDC --amount 100 --to 0xOtherAddress
 
 # USDC → Ethereum mainnet (HL → Arbitrum → Ethereum, ~5-7 min)
-fintool withdraw 100 USDC --network ethereum
+fintool withdraw USDC --amount 100 --to ethereum
 
 # USDC → Base (HL → Arbitrum → Base, ~5-6 min)
-fintool withdraw 100 USDC --network base
+fintool withdraw USDC --amount 100 --to base
 
 # Quote only
-fintool withdraw 100 USDC --network ethereum --dry-run
+fintool withdraw USDC --amount 100 --to ethereum --dry-run
 ```
 
-For `--network ethereum` or `--network base`, the chained withdrawal:
+For `--to ethereum` or `--to base`, the chained withdrawal:
 1. Withdraws USDC from HL to your Arbitrum address (~4 min)
 2. Bridges USDC from Arbitrum to destination via Across (~2-10s)
 
@@ -1047,34 +1043,34 @@ For `--network ethereum` or `--network base`, the chained withdrawal:
 
 ```bash
 # ETH → Ethereum (defaults to your wallet address)
-fintool withdraw 0.5 ETH
+fintool withdraw ETH --amount 0.5
 
 # SOL → Solana
-fintool withdraw 1 SOL --to SomeSolanaAddress
+fintool withdraw SOL --amount 1 --to SomeSolanaAddress
 
 # BTC → Bitcoin (--to required)
-fintool withdraw 0.01 BTC --to bc1q...
+fintool withdraw BTC --amount 0.01 --to bc1q...
 ```
 
 #### Binance
 
-Withdraws via Binance API. Requires `--to` and optionally `--network`.
+Withdraws via Binance API. Requires `--to` (address) and optionally `--network`.
 
 ```bash
-fintool withdraw 100 USDC --to 0x... --exchange binance --network ethereum
-fintool withdraw 0.5 ETH --to 0x... --exchange binance --network arbitrum
-fintool withdraw 0.01 BTC --to bc1q... --exchange binance
+fintool withdraw USDC --amount 100 --to 0x... --exchange binance --network ethereum
+fintool withdraw ETH --amount 0.5 --to 0x... --exchange binance --network arbitrum
+fintool withdraw BTC --amount 0.01 --to bc1q... --exchange binance
 ```
 
 Network name mapping: `ethereum`→ETH, `base`→BASE, `arbitrum`→ARBITRUM, `solana`→SOL, `bitcoin`→BTC, `bsc`→BSC, `polygon`→MATIC, `optimism`→OPTIMISM, `avalanche`→AVAXC.
 
 #### Coinbase
 
-Withdraws (sends) via Coinbase API. Requires `--to`.
+Withdraws (sends) via Coinbase API. Requires `--to` (address).
 
 ```bash
-fintool withdraw 100 USDC --to 0x... --exchange coinbase
-fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
+fintool withdraw USDC --amount 100 --to 0x... --exchange coinbase
+fintool withdraw ETH --amount 0.5 --to 0x... --exchange coinbase --network base
 ```
 
 #### JSON Schema
@@ -1094,22 +1090,25 @@ fintool withdraw 0.5 ETH --to 0x... --exchange coinbase --network base
 
 ---
 
-### `fintool transfer <AMOUNT> <DIRECTION> [--dex <NAME>]`
+### `fintool transfer <ASSET> --amount <AMT> --from <SRC> --to <DST>`
 
-Transfer USDC between perp, spot, and HIP-3 dex accounts on Hyperliquid. **Hyperliquid only** — other exchanges will return an error.
+Transfer assets between perp, spot, and HIP-3 dex accounts on Hyperliquid. **Hyperliquid only** — other exchanges will return an error.
 
-On Hyperliquid, perp margin, spot balances, and HIP-3 dex margins are separate pools. This command lets you move USDC between them.
+On Hyperliquid, perp margin, spot balances, and HIP-3 dex margins are separate pools. This command lets you move funds between them.
 
-#### Directions
+#### Source/Destination Values
 
-| Direction | `--dex` | Effect |
-|-----------|---------|--------|
-| `to-spot` | — | Move USDC from main perp → spot |
-| `to-perp` | — | Move USDC from spot → main perp |
-| `to-dex` | required | Move collateral from spot → HIP-3 dex margin |
-| `from-dex` | required | Move collateral from HIP-3 dex margin → spot |
+| Value | Description |
+|-------|-------------|
+| `spot` | Spot account |
+| `perp` | Main perp margin account |
+| `cash` | HIP-3 cash dex (SILVER, GOLD, stocks — uses USDT0 collateral) |
+| `xyz` | HIP-3 xyz dex (uses USDC collateral) |
+| `km`, `flx`, etc. | Other HIP-3 dexes |
 
-#### HIP-3 Dex Names
+**Note:** One side must always be `spot`. Direct perp-to-dex transfers are not supported.
+
+#### HIP-3 Dex Collateral
 
 | Dex | Auto-Resolved Assets | Collateral |
 |-----|---------------------|------------|
@@ -1118,19 +1117,17 @@ On Hyperliquid, perp margin, spot balances, and HIP-3 dex margins are separate p
 | `km` | (use `km:SYMBOL` prefix) | varies |
 | `flx` | (use `flx:SYMBOL` prefix) | varies |
 
-**Note:** `cash` dex assets are auto-resolved (e.g. `fintool transfer 10 to-dex --dex cash`). For other dexes, use the `dex:SYMBOL` prefix directly (e.g. `xyz:AAPL`).
-
 #### Examples
 
 ```bash
 # Spot ↔ main perp
-fintool transfer 10 to-spot     # move $10 USDC from perp to spot
-fintool transfer 10 to-perp     # move $10 USDC from spot to perp
+fintool transfer USDC --amount 10 --from perp --to spot
+fintool transfer USDC --amount 10 --from spot --to perp
 
 # Spot ↔ HIP-3 dex (required for SILVER, GOLD, stocks)
 # Note: cash dex uses USDT0 collateral — swap USDC→USDT0 on spot first
-fintool transfer 10 to-dex --dex cash      # fund cash dex with USDT0
-fintool transfer 10 from-dex --dex cash    # withdraw USDT0 from cash dex to spot
+fintool transfer USDT0 --amount 10 --from spot --to cash
+fintool transfer USDT0 --amount 10 --from cash --to spot
 ```
 
 #### JSON Schema
@@ -1138,9 +1135,10 @@ fintool transfer 10 from-dex --dex cash    # withdraw USDT0 from cash dex to spo
 ```json
 {
   "action": "transfer",
+  "asset": "USDT0",
   "amount": "10",
-  "direction": "to-dex",
-  "dex": "cash",
+  "from": "spot",
+  "to": "cash",
   "token": "USDT0",
   "status": "ok"
 }
@@ -1154,7 +1152,6 @@ Show all HyperUnit bridge operations (deposits and withdrawals) for your configu
 
 ```bash
 fintool bridge-status
-fintool bridge-status --human
 ```
 
 #### JSON Schema
@@ -1191,11 +1188,11 @@ fintool bridge-status --human
 | `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
 | `fintool report list <SYM>` | List recent SEC filings | N/A |
 | `fintool report get <SYM> <ACC>` | Fetch specific filing | N/A |
-| `fintool order buy <SYM> <USDC> <MAX>` | Spot limit buy | Hyperliquid, Binance, Coinbase |
-| `fintool order sell <SYM> <AMT> <MIN>` | Spot limit sell | Hyperliquid, Binance, Coinbase |
-| `fintool perp buy <SYM> <USDC> <PX>` | Perp limit long / close short (`--close`) | Hyperliquid, Binance |
-| `fintool perp sell <SYM> <AMT> <PX>` | Perp limit short / close long (`--close`) | Hyperliquid, Binance |
-| `fintool perp leverage <SYM> <N>` | Set perp leverage (incl. HIP-3) | Hyperliquid, Binance |
+| `fintool order buy <SYM> --amount N --price P` | Spot limit buy | Hyperliquid, Binance, Coinbase |
+| `fintool order sell <SYM> --amount N --price P` | Spot limit sell | Hyperliquid, Binance, Coinbase |
+| `fintool perp buy <SYM> --amount N --price P` | Perp limit long / close short (`--close`) | Hyperliquid, Binance |
+| `fintool perp sell <SYM> --amount N --price P` | Perp limit short / close long (`--close`) | Hyperliquid, Binance |
+| `fintool perp leverage <SYM> --leverage N` | Set perp leverage (incl. HIP-3) | Hyperliquid, Binance |
 | `fintool perp set-mode <MODE>` | Set account abstraction mode | Hyperliquid only |
 | `fintool orders [SYM]` | List open orders | Hyperliquid, Binance, Coinbase |
 | `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance, Coinbase |
@@ -1203,9 +1200,9 @@ fintool bridge-status --human
 | `fintool positions` | Open positions + PnL (incl. HIP-3) | Hyperliquid, Binance |
 | `fintool options buy/sell ...` | Options trading | Binance only |
 | `fintool deposit <ASSET>` | Deposit to exchange | Hyperliquid, Binance, Coinbase |
-| `fintool withdraw <AMT> <ASSET>` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
+| `fintool withdraw <ASSET> --amount N` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
 | `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
-| `fintool transfer <AMT> <DIR>` | Transfer USDC: perp ↔ spot ↔ dex | Hyperliquid only |
+| `fintool transfer <ASSET> --amount N --from X --to Y` | Transfer: perp ↔ spot ↔ dex | Hyperliquid only |
 
 ## Data Sources
 
@@ -1290,6 +1287,88 @@ fintool/
 - Perps: Hyperliquid > Binance (Coinbase excluded)
 - Options always require Binance
 
+## JSON Mode
+
+For scripts, bots, and programmatic use, pass the entire command as a JSON string via the `--json` flag. In this mode, **all output is JSON** (including errors).
+
+```bash
+fintool --json '{"command":"quote","symbol":"BTC"}'
+fintool --json '{"command":"balance"}'
+fintool --json '{"command":"order_buy","symbol":"HYPE","amount":"1.0","price":"25.00"}'
+fintool --json '{"command":"withdraw","asset":"USDC","amount":"10","to":"base"}'
+```
+
+Errors are returned as JSON too:
+
+```json
+{"error": "Invalid JSON command: missing field `symbol`"}
+```
+
+### JSON Command Schema
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `init` | — | — |
+| `address` | — | — |
+| `quote` | `symbol` | — |
+| `news` | `symbol` | — |
+| `order_buy` | `symbol`, `amount`, `price` | `exchange` |
+| `order_sell` | `symbol`, `amount`, `price` | `exchange` |
+| `orders` | — | `symbol`, `exchange` |
+| `cancel` | `order_id` | `exchange` |
+| `balance` | — | `exchange` |
+| `positions` | — | `exchange` |
+| `perp_quote` | `symbol` | — |
+| `perp_buy` | `symbol`, `amount`, `price` | `close`, `exchange` |
+| `perp_sell` | `symbol`, `amount`, `price` | `close`, `exchange` |
+| `perp_leverage` | `symbol`, `leverage` | `cross`, `exchange` |
+| `perp_set_mode` | `mode` | — |
+| `options_buy` | `symbol`, `option_type`, `strike`, `expiry`, `size` | `exchange` |
+| `options_sell` | `symbol`, `option_type`, `strike`, `expiry`, `size` | `exchange` |
+| `deposit` | `asset` | `amount`, `from`, `exchange`, `dry_run` |
+| `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
+| `transfer` | `asset`, `amount`, `from`, `to` | — |
+| `bridge_status` | — | — |
+| `report_annual` | `symbol` | `output` |
+| `report_quarterly` | `symbol` | `output` |
+| `report_list` | `symbol` | `limit` |
+| `report_get` | `symbol`, `accession` | `output` |
+
+**Notes:**
+- `exchange` defaults to `"auto"` when omitted
+- `amount` and `price` are strings (e.g. `"0.1"`, `"2500.00"`)
+- `leverage` is a number (e.g. `10`)
+- `close` and `dry_run` are booleans (default `false`)
+- `limit` is a number (default `10`)
+
+### Examples
+
+```bash
+# Get a price quote
+fintool --json '{"command":"quote","symbol":"ETH"}'
+
+# Place a perp buy with leverage
+fintool --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
+fintool --json '{"command":"perp_buy","symbol":"ETH","amount":"0.1","price":"3000"}'
+
+# Close a perp position
+fintool --json '{"command":"perp_sell","symbol":"ETH","amount":"0.1","price":"3100","close":true}'
+
+# Transfer USDT0 to cash dex for commodity trading
+fintool --json '{"command":"transfer","asset":"USDT0","amount":"30","from":"spot","to":"cash"}'
+
+# Deposit and withdraw
+fintool --json '{"command":"deposit","asset":"USDC","amount":"15","from":"base"}'
+fintool --json '{"command":"withdraw","asset":"USDC","amount":"10","to":"base"}'
+
+# Check account state
+fintool --json '{"command":"balance"}'
+fintool --json '{"command":"positions"}'
+fintool --json '{"command":"orders"}'
+```
+
+---
+
 ## Key Dependencies
 
 | Crate | Purpose |
@@ -1300,8 +1379,8 @@ fintool/
 | `hmac`, `sha2`, `hex` | HMAC-SHA256 signing for Binance and Coinbase APIs |
 | `clap` | CLI argument parsing |
 | `serde` / `serde_json` | JSON serialization |
-| `colored` | Terminal colors (`--human` mode) |
-| `tabled` | Table formatting (`--human` mode) |
+| `colored` | Terminal colors (human-readable output) |
+| `tabled` | Table formatting (human-readable output) |
 | `rust_decimal` | Precise financial math |
 
 ## License
