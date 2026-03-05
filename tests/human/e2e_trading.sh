@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# End-to-end fintool workflow
+# End-to-end fintool trading workflow (human CLI API)
 #
-# This script illustrates the full deposit → trade → withdraw cycle.
+# This script illustrates the full deposit -> trade -> withdraw cycle
+# using standard fintool CLI commands with human-readable output.
 # Each command is a real fintool invocation. Run them individually or
 # execute this script end-to-end.
 #
@@ -12,11 +13,13 @@
 #   - ETH on Base for gas fees
 #   - USDC on Base to deposit
 #
+# Usage: ./tests/human/e2e_trading.sh
+#
 
 set -euo pipefail
 
 # ── 1. Deposit USDC from Base to Hyperliquid ───────────────────────
-# Bridges $15 USDC: Base → Across → Arbitrum → HL Bridge2 → Hyperliquid
+# Bridges $15 USDC: Base -> Across -> Arbitrum -> HL Bridge2 -> Hyperliquid
 fintool deposit USDC --amount 15 --from base
 
 # Wait for deposit to settle (~5 min)
@@ -57,7 +60,7 @@ fintool order sell HYPE --amount 0.48 --price 24.50
 
 # ── 4. Trade SILVER perp (HIP-3 cash dex) ──────────────────────────
 # The cash dex uses USDT0 as collateral, not USDC.
-# Step 1: Swap USDC → USDT0 on spot
+# Step 1: Swap USDC -> USDT0 on spot
 fintool order buy USDT0 --amount 30 --price 1.002
 
 # Step 2: Transfer USDT0 from spot to cash dex
@@ -84,5 +87,5 @@ fintool orders
 fintool balance
 
 # ── 6. Withdraw to Base ────────────────────────────────────────────
-# Bridges back: Hyperliquid → Arbitrum → Across → Base
+# Bridges back: Hyperliquid -> Arbitrum -> Across -> Base
 fintool withdraw USDC --amount 10 --to base
