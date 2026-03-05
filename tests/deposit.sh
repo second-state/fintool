@@ -18,7 +18,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -31,7 +31,7 @@ info "This signs 3 transactions: USDC approval, Across bridge, HL Bridge2 deposi
 info "Requires ETH on Base for gas fees."
 
 # ── Deposit ──────────────────────────────────────────────────────────
-RESULT=$(ft '{"command":"deposit","asset":"USDC","amount":"15","from":"base"}')
+RESULT=$(ft '{"command":"deposit","asset":"USDC","amount":15,"from":"base"}')
 
 if [[ -z "$RESULT" ]]; then
     fail "Deposit \$15 USDC from Base to Hyperliquid failed"

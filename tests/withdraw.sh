@@ -16,7 +16,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -29,7 +29,7 @@ info "Route: Hyperliquid -> HL Bridge2 -> Arbitrum -> Across bridge -> Base"
 
 # ── Withdraw USDC ────────────────────────────────────────────────────
 info "-- Withdraw $USDC_AMOUNT USDC --"
-RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"USDC\",\"amount\":\"$USDC_AMOUNT\",\"to\":\"base\"}")
+RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"USDC\",\"amount\":$USDC_AMOUNT,\"to\":\"base\"}")
 
 if [[ -z "$RESULT" ]]; then
     fail "USDC withdrawal to Base failed"
@@ -47,7 +47,7 @@ if awk "BEGIN{exit !(${ETH_AMOUNT:-0} > 0)}"; then
     sleep 5
 
     info "-- Withdraw $ETH_AMOUNT ETH --"
-    RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"ETH\",\"amount\":\"$ETH_AMOUNT\",\"to\":\"base\"}")
+    RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"ETH\",\"amount\":$ETH_AMOUNT,\"to\":\"base\"}")
 
     if [[ -z "$RESULT" ]]; then
         fail "ETH withdrawal to Base failed"

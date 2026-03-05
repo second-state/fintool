@@ -15,7 +15,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -69,7 +69,7 @@ info "Current mark: \$$SELL_PRICE"
 info "Sell limit:   \$$SELL_LIMIT (-0.5% buffer)"
 
 # ── Place sell order with close flag ─────────────────────────────────
-RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"ETH\",\"amount\":\"$SELL_SIZE\",\"price\":\"$SELL_LIMIT\",\"close\":true}")
+RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"ETH\",\"amount\":$SELL_SIZE,\"price\":$SELL_LIMIT,\"close\":true}")
 
 if [[ -z "$RESULT" ]]; then
     fail "ETH perp sell failed"

@@ -17,7 +17,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -45,7 +45,7 @@ SWAP_AMT=$(echo "$SPOT_USDC" | awk '{v = int($1 * 100) / 100; if (v > 0.5) print
 # ── Step 3: Swap USDC -> USDT0 on spot ───────────────────────────────
 if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
     info "Swapping \$$SWAP_AMT USDC -> USDT0 on spot (cash dex collateral)..."
-    RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"USDT0\",\"amount\":\"$SWAP_AMT\",\"price\":\"1.002\"}")
+    RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"USDT0\",\"amount\":$SWAP_AMT,\"price\":1.002}")
     if [[ -z "$RESULT" ]]; then
         fail "USDC -> USDT0 spot swap failed"
         exit 1
@@ -69,7 +69,7 @@ TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v > 0) pr
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from spot to cash dex..."
-    RESULT=$(ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":\"$TRANSFER_AMT\",\"from\":\"spot\",\"to\":\"cash\"}")
+    RESULT=$(ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":$TRANSFER_AMT,\"from\":\"spot\",\"to\":\"cash\"}")
     if [[ -z "$RESULT" ]]; then
         fail "USDT0 transfer to cash dex failed"
         exit 1
@@ -104,7 +104,7 @@ info "Mark price:      \$$SILVER_PRICE"
 info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
 info "Buy size:        $BUY_SIZE oz (~\$12)"
 
-RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"SILVER\",\"amount\":\"$BUY_SIZE\",\"price\":\"$BUY_LIMIT\",\"close\":false}")
+RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"SILVER\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT,\"close\":false}")
 
 if [[ -z "$RESULT" ]]; then
     fail "SILVER perp buy failed"

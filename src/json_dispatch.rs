@@ -8,6 +8,13 @@ use serde::Deserialize;
 
 use crate::{commands, config, signing};
 
+/// Format f64 to string with 8 decimal places, then strip trailing zeros.
+/// Matches Hyperliquid SDK's float_to_string_for_hashing convention.
+fn fmt_num(val: f64) -> String {
+    let s = format!("{:.8}", val);
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 fn default_exchange() -> String {
     "auto".to_string()
 }
@@ -29,15 +36,15 @@ pub enum JsonCommand {
     },
     OrderBuy {
         symbol: String,
-        amount: String,
-        price: String,
+        amount: f64,
+        price: f64,
         #[serde(default = "default_exchange")]
         exchange: String,
     },
     OrderSell {
         symbol: String,
-        amount: String,
-        price: String,
+        amount: f64,
+        price: f64,
         #[serde(default = "default_exchange")]
         exchange: String,
     },
@@ -64,8 +71,8 @@ pub enum JsonCommand {
     },
     PerpBuy {
         symbol: String,
-        amount: String,
-        price: String,
+        amount: f64,
+        price: f64,
         #[serde(default)]
         close: bool,
         #[serde(default = "default_exchange")]
@@ -73,8 +80,8 @@ pub enum JsonCommand {
     },
     PerpSell {
         symbol: String,
-        amount: String,
-        price: String,
+        amount: f64,
+        price: f64,
         #[serde(default)]
         close: bool,
         #[serde(default = "default_exchange")]
@@ -111,7 +118,7 @@ pub enum JsonCommand {
     },
     Deposit {
         asset: String,
-        amount: Option<String>,
+        amount: Option<f64>,
         from: Option<String>,
         #[serde(default = "default_exchange")]
         exchange: String,
@@ -120,7 +127,7 @@ pub enum JsonCommand {
     },
     Withdraw {
         asset: String,
-        amount: String,
+        amount: f64,
         to: Option<String>,
         network: Option<String>,
         #[serde(default)]
@@ -128,7 +135,7 @@ pub enum JsonCommand {
     },
     Transfer {
         asset: String,
-        amount: String,
+        amount: f64,
         from: String,
         to: String,
     },
@@ -180,13 +187,21 @@ pub async fn run(json_str: &str) -> Result<()> {
             amount,
             price,
             exchange,
-        } => commands::order::buy(&symbol, &amount, &price, &exchange, true).await,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::order::buy(&symbol, &amount, &price, &exchange, true).await
+        }
         JsonCommand::OrderSell {
             symbol,
             amount,
             price,
             exchange,
-        } => commands::order::sell(&symbol, &amount, &price, &exchange, true).await,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::order::sell(&symbol, &amount, &price, &exchange, true).await
+        }
         JsonCommand::Orders { symbol, exchange } => {
             commands::orders::run(symbol.as_deref(), &exchange, true).await
         }
@@ -202,14 +217,22 @@ pub async fn run(json_str: &str) -> Result<()> {
             price,
             close,
             exchange,
-        } => commands::perp::buy(&symbol, &amount, &price, close, &exchange, true).await,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::perp::buy(&symbol, &amount, &price, close, &exchange, true).await
+        }
         JsonCommand::PerpSell {
             symbol,
             amount,
             price,
             close,
             exchange,
-        } => commands::perp::sell(&symbol, &amount, &price, close, &exchange, true).await,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::perp::sell(&symbol, &amount, &price, close, &exchange, true).await
+        }
         JsonCommand::PerpLeverage {
             symbol,
             leverage,
@@ -262,6 +285,7 @@ pub async fn run(json_str: &str) -> Result<()> {
             exchange,
             dry_run,
         } => {
+            let amount = amount.map(fmt_num);
             commands::deposit::run(
                 &asset,
                 amount.as_deref(),
@@ -279,6 +303,7 @@ pub async fn run(json_str: &str) -> Result<()> {
             network,
             dry_run,
         } => {
+            let amount = fmt_num(amount);
             let (resolved_to, resolved_network) =
                 crate::resolve_withdraw_destination(to.as_deref(), network.as_deref());
             commands::withdraw::run(
@@ -297,7 +322,10 @@ pub async fn run(json_str: &str) -> Result<()> {
             amount,
             from,
             to,
-        } => commands::transfer::run(&asset, &amount, &from, &to, true).await,
+        } => {
+            let amount = fmt_num(amount);
+            commands::transfer::run(&asset, &amount, &from, &to, true).await
+        }
         JsonCommand::BridgeStatus => commands::bridge_status::run(true).await,
         JsonCommand::ReportAnnual { symbol, output } => {
             commands::report::annual(&symbol, output.as_deref(), true).await

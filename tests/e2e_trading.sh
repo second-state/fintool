@@ -28,7 +28,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -39,7 +39,7 @@ ft() { $FINTOOL --json "$1" 2>/dev/null; }
 log "Step 1: Deposit \$15 USDC from Base"
 
 info "Bridging \$15 USDC: Base -> Across -> Arbitrum -> HL Bridge2 -> Hyperliquid"
-RESULT=$(ft '{"command":"deposit","asset":"USDC","amount":"15","from":"base"}')
+RESULT=$(ft '{"command":"deposit","asset":"USDC","amount":15,"from":"base"}')
 if [[ -z "$RESULT" ]]; then
     fail "Deposit failed"
     exit 1
@@ -82,7 +82,7 @@ ETH_PRICE=$(echo "$QUOTE" | jq -r '.markPx')
 info "ETH mark price: \$$ETH_PRICE"
 
 info "Buying 0.006 ETH perp at \$2100 limit..."
-RESULT=$(ft '{"command":"perp_buy","symbol":"ETH","amount":"0.006","price":"2100.00","close":false}')
+RESULT=$(ft '{"command":"perp_buy","symbol":"ETH","amount":0.006,"price":2100.00,"close":false}')
 BUY_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "ETH buy fill: $BUY_FILL"
 
@@ -90,7 +90,7 @@ info "Checking positions..."
 ft '{"command":"positions"}' | jq .
 
 info "Selling 0.006 ETH perp at \$2050 limit (close)..."
-RESULT=$(ft '{"command":"perp_sell","symbol":"ETH","amount":"0.006","price":"2050.00","close":true}')
+RESULT=$(ft '{"command":"perp_sell","symbol":"ETH","amount":0.006,"price":2050.00,"close":true}')
 SELL_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "ETH sell fill: $SELL_FILL"
 
@@ -106,7 +106,7 @@ HYPE_PRICE=$(echo "$QUOTE" | jq -r '.price // .markPx')
 info "HYPE price: \$$HYPE_PRICE"
 
 info "Buying 0.48 HYPE at \$25.00 limit..."
-RESULT=$(ft '{"command":"order_buy","symbol":"HYPE","amount":"0.48","price":"25.00"}')
+RESULT=$(ft '{"command":"order_buy","symbol":"HYPE","amount":0.48,"price":25.00}')
 BUY_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "HYPE buy fill: $BUY_FILL"
 
@@ -114,7 +114,7 @@ info "Checking balance..."
 ft '{"command":"balance"}' | jq .
 
 info "Selling 0.48 HYPE at \$24.50 limit..."
-RESULT=$(ft '{"command":"order_sell","symbol":"HYPE","amount":"0.48","price":"24.50"}')
+RESULT=$(ft '{"command":"order_sell","symbol":"HYPE","amount":0.48,"price":24.50}')
 SELL_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "HYPE sell fill: $SELL_FILL"
 
@@ -124,12 +124,12 @@ info "HYPE sell fill: $SELL_FILL"
 log "Step 5: Fund cash dex with USDT0"
 
 info "Buying 30 USDT0 (swapping USDC -> USDT0)..."
-RESULT=$(ft '{"command":"order_buy","symbol":"USDT0","amount":"30","price":"1.002"}')
+RESULT=$(ft '{"command":"order_buy","symbol":"USDT0","amount":30,"price":1.002}')
 SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "USDT0 buy fill: $SWAP_FILL"
 
 info "Transferring 30 USDT0 from spot to cash dex..."
-RESULT=$(ft '{"command":"transfer","asset":"USDT0","amount":"30","from":"spot","to":"cash"}')
+RESULT=$(ft '{"command":"transfer","asset":"USDT0","amount":30,"from":"spot","to":"cash"}')
 if [[ -n "$RESULT" ]]; then
     ok "USDT0 transferred to cash dex"
 else
@@ -151,7 +151,7 @@ SILVER_PRICE=$(echo "$QUOTE" | jq -r '.markPx')
 info "SILVER mark price: \$$SILVER_PRICE"
 
 info "Buying 0.13 oz SILVER perp at \$89.00 limit..."
-RESULT=$(ft '{"command":"perp_buy","symbol":"SILVER","amount":"0.13","price":"89.00","close":false}')
+RESULT=$(ft '{"command":"perp_buy","symbol":"SILVER","amount":0.13,"price":89.00,"close":false}')
 BUY_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "SILVER buy fill: $BUY_FILL"
 
@@ -159,7 +159,7 @@ info "Checking positions..."
 ft '{"command":"positions"}' | jq .
 
 info "Selling 0.14 oz SILVER perp at \$87.00 limit (close)..."
-RESULT=$(ft '{"command":"perp_sell","symbol":"SILVER","amount":"0.14","price":"87.00","close":true}')
+RESULT=$(ft '{"command":"perp_sell","symbol":"SILVER","amount":0.14,"price":87.00,"close":true}')
 SELL_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "SILVER sell fill: $SELL_FILL"
 
@@ -169,7 +169,7 @@ info "SILVER sell fill: $SELL_FILL"
 log "Step 7: Return USDT0 to spot and swap to USDC"
 
 info "Transferring 30 USDT0 from cash dex to spot..."
-RESULT=$(ft '{"command":"transfer","asset":"USDT0","amount":"30","from":"cash","to":"spot"}')
+RESULT=$(ft '{"command":"transfer","asset":"USDT0","amount":30,"from":"cash","to":"spot"}')
 if [[ -n "$RESULT" ]]; then
     ok "USDT0 transferred back to spot"
 else
@@ -177,7 +177,7 @@ else
 fi
 
 info "Selling 30 USDT0 (swapping USDT0 -> USDC)..."
-RESULT=$(ft '{"command":"order_sell","symbol":"USDT0","amount":"30","price":"0.998"}')
+RESULT=$(ft '{"command":"order_sell","symbol":"USDT0","amount":30,"price":0.998}')
 SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "USDT0 sell fill: $SWAP_FILL"
 
@@ -201,7 +201,7 @@ ft '{"command":"balance"}' | jq .
 log "Step 9: Withdraw \$10 USDC to Base"
 
 info "Withdrawing \$10 USDC to Base..."
-RESULT=$(ft '{"command":"withdraw","asset":"USDC","amount":"10","to":"base"}')
+RESULT=$(ft '{"command":"withdraw","asset":"USDC","amount":10,"to":"base"}')
 if [[ -z "$RESULT" ]]; then
     fail "USDC withdrawal failed"
     exit 1

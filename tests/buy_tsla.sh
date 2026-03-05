@@ -13,7 +13,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -45,7 +45,7 @@ info "Limit buy price:  \$$BUY_LIMIT (+1%)"
 info "Buy size:         $BUY_SIZE shares (~\$1)"
 
 # ── Place buy order on Coinbase ──────────────────────────────────────
-RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"TSLA\",\"amount\":\"$BUY_SIZE\",\"price\":\"$BUY_LIMIT\",\"exchange\":\"coinbase\"}")
+RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"TSLA\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT,\"exchange\":\"coinbase\"}")
 
 if [[ -z "$RESULT" ]]; then
     fail "TSLA spot buy on Coinbase failed"

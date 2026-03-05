@@ -18,7 +18,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -71,7 +71,7 @@ info "Current mark: \$$SELL_PRICE"
 info "Sell limit:   \$$SELL_LIMIT (-0.5% buffer)"
 
 # ── Step 3: Sell SILVER perp with close flag ─────────────────────────
-RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"SILVER\",\"amount\":\"$SELL_SIZE\",\"price\":\"$SELL_LIMIT\",\"close\":true}")
+RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"SILVER\",\"amount\":$SELL_SIZE,\"price\":$SELL_LIMIT,\"close\":true}")
 
 if [[ -z "$RESULT" ]]; then
     fail "SILVER perp sell failed"
@@ -109,7 +109,7 @@ TRANSFER_AMT=$(echo "$CASH_WITHDRAWABLE" | awk '{v = int($1 * 100) / 100; if (v 
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from cash dex to spot..."
-    RESULT=$(ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":\"$TRANSFER_AMT\",\"from\":\"cash\",\"to\":\"spot\"}")
+    RESULT=$(ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":$TRANSFER_AMT,\"from\":\"cash\",\"to\":\"spot\"}")
     if [[ -z "$RESULT" ]]; then
         warn "USDT0 transfer from cash dex failed"
         warn "USDT0 may still be in cash dex. Use: fintool transfer USDT0 --amount <amount> --from cash --to spot"
@@ -132,7 +132,7 @@ SELL_AMT=$(echo "$SPOT_USDT0 $USDT0_HOLD" | awk '{v = int(($1 - $2) * 100) / 100
 
 if [[ "$SELL_AMT" != "0" && "$SELL_AMT" != "0.00" ]]; then
     info "Swapping $SELL_AMT USDT0 -> USDC on spot..."
-    RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"USDT0\",\"amount\":\"$SELL_AMT\",\"price\":\"0.998\"}")
+    RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"USDT0\",\"amount\":$SELL_AMT,\"price\":0.998}")
     if [[ -z "$RESULT" ]]; then
         warn "USDT0 -> USDC spot swap failed"
         warn "USDT0 still in spot. Sell manually: fintool order sell USDT0 --amount $SELL_AMT --price 0.998"

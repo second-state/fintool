@@ -15,7 +15,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -72,7 +72,7 @@ info "Current price: \$$HYPE_PRICE"
 info "Sell limit:    \$$SELL_LIMIT (-0.5% buffer)"
 
 # ── Place sell order ─────────────────────────────────────────────────
-RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"HYPE\",\"amount\":\"$SELL_SIZE\",\"price\":\"$SELL_LIMIT\"}")
+RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"HYPE\",\"amount\":$SELL_SIZE,\"price\":$SELL_LIMIT}")
 
 if [[ -z "$RESULT" ]]; then
     fail "HYPE spot sell failed"

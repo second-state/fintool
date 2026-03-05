@@ -14,7 +14,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -55,7 +55,7 @@ info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
 info "Buy size:        $BUY_SIZE ETH (~\$12)"
 
 # ── Place buy order ──────────────────────────────────────────────────
-RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"ETH\",\"amount\":\"$BUY_SIZE\",\"price\":\"$BUY_LIMIT\",\"close\":false}")
+RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"ETH\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT,\"close\":false}")
 
 if [[ -z "$RESULT" ]]; then
     fail "ETH perp buy failed"

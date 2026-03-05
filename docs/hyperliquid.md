@@ -100,7 +100,7 @@ fintool quote HYPE
 Put in an order for HYPE at a max price. In this command, we order $12 worth of HYPE at the mac price of $25/HYPE.
 
 ```
-fintool order buy HYPE 12 25.00
+fintool order buy HYPE --amount 12 --price 25.00
 ```
 
 You can check the balance of USDC and HYPE in your account once the order is filled.
@@ -112,7 +112,7 @@ fintool balance
 Once the HYPE price goes up, you can put in another order to sell HYPE. The command below sells 0.48 HYPE at $30/HYPE.
 
 ```
-fintool order sell HYPE 0.48 30.00
+fintool order sell HYPE --amount 0.48 --price 30.00
 ```
 
 Check the balance again.
@@ -165,13 +165,13 @@ fintool perp quote ETH
 Set the perp leverage to 2x (max is 20x)
 
 ```
-fintool perp leverage ETH 2
+fintool perp leverage ETH --leverage 2
 ```
 
 Buy $12 of ETH perp at a limit price (adjust price to current market)
 
 ```
-fintool perp buy ETH 12 2100.00
+fintool perp buy ETH --amount 12 --price 2100.00
 ```
 
 Check out the perp positions, open orders, and USDC balance
@@ -187,7 +187,7 @@ Sell to close the position (adjust size and price to your position).
 The `--close` flag means that instead of opening up a new short (sell) perp position, we should reduce the size of the existing long (buy) position by the specified amount.
 
 ```
-fintool perp sell ETH 0.006 2150.00 --close
+fintool perp sell ETH --amount 0.006 --price 2150.00 --close
 ```
 
 Check out the perp positions, open orders, and USDC balance to ensure that the long position is closed and the USDC are back in the account unlocked.
@@ -219,7 +219,7 @@ tests/buy_silver.sh
 ![](images/fintool_hip3_buy_after.png)
 
 ```
-tests/sell_hip3.sh
+tests/sell_silver.sh
 ```
 
 4 Close the Silver perp contract in this account
@@ -240,13 +240,13 @@ to USDT0, which is a special stable coin for the HIP-3 market. You can buy USDT0
 It is to buy $30 USDT0 at $1.002 USDC/USDT0.
 
 ```
-fintool order buy USDT0 30 1.002
+fintool order buy USDT0 --amount 30 --price 1.002
 ```
 
 Next, transfer the $20 USDT0 to the HIP-3 market.
 
 ```
-fintool transfer 30 to-dex --dex cash
+fintool transfer USDT0 --amount 30 --from spot --to cash
 ```
 
 Now you can trade commodity assets on the HIP-3 market. We will trade SILVER. Get the current price of SILVER.
@@ -258,13 +258,13 @@ fintool perp quote SILVER
 Set the perp leverage to 2x (max is 20x)
 
 ```
-fintool perp leverage SILVER 2
+fintool perp leverage SILVER --leverage 2
 ```
 
 Buy $12 of SILVER perp at a limit price (adjust price to current market)
 
 ```
-fintool perp buy SILVER 12 89.00
+fintool perp buy SILVER --amount 12 --price 89.00
 ```
 
 Check out the perp positions, open orders, and USDC  / USDT0 balance. SILVER shows as "cash:SILVER".
@@ -280,19 +280,19 @@ Sell to close the position (adjust size and price to your position).
 The `--close` flag means that instead of opening up a new short (sell) perp position, we should reduce the size of the existing long (buy) position by the specified amount.
 
 ```
-fintool perp sell SILVER 0.14 91.00 --close
+fintool perp sell SILVER --amount 0.14 --price 91.00 --close
 ```
 
 Transfer the $30 USDT0 back to spot.
 
 ```
-fintool transfer 30 from-dex --dex cash
+fintool transfer USDT0 --amount 30 --from cash --to spot
 ```
 
 Swap $30 USDT0 back to USDC at 0.998 USDC/USDT0.
 
 ```
-fintool order sell USDT0 30 0.998
+fintool order sell USDT0 --amount 30 --price 0.998
 ```
 
 Check out the perp positions, open orders, and USDC balance to ensure that the long position is closed and the USDC are back in the account unlocked.
@@ -329,6 +329,6 @@ The withdraw command reversed the bridges in the deposit command to send the USD
 The command below bridges $10 USDC back to the Base address.
 
 ```
-fintool withdraw 10 USDC --network base
+fintool withdraw USDC --amount 10 --to base
 ```
 

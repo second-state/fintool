@@ -13,7 +13,7 @@
 #
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../helpers.sh"
+source "$SCRIPT_DIR/helpers.sh"
 ensure_built
 
 ft() { $FINTOOL --json "$1" 2>/dev/null; }
@@ -45,7 +45,7 @@ info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
 info "Buy size:        $BUY_SIZE HYPE (~\$12)"
 
 # ── Place buy order ──────────────────────────────────────────────────
-RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"HYPE\",\"amount\":\"$BUY_SIZE\",\"price\":\"$BUY_LIMIT\"}")
+RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"HYPE\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT}")
 
 if [[ -z "$RESULT" ]]; then
     fail "HYPE spot buy failed"
