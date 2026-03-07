@@ -30,6 +30,7 @@ pub async fn run(
     json_out: bool,
 ) -> Result<()> {
     match exchange.to_lowercase().as_str() {
+        "polymarket" => deposit_polymarket(asset, json_out).await,
         "binance" => deposit_binance(asset, from, json_out).await,
         "coinbase" => deposit_coinbase(asset, json_out).await,
         "hyperliquid" | "auto" => {
@@ -41,7 +42,7 @@ pub async fn run(
             }
         }
         other => bail!(
-            "Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase",
+            "Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase, polymarket",
             other
         ),
     }
@@ -759,5 +760,51 @@ async fn deposit_coinbase(asset: &str, json_out: bool) -> Result<()> {
         println!();
     }
 
+    Ok(())
+}
+
+// ── Polymarket deposit ───────────────────────────────────────────────
+
+async fn deposit_polymarket(asset: &str, json_out: bool) -> Result<()> {
+    let asset_upper = asset.to_uppercase();
+    if asset_upper != "USDC" {
+        bail!("Polymarket only supports USDC deposits. Got '{}'", asset);
+    }
+
+    let address = crate::polymarket::get_polymarket_address()?;
+    let client = crate::polymarket::create_bridge_client();
+
+    use std::str::FromStr;
+    let addr = alloy::primitives::Address::from_str(&address)
+        .context("Invalid Polymarket wallet address")?;
+
+    use polymarket_client_sdk::bridge::types::DepositRequest;
+    let req = DepositRequest::builder().address(addr).build();
+    let deposit_info = client.deposit(&req).await?;
+
+    if json_out {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "action": "deposit",
+                "exchange": "polymarket",
+                "asset": "USDC",
+                "wallet_address": address,
+                "deposit_info": format!("{:?}", deposit_info),
+            }))?
+        );
+    } else {
+        println!("{}", "━".repeat(50).dimmed());
+        println!("  {} USDC → Polymarket", "Deposit".green().bold());
+        println!("{}", "━".repeat(50).dimmed());
+        println!();
+        println!("  {} {}", "Wallet:".dimmed(), address.cyan());
+        println!("  {} {:?}", "Deposit info:".dimmed(), deposit_info);
+        println!();
+        println!(
+            "  {}",
+            "Send USDC to the deposit address to fund your Polymarket account.".yellow()
+        );
+    }
     Ok(())
 }

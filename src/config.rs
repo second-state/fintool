@@ -11,6 +11,14 @@ pub struct ConfigFile {
     pub network: NetworkConfig,
     #[serde(default)]
     pub api_keys: ApiKeysConfig,
+    #[serde(default)]
+    pub polymarket: PolymarketConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct PolymarketConfig {
+    /// Signature type: proxy (default), eoa, or gnosis-safe
+    pub signature_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -200,6 +208,25 @@ pub fn binance_credentials() -> Option<(String, String)> {
         cfg.api_keys.binance_api_key?,
         cfg.api_keys.binance_api_secret?,
     ))
+}
+
+/// Get Polymarket credentials (private_key, signature_type)
+/// Get wallet private key + Polymarket signature type for Polymarket operations.
+/// Uses the same [wallet] private_key as all other exchanges.
+pub fn polymarket_credentials() -> Result<(String, String)> {
+    let cfg = load_config_file()?;
+    let key = cfg.wallet.private_key.ok_or_else(|| {
+        anyhow::anyhow!(
+            "No wallet private key configured.\n\
+             Set [wallet] private_key in {}",
+            config_path().display()
+        )
+    })?;
+    let sig_type = cfg
+        .polymarket
+        .signature_type
+        .unwrap_or_else(|| "proxy".to_string());
+    Ok((key, sig_type))
 }
 
 /// Get Coinbase Advanced Trade API credentials (key, secret)

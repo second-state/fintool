@@ -111,6 +111,64 @@ pub enum Commands {
 
     /// Show bridge operation status (deposits/withdrawals via Unit)
     BridgeStatus,
+
+    /// Prediction market trading (Polymarket)
+    #[command(subcommand)]
+    Predict(PredictCmd),
+}
+
+#[derive(Subcommand)]
+pub enum PredictCmd {
+    /// List/search prediction markets
+    List {
+        /// Search query
+        #[arg(long)]
+        query: Option<String>,
+        /// Max results
+        #[arg(long, default_value = "10")]
+        limit: i32,
+        /// Filter active only
+        #[arg(long)]
+        active: Option<bool>,
+        /// Sort by: volume, liquidity
+        #[arg(long)]
+        sort: Option<String>,
+    },
+    /// Get prediction market quote/details
+    Quote {
+        /// Market slug or ID
+        market: String,
+    },
+    /// Buy shares in a prediction market outcome
+    Buy {
+        /// Market slug or condition ID
+        market: String,
+        /// Outcome: yes or no
+        #[arg(long)]
+        outcome: String,
+        /// Amount in USDC
+        #[arg(long)]
+        amount: String,
+        /// Max price (0.01-0.99)
+        #[arg(long)]
+        price: String,
+    },
+    /// Sell shares in a prediction market outcome
+    Sell {
+        /// Market slug or condition ID
+        market: String,
+        /// Outcome: yes or no
+        #[arg(long)]
+        outcome: String,
+        /// Amount of shares to sell
+        #[arg(long)]
+        amount: String,
+        /// Min price (0.01-0.99)
+        #[arg(long)]
+        price: String,
+    },
+    /// Show prediction market positions
+    Positions,
 }
 
 #[derive(Subcommand)]

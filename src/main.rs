@@ -7,11 +7,12 @@ mod config;
 mod format;
 mod hip3;
 mod json_dispatch;
+mod polymarket;
 mod signing;
 mod unit;
 
 use anyhow::{Context, Result};
-use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, ReportCmd};
+use cli::{Cli, Commands, OptionsCmd, OrderCmd, PerpCmd, PredictCmd, ReportCmd};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -199,6 +200,37 @@ async fn main() -> Result<()> {
             commands::transfer::run(&asset, &amount, &from, &to, json_output).await
         }
         Commands::BridgeStatus => commands::bridge_status::run(json_output).await,
+        Commands::Predict(cmd) => match cmd {
+            PredictCmd::List {
+                query,
+                limit,
+                active,
+                sort,
+            } => {
+                commands::predict::list(
+                    query.as_deref(),
+                    limit,
+                    active,
+                    sort.as_deref(),
+                    json_output,
+                )
+                .await
+            }
+            PredictCmd::Quote { market } => commands::predict::quote(&market, json_output).await,
+            PredictCmd::Buy {
+                market,
+                outcome,
+                amount,
+                price,
+            } => commands::predict::buy(&market, &outcome, &amount, &price, json_output).await,
+            PredictCmd::Sell {
+                market,
+                outcome,
+                amount,
+                price,
+            } => commands::predict::sell(&market, &outcome, &amount, &price, json_output).await,
+            PredictCmd::Positions => commands::predict::positions(json_output).await,
+        },
         Commands::Report(cmd) => match cmd {
             ReportCmd::Annual { symbol, output } => {
                 commands::report::annual(&symbol, output.as_deref(), json_output).await

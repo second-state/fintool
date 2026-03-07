@@ -37,3 +37,8 @@ testnet = false
 # Sign up at https://www.coinbase.com/
 # coinbase_api_key = "..."
 # coinbase_api_secret = "..."
+
+# Polymarket — prediction market trading on Polygon
+# Uses the [wallet] private_key for signing. Only signature_type is configurable.
+# [polymarket]
+# signature_type = "proxy"   # proxy (default), eoa, or gnosis-safe

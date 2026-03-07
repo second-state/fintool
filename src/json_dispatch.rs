@@ -23,6 +23,10 @@ fn default_limit() -> usize {
     10
 }
 
+fn default_predict_limit() -> i32 {
+    10
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum JsonCommand {
@@ -158,6 +162,29 @@ pub enum JsonCommand {
         accession: String,
         output: Option<String>,
     },
+    PredictList {
+        query: Option<String>,
+        #[serde(default = "default_predict_limit")]
+        limit: i32,
+        active: Option<bool>,
+        sort: Option<String>,
+    },
+    PredictQuote {
+        market: String,
+    },
+    PredictBuy {
+        market: String,
+        outcome: String,
+        amount: f64,
+        price: f64,
+    },
+    PredictSell {
+        market: String,
+        outcome: String,
+        amount: f64,
+        price: f64,
+    },
+    PredictPositions,
 }
 
 pub async fn run(json_str: &str) -> Result<()> {
@@ -341,5 +368,33 @@ pub async fn run(json_str: &str) -> Result<()> {
             accession,
             output,
         } => commands::report::get(&symbol, &accession, output.as_deref(), true).await,
+        JsonCommand::PredictList {
+            query,
+            limit,
+            active,
+            sort,
+        } => commands::predict::list(query.as_deref(), limit, active, sort.as_deref(), true).await,
+        JsonCommand::PredictQuote { market } => commands::predict::quote(&market, true).await,
+        JsonCommand::PredictBuy {
+            market,
+            outcome,
+            amount,
+            price,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::predict::buy(&market, &outcome, &amount, &price, true).await
+        }
+        JsonCommand::PredictSell {
+            market,
+            outcome,
+            amount,
+            price,
+        } => {
+            let amount = fmt_num(amount);
+            let price = fmt_num(price);
+            commands::predict::sell(&market, &outcome, &amount, &price, true).await
+        }
+        JsonCommand::PredictPositions => commands::predict::positions(true).await,
     }
 }

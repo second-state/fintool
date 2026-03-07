@@ -28,6 +28,8 @@ eth-keystore = "0.5"
 hyperliquid_rust_sdk = { version = "0.6", default-features = false }
 ethers = { version = "2", default-features = false, features = ["rustls", "eip712", "abigen", "legacy"] }
 urlencoding = "2"
+polymarket-client-sdk = { version = "0.4", features = ["gamma", "data", "clob", "bridge", "ctf"] }
+alloy = { version = "1.6", default-features = false, features = ["providers", "sol-types", "contract", "reqwest", "reqwest-rustls-tls", "signer-local", "signers"] }
 regex = "1"
 openssl = { version = "0.10", features = ["vendored"] }
 hmac = "0.12"
