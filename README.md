@@ -15,7 +15,6 @@ A Rust CLI tool for agentic trading and market intelligence — spot and perpetu
   - [Open and close perp positions](#open-and-close-perp-positions)
   - [Commodity perp on Hyperliquid (USDT0 conversion)](#commodity-perp-on-hyperliquid-usdt0-conversion)
   - [Prediction market trading (Polymarket)](#prediction-market-trading-polymarket)
-- [Output Modes](#output-modes)
 - [Exchange Support](#exchange-support)
   - [Exchange Capability Matrix](#exchange-capability-matrix)
   - [Global Exchange Flag](#global-exchange-flag)
@@ -244,25 +243,7 @@ fintool predict positions
 fintool predict deposit --amount 100 --from base
 ```
 
-## Output Modes
-
-**Human-readable (default):** Colored, formatted terminal output.
-
-```bash
-fintool quote BTC
-fintool balance
-```
-
-**JSON mode:** Pass a full command as JSON for programmatic use. Output is always JSON.
-
-```bash
-fintool --json '{"command":"quote","symbol":"BTC"}'
-fintool --json '{"command":"balance"}'
-```
-
-See [JSON Mode](#json-mode) for the full schema.
-
----
+> **Note:** fintool also supports a `--json` mode for scripting and agent integration — pass a full command as a JSON string and get JSON output. See [JSON Mode](#json-mode) for details.
 
 ## Exchange Support
 
