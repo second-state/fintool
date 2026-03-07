@@ -8,6 +8,7 @@ pub mod order;
 pub mod orders;
 pub mod perp;
 pub mod positions;
+pub mod predict;
 pub mod quote;
 pub mod report;
 pub mod transfer;

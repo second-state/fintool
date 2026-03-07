@@ -1,6 +1,6 @@
 # fintool
 
-A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**. Supports crypto, stocks, and commodities. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command. Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
+A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**, plus prediction market trading on **Polymarket**. Supports crypto, stocks, commodities, and prediction markets. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command. Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
 
 ## Install as an OpenClaw Skill
 
@@ -171,6 +171,29 @@ fintool orders
 fintool balance
 ```
 
+### Prediction market trading (Polymarket)
+
+```bash
+# List/search prediction markets
+fintool predict list --query "bitcoin"
+fintool predict list --query "election" --limit 5
+
+# Get market details/quote
+fintool predict quote will-bitcoin-hit-100k
+
+# Buy shares (yes outcome at $0.65)
+fintool predict buy will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.65
+
+# Sell shares
+fintool predict sell will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.70
+
+# View positions
+fintool predict positions
+
+# Deposit USDC to Polymarket
+fintool predict deposit --amount 100 --from base
+```
+
 ## Output Modes
 
 **Human-readable (default):** Colored, formatted terminal output.
@@ -197,14 +220,15 @@ See [JSON Mode](#json-mode) for the full schema.
 
 ### Exchange Capability Matrix
 
-| Feature | Hyperliquid | Binance | Coinbase |
-|---------|-------------|---------|----------|
-| Spot Trading | ✅ | ✅ | ✅ |
-| Perpetual Futures | ✅ | ✅ | ❌ |
-| Options | ❌ | ✅ | ❌ |
-| Balance | ✅ | ✅ | ✅ |
-| Positions | ✅ | ✅ | ❌ |
-| Orders/Cancellation | ✅ | ✅ | ✅ |
+| Feature | Hyperliquid | Binance | Coinbase | Polymarket |
+|---------|-------------|---------|----------|------------|
+| Spot Trading | ✅ | ✅ | ✅ | — |
+| Perpetual Futures | ✅ | ✅ | ❌ | — |
+| Options | ❌ | ✅ | ❌ | — |
+| Prediction Markets | — | — | — | ✅ |
+| Balance | ✅ | ✅ | ✅ | — |
+| Positions | ✅ | ✅ | ❌ | ✅ |
+| Orders/Cancellation | ✅ | ✅ | ✅ | ✅ |
 
 ### Global Exchange Flag
 
@@ -216,25 +240,46 @@ All trading commands support `--exchange <EXCHANGE>`:
 | `hyperliquid` | Force Hyperliquid (requires wallet config) |
 | `binance` | Force Binance (requires API keys) |
 | `coinbase` | Force Coinbase (requires API keys) |
+| `polymarket` | Force Polymarket (uses wallet config, Polygon network) |
 
 ### Auto Mode Routing
 
 When `--exchange auto` (default):
 
 1. **Options commands** → Always Binance (only exchange that supports options)
-2. **Perpetual futures** → Hyperliquid > Binance (Coinbase doesn't support perps)
-3. **Spot trading** → Hyperliquid > Coinbase > Binance (priority order)
-4. **If only one exchange configured** → Use that one
+2. **Prediction markets** → Always Polymarket (only exchange that supports predictions)
+3. **Perpetual futures** → Hyperliquid > Binance (Coinbase doesn't support perps)
+4. **Spot trading** → Hyperliquid > Coinbase > Binance (priority order)
+5. **If only one exchange configured** → Use that one
+
+**Prediction market routing:** The `predict` command always routes to Polymarket — no `--exchange` flag needed, just like `perp set-mode` always routes to Hyperliquid. Each exchange has exclusive command domains:
+
+| Command Domain | Exchange | Routing |
+|----------------|----------|---------|
+| `predict` (list, quote, buy, sell, positions) | Polymarket | Always Polymarket (exclusive) |
+| `options` (buy, sell) | Binance | Always Binance (exclusive) |
+| `perp set-mode` | Hyperliquid | Always Hyperliquid (exclusive) |
+| `order`, `perp`, `balance`, `positions` | All | Auto-routed by `--exchange` flag |
+| `deposit` | All | Requires `--exchange` for non-default (e.g. `--exchange polymarket`) |
+
+**Deposit routing:** Use `--exchange polymarket` to deposit USDC to Polymarket. Without `--exchange`, deposits default to Hyperliquid.
+
+```bash
+fintool deposit USDC --amount 50 --from base                         # → Hyperliquid (default)
+fintool deposit USDC --amount 50 --from base --exchange polymarket   # → Polymarket
+fintool deposit USDC --exchange binance                              # → Binance
+```
 
 ### Symbol Formats by Exchange
 
-| Exchange | Spot Format | Perp Format | Notes |
-|----------|-------------|-------------|-------|
-| Hyperliquid | `BTC`, `TSLA` | `BTC`, `ETH` | Symbol only, no pair suffix |
-| Binance | `BTCUSDT` | `BTCUSDT` | Auto-appends USDT in code |
-| Coinbase | `BTC-USD` | N/A | Dash-separated, USD quote |
+| Exchange | Spot Format | Perp Format | Predict Format | Notes |
+|----------|-------------|-------------|----------------|-------|
+| Hyperliquid | `BTC`, `TSLA` | `BTC`, `ETH` | — | Symbol only, no pair suffix |
+| Binance | `BTCUSDT` | `BTCUSDT` | — | Auto-appends USDT in code |
+| Coinbase | `BTC-USD` | — | — | Dash-separated, USD quote |
+| Polymarket | — | — | Market slug or ID | e.g. `will-btc-hit-100k` |
 
-**Note:** `fintool` handles format conversion automatically. Just use the base symbol (e.g., `BTC`) and it will convert to the right format for each exchange.
+**Note:** `fintool` handles format conversion automatically. Just use the base symbol (e.g., `BTC`) and it will convert to the right format for each exchange. For prediction markets, use the market slug (from `fintool predict list`) or numeric market ID.
 
 ### Examples
 
@@ -253,6 +298,13 @@ fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
 
 # Options require Binance
 fintool options buy BTC call 70000 260328 0.1 --exchange binance
+
+# Prediction markets always route to Polymarket
+fintool predict list --query "bitcoin"
+fintool predict buy will-btc-hit-100k --outcome yes --amount 20 --price 0.50
+
+# Deposit to Polymarket
+fintool deposit USDC --amount 50 --from base --exchange polymarket
 ```
 
 ---
@@ -263,7 +315,7 @@ Config file: `~/.fintool/config.toml`
 
 Run `fintool init` to generate a template, or copy `config.toml.default` from the release zip.
 
-### Example Configuration (All Three Exchanges)
+### Example Configuration (All Four Exchanges)
 
 ```toml
 [wallet]
@@ -290,6 +342,11 @@ binance_api_secret = "..."
 coinbase_api_key = "..."
 coinbase_api_secret = "..."
 
+# Polymarket — prediction market trading on Polygon
+# private_key defaults to [wallet] private_key if omitted
+[polymarket]
+# private_key = "0x..."
+# signature_type = "proxy"   # proxy (default), eoa, or gnosis-safe
 ```
 
 ### Config Options
@@ -306,6 +363,7 @@ coinbase_api_secret = "..."
 | `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
 | `api_keys` | `coinbase_api_key` | string | — | Coinbase Advanced Trade API key. |
 | `api_keys` | `coinbase_api_secret` | string | — | Coinbase Advanced Trade API secret (HMAC-SHA256 signing). |
+| `polymarket` | `signature_type` | string | `proxy` | Polymarket signing mode: `proxy`, `eoa`, or `gnosis-safe`. Uses `wallet.private_key`. |
 ### What Needs Configuration
 
 | Command | Hyperliquid Wallet | Binance Keys | Coinbase Keys | OpenAI Key | Exchange Support |
@@ -332,6 +390,10 @@ coinbase_api_secret = "..."
 | `withdraw` (Coinbase) | No | No | Yes | No | Coinbase |
 | `bridge-status` | Yes | No | No | No | Hyperliquid |
 | `transfer` | Yes | No | No | No | Hyperliquid only |
+| `predict list/quote` | No | No | No | No | Polymarket (read-only) |
+| `predict buy/sell` | Polymarket key | No | No | No | Polymarket |
+| `predict positions` | Polymarket key | No | No | No | Polymarket |
+| `predict deposit` | Polymarket key | No | No | No | Polymarket |
 
 ---
 
@@ -1203,6 +1265,12 @@ fintool bridge-status
 | `fintool withdraw <ASSET> --amount N` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
 | `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
 | `fintool transfer <ASSET> --amount N --from X --to Y` | Transfer: perp ↔ spot ↔ dex | Hyperliquid only |
+| `fintool predict list [--query Q]` | Search prediction markets | Polymarket |
+| `fintool predict quote <MARKET>` | Market details/prices | Polymarket |
+| `fintool predict buy <MARKET> --outcome O --amount N --price P` | Buy prediction shares | Polymarket |
+| `fintool predict sell <MARKET> --outcome O --amount N --price P` | Sell prediction shares | Polymarket |
+| `fintool predict positions` | Show prediction positions | Polymarket |
+| `fintool predict deposit --amount N --from CHAIN` | Deposit USDC to Polymarket | Polymarket |
 
 ## Data Sources
 
@@ -1220,6 +1288,7 @@ fintool bridge-status
 | Trading — Binance spot | Binance Spot API `/api/v3/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance options | Binance Options API `/eapi/v1/order` | API key + secret | HMAC-SHA256 signing |
+| Prediction markets — Polymarket | Polymarket Gamma + CLOB APIs | Wallet key (for trading) | EIP-712 signing via polymarket-client-sdk |
 | Trading — Coinbase spot | Coinbase Advanced Trade API `/api/v3/brokerage/orders` | API key + secret | HMAC-SHA256 signing |
 | Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
 | Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
@@ -1245,6 +1314,7 @@ fintool/
 │   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, deposit/withdraw, HMAC-SHA256)
 │   ├── bridge.rs        # Across Protocol cross-chain USDC bridge (Ethereum/Base ↔ Arbitrum)
 │   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw, fee estimation)
+│   ├── polymarket.rs    # Polymarket SDK client helpers (gamma, CLOB, data, bridge)
 │   ├── format.rs        # Color formatting helpers
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
@@ -1259,6 +1329,7 @@ fintool/
 │       ├── options.rs   # Options trading (Binance only)
 │       ├── deposit.rs   # Multi-exchange deposit (Unit, Across, Binance, Coinbase)
 │       ├── withdraw.rs  # Multi-exchange withdraw (Bridge2, Unit, Across, Binance, Coinbase)
+│       ├── predict.rs   # Prediction market commands (Polymarket)
 │       └── bridge_status.rs # HyperUnit bridge operation tracker
 ├── config.toml.default  # Config template
 ├── Cargo.toml
@@ -1382,6 +1453,8 @@ fintool --json '{"command":"orders"}'
 | `colored` | Terminal colors (human-readable output) |
 | `tabled` | Table formatting (human-readable output) |
 | `rust_decimal` | Precise financial math |
+| `polymarket-client-sdk` | Polymarket CLOB, Gamma, Data, and Bridge API clients |
+| `alloy` | Ethereum primitives and signing for Polymarket integration |
 
 ## License
 
