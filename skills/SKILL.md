@@ -48,6 +48,7 @@ cat ~/.fintool/config.toml 2>/dev/null
 |---------|-------------|---------|----------|
 | Spot orders | ✅ | ✅ | ✅ |
 | Perp orders | ✅ | ✅ | ❌ |
+| Orderbook | ✅ | ✅ | ✅ |
 | Deposit | ✅ (Unit + Across) | ✅ (API) | ✅ (API) |
 | Withdraw | ✅ (Bridge2 + Unit + Across) | ✅ (API) | ✅ (API) |
 | Balance | ✅ | ✅ | ✅ |
@@ -75,6 +76,10 @@ All commands use: `{baseDir}/scripts/fintool --json '<JSON>'`
 ```json
 {"command": "quote", "symbol": "BTC"}
 {"command": "perp_quote", "symbol": "ETH"}
+{"command": "orderbook", "symbol": "HYPE"}
+{"command": "orderbook", "symbol": "BTC", "levels": 10, "exchange": "binance"}
+{"command": "perp_orderbook", "symbol": "BTC"}
+{"command": "perp_orderbook", "symbol": "ETH", "levels": 20}
 {"command": "news", "symbol": "AAPL"}
 ```
 
@@ -168,6 +173,12 @@ All commands use: `{baseDir}/scripts/fintool --json '<JSON>'`
 ```
 Returns: price, 24h/7d/30d changes, trend (bullish/bearish/neutral), momentum, volume analysis, summary. Uses data from Hyperliquid + Yahoo Finance + CoinGecko, merged by OpenAI.
 
+**Step 1b — Check orderbook depth and spread:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"orderbook","symbol":"BTC"}'
+```
+Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity before trading.
+
 **Step 2 — Check recent news:**
 ```bash
 {baseDir}/scripts/fintool --json '{"command":"news","symbol":"BTC"}'
@@ -201,6 +212,12 @@ Returns: up to 10 recent headlines from Google News RSS.
 {baseDir}/scripts/fintool --json '{"command":"perp_quote","symbol":"ETH"}'
 ```
 Returns: mark price, oracle price, funding rate, open interest, premium, max leverage.
+
+**Step 1b — Check perp orderbook depth and spread:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"perp_orderbook","symbol":"ETH"}'
+```
+Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity and set limit prices.
 
 **Step 2 — Check spot price for context:**
 ```bash

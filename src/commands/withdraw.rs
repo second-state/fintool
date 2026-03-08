@@ -9,6 +9,9 @@
 //!
 //! For Coinbase (--exchange coinbase):
 //!   - POST /v2/accounts/{id}/transactions (type=send)
+//!
+//! For Polymarket (--exchange polymarket):
+//!   - Bridge API: generates withdrawal address, user sends USDC.e on Polygon
 
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
@@ -30,6 +33,7 @@ pub async fn run(
     json_out: bool,
 ) -> Result<()> {
     match exchange.to_lowercase().as_str() {
+        "polymarket" => withdraw_polymarket(amount, asset, to, network, json_out).await,
         "binance" => withdraw_binance(amount, asset, to, network, dry_run, json_out).await,
         "coinbase" => withdraw_coinbase(amount, asset, to, network, dry_run, json_out).await,
         "hyperliquid" | "auto" => {
@@ -41,7 +45,7 @@ pub async fn run(
             }
         }
         other => bail!(
-            "Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase",
+            "Unsupported exchange '{}'. Use: hyperliquid, binance, coinbase, polymarket",
             other
         ),
     }
@@ -814,6 +818,118 @@ async fn withdraw_coinbase(
         println!();
         println!("  {} {}", "To:      ".dimmed(), to.cyan());
         println!("  {} {}", "TX ID:   ".dimmed(), tx_id);
+        println!();
+    }
+
+    Ok(())
+}
+
+// ── Polymarket withdrawal (Bridge API) ────────────────────────────
+
+/// Resolve destination chain info from --to / --network flags.
+/// Returns (chain_id, usdc_address, chain_name).
+fn resolve_polymarket_dest(
+    to: Option<&str>,
+    network: Option<&str>,
+) -> Result<(u64, &'static str, &'static str)> {
+    let chain_name = network
+        .or(to)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Polymarket withdraw requires --to <chain>.\n\
+                 Usage: fintool withdraw USDC --amount 10 --to base --exchange polymarket\n\
+                 Supported chains: base, ethereum, arbitrum"
+            )
+        })?
+        .to_lowercase();
+
+    match chain_name.as_str() {
+        "base" => Ok((8453, "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "Base")),
+        "ethereum" | "eth" | "mainnet" => {
+            Ok((1, "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "Ethereum"))
+        }
+        "arbitrum" | "arb" => Ok((
+            42161,
+            "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+            "Arbitrum",
+        )),
+        other => bail!(
+            "Unsupported destination chain '{}'. Supported: base, ethereum, arbitrum",
+            other
+        ),
+    }
+}
+
+async fn withdraw_polymarket(
+    amount: &str,
+    asset: &str,
+    to: Option<&str>,
+    network: Option<&str>,
+    json_out: bool,
+) -> Result<()> {
+    let asset_upper = asset.to_uppercase();
+    if asset_upper != "USDC" {
+        bail!("Polymarket only supports USDC withdrawals. Got '{}'", asset);
+    }
+
+    let (chain_id, usdc_address, chain_name) = resolve_polymarket_dest(to, network)?;
+
+    let address = crate::polymarket::get_polymarket_address()?;
+    let client = crate::polymarket::create_bridge_client();
+
+    use std::str::FromStr;
+    let addr = alloy::primitives::Address::from_str(&address)
+        .context("Invalid Polymarket wallet address")?;
+
+    use polymarket_client_sdk::bridge::types::WithdrawRequest;
+    let req = WithdrawRequest::builder()
+        .address(addr)
+        .to_chain_id(chain_id)
+        .to_token_address(usdc_address)
+        .recipient_addr(&address)
+        .build();
+
+    let resp = client
+        .withdraw(&req)
+        .await
+        .context("Failed to get Polymarket withdrawal address")?;
+
+    if json_out {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "action": "withdraw",
+                "exchange": "polymarket",
+                "asset": "USDC",
+                "amount": amount,
+                "destination_chain": chain_name,
+                "destination_address": address,
+                "withdrawal_address_evm": format!("{}", resp.address.evm),
+                "note": resp.note,
+            }))?
+        );
+    } else {
+        println!("{}", "━".repeat(55).dimmed());
+        println!(
+            "  {} {} USDC → {}  [Polymarket]",
+            "Withdraw".red().bold(),
+            amount,
+            chain_name.yellow(),
+        );
+        println!("{}", "━".repeat(55).dimmed());
+        println!();
+        println!("  {} {}", "Destination:".dimmed(), chain_name.yellow());
+        println!("  {} {}", "Recipient:  ".dimmed(), address.cyan());
+        println!();
+        println!(
+            "  {} Send {} USDC.e on Polygon to:",
+            "→".red().bold(),
+            amount
+        );
+        println!();
+        println!("    {}", format!("{}", resp.address.evm).green().bold());
+        println!();
+        println!("  {} {}", "Note:".dimmed(), resp.note);
         println!();
     }
 

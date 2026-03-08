@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type HmacSha256 = Hmac<Sha256>;
 
-const SPOT_BASE_URL: &str = "https://api.binance.com";
-const FUTURES_BASE_URL: &str = "https://fapi.binance.com";
+pub(crate) const SPOT_BASE_URL: &str = "https://api.binance.com";
+pub(crate) const FUTURES_BASE_URL: &str = "https://fapi.binance.com";
 const OPTIONS_BASE_URL: &str = "https://eapi.binance.com";
 
 /// Sign a request with HMAC-SHA256

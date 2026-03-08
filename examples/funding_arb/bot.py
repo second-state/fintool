@@ -9,7 +9,7 @@ market-neutral. If funding turns negative, unwind and wait.
 Usage:
     python3 bot.py [--dry-run] [--interval 3600]
 
-Requires: fintool CLI, OPENAI_API_KEY env var (optional)
+Requires: fintool CLI, OpenAI API key (optional, set below)
 """
 
 import argparse
@@ -21,6 +21,10 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+
+# ── API keys (set these before running) ───────────────────────────────────────
+
+OPENAI_API_KEY = ""   # https://platform.openai.com/api-keys (optional — without it, picks highest funding rate)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -90,38 +94,13 @@ def ft_or_fail(cmd: dict, fintool: str) -> dict | None:
     return result
 
 
-# ── Hyperliquid API helpers ──────────────────────────────────────────────────
-
-HL_API = "https://api.hyperliquid.xyz/info"
-
-
-def hl_post(payload: dict) -> dict | list | None:
-    """POST to Hyperliquid info API."""
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(HL_API, data=data, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except Exception as e:
-        log.error("Hyperliquid API error: %s", e)
-        return None
-
-
-def fetch_all_funding() -> list | None:
-    return hl_post({"type": "metaAndAssetCtxs"})
-
-
-def fetch_spot_book(coin: str) -> dict | None:
-    return hl_post({"type": "l2Book", "coin": coin})
-
-
 # ── OpenAI analysis ──────────────────────────────────────────────────────────
 
 def analyze_with_openai(candidates: list, api_key: str) -> dict | None:
     """Ask OpenAI to pick the best funding arb candidate."""
     prompt = f"""You are a quantitative trading analyst. Analyze these Hyperliquid assets for a funding rate arbitrage trade (buy spot + short perp to collect positive funding).
 
-For each candidate, I'm providing: symbol, funding rate (hourly), 24h perp volume, open interest, spot bid/ask spread, and spot depth.
+For each candidate, I'm providing: symbol, funding rate (hourly), 24h perp volume, open interest, spot bid/ask spread %, and spot orderbook depth (bid/ask side in USD).
 
 Candidates:
 {json.dumps(candidates, indent=2)}
@@ -193,53 +172,45 @@ def get_current_state(fintool: str) -> dict:
     }
 
 
+def fetch_spot_orderbook(spot_ticker: str, fintool: str) -> dict:
+    """Fetch spot orderbook via fintool and compute spread/depth metrics."""
+    book = ft({"command": "orderbook", "symbol": spot_ticker, "levels": 5}, fintool)
+    if "error" in book or not book.get("bids") or not book.get("asks"):
+        return {"spread_pct": 99.0, "bid_depth_usd": 0.0, "ask_depth_usd": 0.0}
+
+    spread_pct = float(book.get("spreadPct") or 99)
+    mid = float(book.get("midPrice") or 0)
+
+    bid_depth = sum(float(b["size"]) * float(b["price"]) for b in book["bids"])
+    ask_depth = sum(float(a["size"]) * float(a["price"]) for a in book["asks"])
+
+    return {
+        "spread_pct": round(spread_pct, 4),
+        "bid_depth_usd": round(bid_depth, 2),
+        "ask_depth_usd": round(ask_depth, 2),
+    }
+
+
 def gather_candidates(cfg: dict) -> list:
-    """Scan all spot/perp pairs for funding arb opportunities."""
-    all_data = fetch_all_funding()
-    if not all_data:
-        log.error("Failed to fetch funding data")
-        return []
-
-    universe = all_data[0]["universe"]
-    ctxs = all_data[1]
-
-    # Build perp lookup
-    perp_lookup = {}
-    for u, c in zip(universe, ctxs):
-        perp_lookup[u["name"]] = c
-
+    """Scan all spot/perp pairs for funding arb opportunities via fintool."""
+    fintool = cfg["fintool"]
     candidates = []
+
     for spot_ticker, perp_ticker in SPOT_TO_PERP.items():
-        ctx = perp_lookup.get(perp_ticker)
-        if not ctx:
+        ctx = ft({"command": "perp_quote", "symbol": perp_ticker}, fintool)
+        if "error" in ctx:
             continue
 
-        funding = float(ctx["funding"])
-        volume = float(ctx["dayNtlVlm"])
-        mark_px = float(ctx["markPx"])
-        oi = float(ctx["openInterest"]) * mark_px
+        funding = float(ctx.get("funding") or 0)
+        volume = float(ctx.get("volume24h") or 0)
+        mark_px = float(ctx.get("markPx") or 0)
+        oi = float(ctx.get("openInterest") or 0) * mark_px
 
         if funding <= 0 or volume < cfg["min_volume"]:
             continue
 
-        # Fetch spot orderbook for spread analysis
-        spread_data = {"spread_pct": 99, "bid_depth_usd": 0, "ask_depth_usd": 0}
-        book = fetch_spot_book(f"@{spot_ticker}")
-        if book and "levels" in book:
-            levels = book["levels"]
-            bids = levels[0] if len(levels) > 0 else []
-            asks = levels[1] if len(levels) > 1 else []
-            if bids and asks:
-                best_bid = float(bids[0]["px"])
-                best_ask = float(asks[0]["px"])
-                spread_pct = (best_ask - best_bid) / best_bid * 100 if best_bid > 0 else 99
-                bid_depth = sum(float(b["sz"]) * float(b["px"]) for b in bids[:5])
-                ask_depth = sum(float(a["sz"]) * float(a["px"]) for a in asks[:5])
-                spread_data = {
-                    "spread_pct": round(spread_pct, 4),
-                    "bid_depth_usd": round(bid_depth, 2),
-                    "ask_depth_usd": round(ask_depth, 2),
-                }
+        # Fetch spot orderbook for spread/depth analysis
+        spread_data = fetch_spot_orderbook(spot_ticker, fintool)
 
         candidates.append({
             "perp_ticker": perp_ticker,
@@ -410,7 +381,7 @@ def run(cfg: dict):
     log.info("  Min funding: %s | Min volume: $%s", cfg["min_funding"], cfg["min_volume"])
     log.info("=" * 55)
 
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    openai_key = OPENAI_API_KEY
 
     while True:
         log.info("────── Check cycle ──────")
@@ -439,9 +410,10 @@ def run(cfg: dict):
             else:
                 log.info("Found %d candidates with positive funding:", len(candidates))
                 for c in candidates:
-                    log.info("  %s: funding=%s vol=$%.0f spread=%.2f%% depth=$%.0f",
+                    log.info("  %s: funding=%s vol=$%.0f OI=$%.0f spread=%.2f%% depth=$%.0f/$%.0f",
                              c["perp_ticker"], c["funding"], c["volume24h"],
-                             c["spread_pct"], c["bid_depth_usd"])
+                             c["openInterest"], c["spread_pct"],
+                             c["bid_depth_usd"], c["ask_depth_usd"])
 
                 pick_perp = None
                 pick_spot = None

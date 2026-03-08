@@ -28,6 +28,8 @@ A Rust CLI tool for agentic trading and market intelligence — spot and perpetu
   - [`fintool address`](#fintool-address)
   - [`fintool quote`](#fintool-quote-symbol)
   - [`fintool perp quote`](#fintool-perp-quote-symbol)
+  - [`fintool orderbook`](#fintool-orderbook-symbol)
+  - [`fintool perp orderbook`](#fintool-perp-orderbook-symbol)
   - [`fintool news`](#fintool-news-symbol)
   - [`fintool report`](#fintool-report-annual-symbol)
   - [`fintool order buy/sell`](#fintool-order-buy-symbol---amount-size---price-price)
@@ -129,6 +131,14 @@ Get a perpetual futures quote with funding rate, open interest, and leverage inf
 ```bash
 fintool perp quote ETH
 fintool perp quote SILVER         # HIP-3 commodity perp
+```
+
+View the L2 orderbook (bids/asks, spread, depth):
+
+```bash
+fintool orderbook HYPE             # spot orderbook (default 5 levels)
+fintool perp orderbook BTC         # perp orderbook
+fintool orderbook ETH --levels 20  # more depth
 ```
 
 Get the latest news headlines and SEC filings:
@@ -255,6 +265,7 @@ fintool predict deposit --amount 100 --from base
 |---------|-------------|---------|----------|------------|
 | Spot Trading | ✅ | ✅ | ✅ | — |
 | Perpetual Futures | ✅ | ✅ | ❌ | — |
+| Orderbook | ✅ | ✅ | ✅ | — |
 | Options | ❌ | ✅ | ❌ | — |
 | Prediction Markets | — | — | — | ✅ |
 | Balance | ✅ | ✅ | ✅ | — |
@@ -666,6 +677,75 @@ Aliases: `XAG` → SILVER, `XAU` → GOLD, `SP500`/`SPX` → USA500
 | `prevDayPx` | string | Previous day price (USD) |
 | `maxLeverage` | number | Maximum allowed leverage |
 | `source` | string | `"Hyperliquid"` or `"Hyperliquid HIP-3 (cash)"` |
+
+---
+
+### `fintool orderbook <SYMBOL>`
+
+Show the L2 orderbook (bids and asks) for a **spot** pair.
+
+**Supported exchanges:** Hyperliquid (default, no auth), Binance (no auth), Coinbase (requires API keys)
+
+#### Examples
+
+```bash
+fintool orderbook HYPE
+fintool orderbook ETH --levels 20
+fintool orderbook BTC --exchange binance
+```
+
+#### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--levels N` | 5 | Number of price levels per side |
+| `--exchange` | auto | Exchange to query (auto defaults to Hyperliquid) |
+
+#### JSON Schema
+
+```json
+{
+  "symbol": "HYPE",
+  "market": "spot",
+  "exchange": "hyperliquid",
+  "bids": [
+    {"price": "30.322", "size": "12.5", "numOrders": 1}
+  ],
+  "asks": [
+    {"price": "30.323", "size": "138.07", "numOrders": 1}
+  ],
+  "spread": "0.0010",
+  "spreadPct": "0.0033",
+  "midPrice": "30.3225"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bids` | array | Bid levels sorted by price descending (best bid first) |
+| `asks` | array | Ask levels sorted by price ascending (best ask first) |
+| `spread` | string | Best ask minus best bid (USD) |
+| `spreadPct` | string | Spread as percentage of mid price |
+| `midPrice` | string | (best bid + best ask) / 2 |
+| `numOrders` | number | Number of orders at that level (Hyperliquid only) |
+
+---
+
+### `fintool perp orderbook <SYMBOL>`
+
+Show the L2 orderbook for a **perpetual futures** market.
+
+**Supported exchanges:** Hyperliquid (default, no auth), Binance (no auth). Coinbase does not support perps.
+
+#### Examples
+
+```bash
+fintool perp orderbook BTC
+fintool perp orderbook ETH --levels 10
+fintool perp orderbook SOL --exchange binance
+```
+
+Uses the same options and JSON schema as [`fintool orderbook`](#fintool-orderbook-symbol), with `"market": "perp"`.
 
 ---
 
@@ -1277,6 +1357,8 @@ fintool bridge-status
 | `fintool address` | Print wallet address | Hyperliquid |
 | `fintool quote <SYM>` | Multi-source price + LLM analysis | N/A (read-only) |
 | `fintool perp quote <SYM>` | Perp price + funding/OI/premium | Hyperliquid |
+| `fintool orderbook <SYM>` | Spot L2 orderbook (bids/asks/spread) | Hyperliquid, Binance, Coinbase |
+| `fintool perp orderbook <SYM>` | Perp L2 orderbook (bids/asks/spread) | Hyperliquid, Binance |
 | `fintool news <SYM>` | Latest news headlines | N/A |
 | `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
 | `fintool report list <SYM>` | List recent SEC filings | N/A |

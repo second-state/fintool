@@ -5,6 +5,7 @@ pub mod deposit;
 pub mod news;
 pub mod options;
 pub mod order;
+pub mod orderbook;
 pub mod orders;
 pub mod perp;
 pub mod positions;
