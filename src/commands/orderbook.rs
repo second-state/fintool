@@ -30,7 +30,14 @@ pub async fn run_spot(
         _ => bail!("Unsupported exchange: {}", exchange_name),
     };
 
-    output(&symbol_upper, "spot", &exchange_name, &bids, &asks, json_output)
+    output(
+        &symbol_upper,
+        "spot",
+        &exchange_name,
+        &bids,
+        &asks,
+        json_output,
+    )
 }
 
 /// Perp orderbook: fintool perp orderbook BTC [--levels 5] [--exchange auto]
@@ -50,7 +57,14 @@ pub async fn run_perp(
         _ => bail!("Unsupported exchange for perp orderbook: {}", exchange_name),
     };
 
-    output(&symbol_upper, "perp", &exchange_name, &bids, &asks, json_output)
+    output(
+        &symbol_upper,
+        "perp",
+        &exchange_name,
+        &bids,
+        &asks,
+        json_output,
+    )
 }
 
 // ── Exchange resolution ─────────────────────────────────────────────────────
@@ -160,7 +174,11 @@ fn parse_hl_levels(side: Option<&Value>, max_levels: usize) -> Vec<Level> {
             let px = entry.get("px")?.as_str()?.to_string();
             let sz = entry.get("sz")?.as_str()?.to_string();
             let n = entry.get("n").and_then(|v| v.as_u64());
-            Some(Level { price: px, size: sz, num_orders: n })
+            Some(Level {
+                price: px,
+                size: sz,
+                num_orders: n,
+            })
         })
         .collect()
 }
@@ -184,10 +202,7 @@ async fn fetch_binance_orderbook(
     } else {
         "/api/v3/depth"
     };
-    let url = format!(
-        "{}{}?symbol={}USDT&limit={}",
-        base, endpoint, symbol, limit
-    );
+    let url = format!("{}{}?symbol={}USDT&limit={}", base, endpoint, symbol, limit);
 
     let resp: Value = client
         .get(&url)
@@ -217,7 +232,11 @@ fn parse_binance_levels(side: Option<&Value>, max_levels: usize) -> Vec<Level> {
             let pair = entry.as_array()?;
             let px = pair.first()?.as_str()?.to_string();
             let sz = pair.get(1)?.as_str()?.to_string();
-            Some(Level { price: px, size: sz, num_orders: None })
+            Some(Level {
+                price: px,
+                size: sz,
+                num_orders: None,
+            })
         })
         .collect()
 }
@@ -266,9 +285,7 @@ async fn fetch_coinbase_orderbook(
         .context("Failed to parse Coinbase book response")?;
 
     // Coinbase wraps in {"pricebook": {"bids": [...], "asks": [...]}}
-    let book = resp
-        .get("pricebook")
-        .unwrap_or(&resp);
+    let book = resp.get("pricebook").unwrap_or(&resp);
 
     let bids = parse_coinbase_levels(book.get("bids"), levels);
     let asks = parse_coinbase_levels(book.get("asks"), levels);
@@ -285,7 +302,11 @@ fn parse_coinbase_levels(side: Option<&Value>, max_levels: usize) -> Vec<Level> 
         .filter_map(|entry| {
             let px = entry.get("price")?.as_str()?.to_string();
             let sz = entry.get("size")?.as_str()?.to_string();
-            Some(Level { price: px, size: sz, num_orders: None })
+            Some(Level {
+                price: px,
+                size: sz,
+                num_orders: None,
+            })
         })
         .collect()
 }
@@ -417,5 +438,9 @@ fn compute_spread(bids: &[Level], asks: &[Level]) -> Option<Spread> {
     let mid = (best_bid + best_ask) / 2.0;
     let pct = spread / mid * 100.0;
 
-    Some(Spread { spread, spread_pct: pct, mid_price: mid })
+    Some(Spread {
+        spread,
+        spread_pct: pct,
+        mid_price: mid,
+    })
 }
