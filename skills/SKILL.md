@@ -13,7 +13,7 @@ A CLI tool for market intelligence and trading across multiple exchanges.
 
 - **Binary**: `{baseDir}/scripts/fintool`
 - **Config**: `~/.fintool/config.toml`
-- **Output**: Human-readable colored output by default. Use `--json` for programmatic JSON mode
+- **Mode**: Always use JSON mode — `fintool --json '<JSON>'`. All input and output is structured JSON.
 
 ## Setup Check (MANDATORY — do this FIRST)
 
@@ -25,7 +25,7 @@ cat ~/.fintool/config.toml 2>/dev/null
 
 **If the file doesn't exist**, run:
 ```bash
-{baseDir}/scripts/fintool init
+{baseDir}/scripts/fintool --json '{"command":"init"}'
 ```
 
 **Check for these requirements:**
@@ -57,13 +57,104 @@ cat ~/.fintool/config.toml 2>/dev/null
 
 **Auto exchange priority**: Hyperliquid > Coinbase > Binance for spot. Hyperliquid > Binance for perps.
 
-Use `--exchange hyperliquid|binance|coinbase` to force a specific exchange.
+Use `"exchange": "hyperliquid"` (or `"binance"`, `"coinbase"`) to force a specific exchange. Defaults to `"auto"`.
 
 ## Error Handling
 
-- If a command returns an **exchange error**, suggest the user try a different exchange with `--exchange <name>`.
+- All errors are returned as `{"error": "..."}`. Check for an `error` key in every response.
+- If a command returns an **exchange error**, suggest the user try a different exchange with `"exchange": "<name>"`.
 - If the selected exchange is **not configured**, tell the user which credentials are needed and offer to add them to config.
 - If a trading command fails with **insufficient balance** or **invalid symbol**, relay the error clearly.
+
+## JSON Command Reference
+
+All commands use: `{baseDir}/scripts/fintool --json '<JSON>'`
+
+### Market Data
+
+```json
+{"command": "quote", "symbol": "BTC"}
+{"command": "perp_quote", "symbol": "ETH"}
+{"command": "news", "symbol": "AAPL"}
+```
+
+### Spot Trading
+
+```json
+{"command": "order_buy", "symbol": "ETH", "amount": 0.1, "price": 3800}
+{"command": "order_sell", "symbol": "ETH", "amount": 0.1, "price": 4000}
+{"command": "order_buy", "symbol": "BTC", "amount": 0.01, "price": 95000, "exchange": "binance"}
+```
+
+### Perpetual Futures
+
+```json
+{"command": "perp_buy", "symbol": "ETH", "amount": 0.5, "price": 3800}
+{"command": "perp_sell", "symbol": "BTC", "amount": 0.01, "price": 100000}
+{"command": "perp_buy", "symbol": "ETH", "amount": 0.5, "price": 3900, "close": true}
+{"command": "perp_sell", "symbol": "BTC", "amount": 0.01, "price": 95000, "close": true}
+{"command": "perp_leverage", "symbol": "ETH", "leverage": 5, "cross": true}
+{"command": "perp_set_mode", "mode": "unified"}
+```
+
+### Portfolio
+
+```json
+{"command": "balance"}
+{"command": "balance", "exchange": "binance"}
+{"command": "positions"}
+{"command": "orders"}
+{"command": "orders", "symbol": "BTC"}
+{"command": "cancel", "order_id": "BTC:91490942"}
+{"command": "cancel", "order_id": "binance_spot:BTCUSDT:123"}
+```
+
+### Deposits
+
+```json
+{"command": "deposit", "asset": "ETH"}
+{"command": "deposit", "asset": "BTC"}
+{"command": "deposit", "asset": "USDC", "amount": 100, "from": "ethereum"}
+{"command": "deposit", "asset": "USDC", "amount": 500, "from": "base"}
+{"command": "deposit", "asset": "USDC", "amount": 100, "from": "ethereum", "dry_run": true}
+{"command": "deposit", "asset": "USDC", "exchange": "binance", "from": "ethereum"}
+{"command": "deposit", "asset": "ETH", "exchange": "coinbase"}
+```
+
+### Withdrawals
+
+```json
+{"command": "withdraw", "asset": "USDC", "amount": 100}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "0xOtherAddress"}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "ethereum"}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "base"}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "ethereum", "dry_run": true}
+{"command": "withdraw", "asset": "ETH", "amount": 0.5}
+{"command": "withdraw", "asset": "BTC", "amount": 0.01, "to": "bc1q..."}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "0x...", "network": "ethereum"}
+```
+
+### Transfers (between spot/perp/HIP-3 dex)
+
+```json
+{"command": "transfer", "asset": "USDT0", "amount": 50, "from": "spot", "to": "cash"}
+{"command": "transfer", "asset": "USDT0", "amount": 50, "from": "cash", "to": "spot"}
+```
+
+### Bridge Status
+
+```json
+{"command": "bridge_status"}
+```
+
+### SEC Reports
+
+```json
+{"command": "report_list", "symbol": "AAPL", "limit": 5}
+{"command": "report_annual", "symbol": "AAPL"}
+{"command": "report_quarterly", "symbol": "AAPL"}
+{"command": "report_get", "symbol": "AAPL", "accession": "0000320193-24-000123"}
+```
 
 ## Workflows
 
@@ -73,32 +164,32 @@ Use `--exchange hyperliquid|binance|coinbase` to force a specific exchange.
 
 **Step 1 — Quote price with analysis:**
 ```bash
-{baseDir}/scripts/fintool quote <SYMBOL>
+{baseDir}/scripts/fintool --json '{"command":"quote","symbol":"BTC"}'
 ```
 Returns: price, 24h/7d/30d changes, trend (bullish/bearish/neutral), momentum, volume analysis, summary. Uses data from Hyperliquid + Yahoo Finance + CoinGecko, merged by OpenAI.
 
 **Step 2 — Check recent news:**
 ```bash
-{baseDir}/scripts/fintool news <SYMBOL>
+{baseDir}/scripts/fintool --json '{"command":"news","symbol":"BTC"}'
 ```
 Returns: up to 10 recent headlines from Google News RSS.
 
 **Step 3 — Place the trade:**
 ```bash
-# Buy: buy <SIZE> units at max price $<PRICE>
-{baseDir}/scripts/fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE>
+# Buy: buy 0.01 BTC at max price $95000
+{baseDir}/scripts/fintool --json '{"command":"order_buy","symbol":"BTC","amount":0.01,"price":95000}'
 
-# Sell: sell <SIZE> units at min price $<PRICE>
-{baseDir}/scripts/fintool order sell <SYMBOL> --amount <SIZE> --price <PRICE>
+# Sell: sell 0.01 BTC at min price $100000
+{baseDir}/scripts/fintool --json '{"command":"order_sell","symbol":"BTC","amount":0.01,"price":100000}'
 
 # Force a specific exchange:
-{baseDir}/scripts/fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE> --exchange binance
+{baseDir}/scripts/fintool --json '{"command":"order_buy","symbol":"BTC","amount":0.01,"price":95000,"exchange":"binance"}'
 ```
 
 **Step 4 — Verify:**
 ```bash
-{baseDir}/scripts/fintool orders
-{baseDir}/scripts/fintool balance
+{baseDir}/scripts/fintool --json '{"command":"orders"}'
+{baseDir}/scripts/fintool --json '{"command":"balance"}'
 ```
 
 ### Workflow 2: Perpetual Futures Trading
@@ -107,44 +198,44 @@ Returns: up to 10 recent headlines from Google News RSS.
 
 **Step 1 — Get perp quote with funding/OI:**
 ```bash
-{baseDir}/scripts/fintool perp quote <SYMBOL>
+{baseDir}/scripts/fintool --json '{"command":"perp_quote","symbol":"ETH"}'
 ```
 Returns: mark price, oracle price, funding rate, open interest, premium, max leverage.
 
 **Step 2 — Check spot price for context:**
 ```bash
-{baseDir}/scripts/fintool quote <SYMBOL>
+{baseDir}/scripts/fintool --json '{"command":"quote","symbol":"ETH"}'
 ```
 
 **Step 3 — Check news:**
 ```bash
-{baseDir}/scripts/fintool news <SYMBOL>
+{baseDir}/scripts/fintool --json '{"command":"news","symbol":"ETH"}'
 ```
 
 **Step 4 — Place the trade:**
 ```bash
-# Long: buy <SIZE> units at limit price $<PRICE>
-{baseDir}/scripts/fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE>
+# Long: buy 0.5 ETH at limit price $3800
+{baseDir}/scripts/fintool --json '{"command":"perp_buy","symbol":"ETH","amount":0.5,"price":3800}'
 
-# Short: sell <SIZE> units at limit price $<PRICE>
-{baseDir}/scripts/fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE>
+# Short: sell 0.5 ETH at limit price $4000
+{baseDir}/scripts/fintool --json '{"command":"perp_sell","symbol":"ETH","amount":0.5,"price":4000}'
 ```
 
 **Step 5 — Monitor:**
 ```bash
-{baseDir}/scripts/fintool positions
-{baseDir}/scripts/fintool orders
+{baseDir}/scripts/fintool --json '{"command":"positions"}'
+{baseDir}/scripts/fintool --json '{"command":"orders"}'
 ```
 
 **Step 6 — Close a position:**
 ```bash
 # Close a long (reduce-only) — sells without opening a new short
-{baseDir}/scripts/fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE> --close
+{baseDir}/scripts/fintool --json '{"command":"perp_sell","symbol":"ETH","amount":0.5,"price":4000,"close":true}'
 
 # Close a short (reduce-only) — buys without opening a new long
-{baseDir}/scripts/fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE> --close
+{baseDir}/scripts/fintool --json '{"command":"perp_buy","symbol":"ETH","amount":0.5,"price":3800,"close":true}'
 ```
-Use `--close` to ensure the order only reduces an existing position. Without it, the order could flip you into the opposite direction.
+Use `"close": true` to ensure the order only reduces an existing position. Without it, the order could flip you into the opposite direction.
 
 **Note**: Perps only available on Hyperliquid and Binance. If the user only has Coinbase configured, tell them perps are not supported on Coinbase.
 
@@ -154,21 +245,21 @@ Use `--close` to ensure the order only reduces an existing position. Without it,
 
 ```bash
 # Account balance
-{baseDir}/scripts/fintool balance
-{baseDir}/scripts/fintool balance --exchange binance
+{baseDir}/scripts/fintool --json '{"command":"balance"}'
+{baseDir}/scripts/fintool --json '{"command":"balance","exchange":"binance"}'
 
 # Open positions (perps)
-{baseDir}/scripts/fintool positions
+{baseDir}/scripts/fintool --json '{"command":"positions"}'
 
 # Open orders
-{baseDir}/scripts/fintool orders
-{baseDir}/scripts/fintool orders BTC
+{baseDir}/scripts/fintool --json '{"command":"orders"}'
+{baseDir}/scripts/fintool --json '{"command":"orders","symbol":"BTC"}'
 
 # Cancel an order
-{baseDir}/scripts/fintool cancel BTC:91490942              # Hyperliquid
-{baseDir}/scripts/fintool cancel binance_spot:BTCUSDT:123   # Binance spot
-{baseDir}/scripts/fintool cancel binance_futures:BTCUSDT:456 # Binance futures
-{baseDir}/scripts/fintool cancel coinbase:uuid-here          # Coinbase
+{baseDir}/scripts/fintool --json '{"command":"cancel","order_id":"BTC:91490942"}'
+{baseDir}/scripts/fintool --json '{"command":"cancel","order_id":"binance_spot:BTCUSDT:123"}'
+{baseDir}/scripts/fintool --json '{"command":"cancel","order_id":"binance_futures:BTCUSDT:456"}'
+{baseDir}/scripts/fintool --json '{"command":"cancel","order_id":"coinbase:uuid-here"}'
 ```
 
 ### Workflow 4: Depositing Funds
@@ -177,36 +268,36 @@ Use `--close` to ensure the order only reduces an existing position. Without it,
 
 **Hyperliquid — ETH/BTC/SOL (permanent deposit address via HyperUnit):**
 ```bash
-{baseDir}/scripts/fintool deposit ETH
-{baseDir}/scripts/fintool deposit BTC
-{baseDir}/scripts/fintool deposit SOL
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"ETH"}'
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"BTC"}'
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"SOL"}'
 ```
 Returns a reusable deposit address on the native chain. User sends any amount, any time.
 
 **Hyperliquid — USDC from Ethereum or Base (automated bridge):**
 ```bash
 # Bridge 100 USDC from Ethereum mainnet → Hyperliquid
-{baseDir}/scripts/fintool deposit USDC --amount 100 --from ethereum
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"USDC","amount":100,"from":"ethereum"}'
 
 # Bridge 500 USDC from Base → Hyperliquid
-{baseDir}/scripts/fintool deposit USDC --amount 500 --from base
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"USDC","amount":500,"from":"base"}'
 
 # Preview the route and fees without executing
-{baseDir}/scripts/fintool deposit USDC --amount 100 --from ethereum --dry-run
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"USDC","amount":100,"from":"ethereum","dry_run":true}'
 ```
 Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 deposit.
 
 **Binance — get deposit address:**
 ```bash
-{baseDir}/scripts/fintool deposit USDC --exchange binance --from ethereum
-{baseDir}/scripts/fintool deposit ETH --exchange binance
-{baseDir}/scripts/fintool deposit BTC --exchange binance --from bitcoin
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"USDC","exchange":"binance","from":"ethereum"}'
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"ETH","exchange":"binance"}'
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"BTC","exchange":"binance","from":"bitcoin"}'
 ```
 
 **Coinbase — get deposit address:**
 ```bash
-{baseDir}/scripts/fintool deposit ETH --exchange coinbase
-{baseDir}/scripts/fintool deposit USDC --exchange coinbase
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"ETH","exchange":"coinbase"}'
+{baseDir}/scripts/fintool --json '{"command":"deposit","asset":"USDC","exchange":"coinbase"}'
 ```
 
 ### Workflow 5: Withdrawing Funds
@@ -215,40 +306,40 @@ Automatically signs 3 transactions: approval → Across bridge → HL Bridge2 de
 
 **Hyperliquid — USDC to Arbitrum (default, ~3-4 min):**
 ```bash
-{baseDir}/scripts/fintool withdraw USDC --amount 100
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0xOtherAddress
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"0xOtherAddress"}'
 ```
 
 **Hyperliquid — USDC to Ethereum or Base (chained bridge, ~5-7 min):**
 ```bash
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to ethereum
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to base
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to ethereum --dry-run
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"ethereum"}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"base"}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"ethereum","dry_run":true}'
 ```
 Automatically chains: HL Bridge2 → Arbitrum → Across bridge → destination.
 
 **Hyperliquid — ETH/BTC/SOL to native chain (via HyperUnit):**
 ```bash
-{baseDir}/scripts/fintool withdraw ETH --amount 0.5
-{baseDir}/scripts/fintool withdraw BTC --amount 0.01 --to bc1q...
-{baseDir}/scripts/fintool withdraw SOL --amount 1 --to SomeSolanaAddress
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"ETH","amount":0.5}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"BTC","amount":0.01,"to":"bc1q..."}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"SOL","amount":1,"to":"SomeSolanaAddress"}'
 ```
 
 **Binance:**
 ```bash
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0x... --exchange binance --network ethereum
-{baseDir}/scripts/fintool withdraw ETH --amount 0.5 --to 0x... --exchange binance --network arbitrum
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"0x...","network":"ethereum"}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"ETH","amount":0.5,"to":"0x...","network":"arbitrum"}'
 ```
 
 **Coinbase:**
 ```bash
-{baseDir}/scripts/fintool withdraw USDC --amount 100 --to 0x... --exchange coinbase
-{baseDir}/scripts/fintool withdraw ETH --amount 0.5 --to 0x... --exchange coinbase --network base
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"0x..."}'
+{baseDir}/scripts/fintool --json '{"command":"withdraw","asset":"ETH","amount":0.5,"to":"0x...","network":"base"}'
 ```
 
 **Track HyperUnit bridge operations:**
 ```bash
-{baseDir}/scripts/fintool bridge-status
+{baseDir}/scripts/fintool --json '{"command":"bridge_status"}'
 ```
 
 ## Symbol Aliases
@@ -271,6 +362,7 @@ Common indices and commodities have convenient aliases:
 
 - **Always quote before trading** — The enriched quote gives trend/momentum context that helps with timing.
 - **Check news before large trades** — Headlines can explain sudden price moves.
-- **Use `--exchange` when ambiguous** — If the user has multiple exchanges, explicitly select one to avoid confusion.
-- **Use `--json` for programmatic access** — `fintool --json '{"command":"quote","symbol":"BTC"}'` always outputs JSON. Normal CLI output is human-readable.
-- **Amount is in symbol units** — `--amount 0.1` on ETH means 0.1 ETH, not $0.10. Calculate the size from the price quote.
+- **Use `"exchange"` when ambiguous** — If the user has multiple exchanges, explicitly select one to avoid confusion.
+- **All output is JSON** — Parse the response and present relevant fields to the user in a readable format.
+- **Amount is in symbol units** — `"amount": 0.1` on ETH means 0.1 ETH, not $0.10. Calculate the size from the price quote.
+- **Check for errors** — Every response may contain `{"error": "..."}`. Always check before presenting results.

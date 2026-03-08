@@ -2,16 +2,6 @@
 
 Delta-neutral funding rate arbitrage: **buy spot + short perp** on the Hyperliquid asset with the highest positive funding rate. Collect hourly funding payments while staying market-neutral.
 
-## Files
-
-| File | Description |
-|------|-------------|
-| `bot.sh` | Uses the **human CLI API** — standard fintool commands with human-readable output |
-| `bot_json.sh` | Uses the **JSON API** — all fintool calls via `--json` with structured JSON output |
-| `README.md` | This file |
-
-Both scripts implement the same strategy. Choose `bot.sh` for readable logs and terminal output, or `bot_json.sh` for programmatic/agent-driven execution.
-
 ## Strategy
 
 Every hour (matching Hyperliquid's funding interval), the bot:
@@ -58,7 +48,7 @@ Required config:
 private_key = "0x..."
 
 [api_keys]
-openai_api_key = "sk-..."
+openai_api_key = "sk-..."   # optional — bot falls back to highest funding rate
 ```
 
 ### 2. Fund your account
@@ -79,32 +69,39 @@ export OPENAI_API_KEY=sk-...             # default: from ~/.fintool/config.toml
 
 ```bash
 # Dry run — scans and logs what it would do, no trades
-./bot.sh --dry-run            # human CLI version
-./bot_json.sh --dry-run       # JSON API version
+python3 bot.py --dry-run
 
 # Live trading
-./bot.sh
+python3 bot.py
 
 # Custom check interval (e.g., every 30 min)
-./bot.sh --interval 1800
+python3 bot.py --interval 1800
 ```
 
 ## Configuration
 
-Tunable parameters at the top of `bot.sh` / `bot_json.sh`:
+All parameters are configurable via command-line flags:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `CHECK_INTERVAL` | 3600 | Seconds between checks (1hr = funding interval) |
-| `SLIPPAGE_BPS` | 50 | Limit order buffer in basis points (0.5%) |
-| `MIN_FUNDING` | 0.0001 | Minimum hourly funding rate to enter (0.01%) |
-| `MIN_VOLUME` | 1000000 | Minimum 24h perp volume in USD |
-| `LEVERAGE` | 1 | Perp leverage (1x for delta neutral) |
-| `POSITION_PCT` | 90 | % of available USDC to deploy (10% buffer) |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--interval` | 3600 | Seconds between checks (1hr = funding interval) |
+| `--slippage-bps` | 50 | Limit order buffer in basis points (0.5%) |
+| `--min-funding` | 0.0001 | Minimum hourly funding rate to enter (0.01%) |
+| `--min-volume` | 1000000 | Minimum 24h perp volume in USD |
+| `--leverage` | 1 | Perp leverage (1x for delta neutral) |
+| `--position-pct` | 90 | % of available USDC to deploy (10% buffer) |
+| `--fintool` | `target/release/fintool` | Path to fintool binary |
+| `--log-file` | `/tmp/funding_arb.log` | Log file path |
+| `--dry-run` | off | Log actions without executing trades |
+
+## Dependencies
+
+- **Python 3.10+** (no third-party packages required — uses only stdlib)
+- **fintool** CLI binary
 
 ## Logs
 
-All activity logged to `/tmp/funding_arb.log`. Each cycle logs:
+All activity logged to `/tmp/funding_arb.log` (configurable). Each cycle logs:
 - Account state (positions, USDC balance)
 - Candidate assets with funding rates and spot liquidity
 - OpenAI analysis and pick reasoning
@@ -120,8 +117,8 @@ All activity logged to `/tmp/funding_arb.log`. Each cycle logs:
 │                                             │
 │  Has positions?                             │
 │  ├─ YES → Check funding rate                │
-│  │   ├─ Still positive → HOLD ✅            │
-│  │   └─ Turned negative → CLOSE ALL → USDC │
+│  │   ├─ Still positive → HOLD               │
+│  │   └─ Turned negative → CLOSE ALL → USDC  │
 │  │                                          │
 │  └─ NO → Scan all 13 assets                 │
 │      ├─ Filter: funding > 0, vol > $1M      │
