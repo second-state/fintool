@@ -20,7 +20,7 @@ struct BalanceRow {
 /// Resolve which exchange to use
 fn resolve_exchange(exchange: &str) -> Result<String> {
     match exchange {
-        "hyperliquid" | "binance" | "coinbase" => Ok(exchange.to_string()),
+        "hyperliquid" | "binance" | "coinbase" | "polymarket" => Ok(exchange.to_string()),
         "auto" => {
             let has_hl = config::load_hl_config().is_ok();
             let has_coinbase = config::coinbase_credentials().is_some();
@@ -38,7 +38,7 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
             }
         }
         _ => bail!(
-            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, or auto",
+            "Invalid exchange: {}. Use hyperliquid, binance, coinbase, polymarket, or auto",
             exchange
         ),
     }
@@ -46,6 +46,10 @@ fn resolve_exchange(exchange: &str) -> Result<String> {
 
 pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     let exchange = resolve_exchange(exchange)?;
+
+    if exchange == "polymarket" {
+        return balance_polymarket(json_output).await;
+    }
 
     if exchange == "coinbase" {
         let (api_key, api_secret) = config::coinbase_credentials()
@@ -241,6 +245,39 @@ pub async fn run(exchange: &str, json_output: bool) -> Result<()> {
     }
 
     println!();
+
+    Ok(())
+}
+
+// ── Polymarket balance ───────────────────────────────────────────────
+
+async fn balance_polymarket(json_output: bool) -> Result<()> {
+    use polymarket_client_sdk::clob::types::request::BalanceAllowanceRequest;
+    use polymarket_client_sdk::clob::types::AssetType;
+
+    let clob = crate::polymarket::create_clob_client().await?;
+    let req = BalanceAllowanceRequest::builder()
+        .asset_type(AssetType::Collateral)
+        .build();
+    let resp = clob.balance_allowance(req).await?;
+    let balance = resp.balance;
+
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "exchange": "polymarket",
+                "asset": "USDC",
+                "balance": balance.to_string(),
+            }))?
+        );
+    } else {
+        println!();
+        println!("  {} Polymarket", "Balance:".green().bold());
+        println!();
+        println!("  {} {} USDC", "USDC:".dimmed(), balance.to_string().cyan());
+        println!();
+    }
 
     Ok(())
 }

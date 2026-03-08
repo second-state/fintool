@@ -4,7 +4,7 @@
 #
 # Uses fintool --json API for all commands. Output is always JSON.
 #
-# This script illustrates the full deposit -> trade -> exit cycle
+# This script illustrates the full deposit -> trade -> exit -> withdraw cycle
 # on Polymarket prediction markets. Every fintool call uses --json mode.
 #
 # Workflow:
@@ -14,6 +14,7 @@
 #   4. Buy Yes outcome shares ($5 USDC)
 #   5. Quote the Yes outcome again (verify)
 #   6. Sell the Yes outcome shares
+#   7. Withdraw entire USDC balance to Base
 #
 # Usage: ./tests/polymarket/predict_btc.sh
 #
@@ -30,7 +31,7 @@ DEPOSIT_AMOUNT=10
 log "Polymarket BTC Prediction — E2E Test (JSON API)"
 
 # ── Step 1: Deposit ─────────────────────────────────────────────────
-log "Step 1/6: Deposit \$${DEPOSIT_AMOUNT} USDC to Polymarket"
+log "Step 1/7: Deposit \$${DEPOSIT_AMOUNT} USDC to Polymarket"
 
 RESULT=$(ft "{\"command\":\"deposit\",\"asset\":\"USDC\",\"amount\":$DEPOSIT_AMOUNT,\"from\":\"base\",\"exchange\":\"polymarket\"}")
 
@@ -48,7 +49,7 @@ fi
 ok "Deposit info retrieved"
 
 # ── Step 2: Find market ─────────────────────────────────────────────
-log "Step 2/6: Find short-term BTC prediction market"
+log "Step 2/7: Find short-term BTC prediction market"
 
 MARKETS=$(ft '{"command":"predict_list","query":"bitcoin","limit":5}')
 
@@ -70,7 +71,7 @@ ok "Found: $MARKET_QUESTION"
 info "Slug: $MARKET_SLUG"
 
 # ── Step 3: Quote Yes ───────────────────────────────────────────────
-log "Step 3/6: Quote Yes outcome"
+log "Step 3/7: Quote Yes outcome"
 
 QUOTE=$(ft "{\"command\":\"predict_quote\",\"market\":\"$MARKET_SLUG\"}")
 
@@ -91,7 +92,7 @@ fi
 ok "Yes: \$$YES_PRICE  |  No: \$$NO_PRICE  |  Volume: \$$VOLUME"
 
 # ── Step 4: Buy Yes ─────────────────────────────────────────────────
-log "Step 4/6: Buy Yes — \$${BUY_AMOUNT} USDC"
+log "Step 4/7: Buy Yes — \$${BUY_AMOUNT} USDC"
 
 BUY_PRICE=$(echo "$YES_PRICE" | awk '{p = $1 + 0.02; if (p > 0.99) p = 0.99; printf "%.2f", p}')
 
@@ -113,7 +114,7 @@ fi
 ok "Buy placed — $(echo "$RESULT" | jq -r '.order_id // "?"') ($(echo "$RESULT" | jq -r '.status // "?"'))"
 
 # ── Step 5: Re-quote ────────────────────────────────────────────────
-log "Step 5/6: Re-quote Yes outcome"
+log "Step 5/7: Re-quote Yes outcome"
 
 sleep 2
 
@@ -131,7 +132,7 @@ else
 fi
 
 # ── Step 6: Sell Yes ────────────────────────────────────────────────
-log "Step 6/6: Sell Yes shares"
+log "Step 6/7: Sell Yes shares"
 
 SELL_PRICE=$(echo "$YES_PRICE2" | awk '{p = $1 - 0.02; if (p < 0.01) p = 0.01; printf "%.2f", p}')
 
@@ -152,5 +153,49 @@ fi
 
 ok "Sell placed — $(echo "$RESULT" | jq -r '.order_id // "?"') ($(echo "$RESULT" | jq -r '.status // "?"'))"
 
+# ── Step 7: Withdraw entire balance to Base ───────────────────────
+log "Step 7/7: Withdraw entire USDC balance to Base"
+
+sleep 2
+
+info "Querying Polymarket USDC balance..."
+BALANCE_RESULT=$(ft '{"command":"balance","exchange":"polymarket"}')
+
+if [[ -z "$BALANCE_RESULT" ]]; then
+    fail "Balance query returned empty"
+    exit 1
+fi
+
+ERROR=$(echo "$BALANCE_RESULT" | jq -r '.error // empty')
+if [[ -n "$ERROR" ]]; then
+    fail "Balance query failed: $ERROR"
+    exit 1
+fi
+
+USDC_BALANCE=$(echo "$BALANCE_RESULT" | jq -r '.balance // "0"')
+ok "USDC balance: \$$USDC_BALANCE"
+
+if [[ "$USDC_BALANCE" == "0" || "$USDC_BALANCE" == "0.0" ]]; then
+    info "Nothing to withdraw"
+else
+    info "Withdrawing \$$USDC_BALANCE USDC to Base..."
+    RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"USDC\",\"amount\":$USDC_BALANCE,\"to\":\"base\",\"exchange\":\"polymarket\"}")
+
+    if [[ -z "$RESULT" ]]; then
+        fail "Withdraw command returned empty"
+        exit 1
+    fi
+
+    ERROR=$(echo "$RESULT" | jq -r '.error // empty')
+    if [[ -n "$ERROR" ]]; then
+        fail "Withdraw failed: $ERROR"
+        exit 1
+    fi
+
+    WITHDRAW_ADDR=$(echo "$RESULT" | jq -r '.withdrawal_address_evm // "?"')
+    ok "Withdrawal initiated — send USDC.e to: $WITHDRAW_ADDR"
+    echo "$RESULT" | jq '.'
+fi
+
 # ── Done ─────────────────────────────────────────────────────────────
-log "✅ Polymarket BTC prediction e2e test complete"
+log "Polymarket BTC prediction e2e test complete"

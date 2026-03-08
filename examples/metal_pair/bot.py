@@ -10,7 +10,7 @@ Usage:
     python3 bot.py --dry-run
     python3 bot.py --target-usdt0 100 --position-size 100 --leverage 3
 
-Requires: fintool CLI, OPENAI_API_KEY, BRAVE_API_KEY env vars
+Requires: fintool CLI, OpenAI and Brave API keys (set below)
 """
 
 import argparse
@@ -24,6 +24,11 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
+
+# ── API keys (set these before running) ───────────────────────────────────────
+
+OPENAI_API_KEY = ""   # https://platform.openai.com/api-keys
+BRAVE_API_KEY = ""    # https://brave.com/search/api/
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -99,24 +104,6 @@ def http_get_json(url: str, headers: dict | None = None, timeout: int = 15) -> d
     except Exception as e:
         log.error("HTTP GET %s failed: %s", url, e)
         return None
-
-
-# ── API key helpers ───────────────────────────────────────────────────────────
-
-def get_api_key(env_var: str) -> str:
-    """Get API key from env, falling back to ~/.fintool/config.toml."""
-    val = os.environ.get(env_var, "")
-    if val:
-        return val
-    config_path = Path.home() / ".fintool" / "config.toml"
-    if config_path.exists():
-        for line in config_path.read_text().splitlines():
-            # Simple TOML key extraction: key = "value"
-            key_name = env_var.lower()  # e.g. OPENAI_API_KEY -> openai_api_key
-            if key_name in line and "=" in line:
-                _, _, value = line.partition("=")
-                return value.strip().strip('"').strip("'")
-    return ""
 
 
 # ── Step 1: News search ──────────────────────────────────────────────────────
@@ -340,14 +327,14 @@ def run(cfg: dict):
     fintool = cfg["fintool"]
     dry_run = cfg["dry_run"]
 
-    openai_key = get_api_key("OPENAI_API_KEY")
-    brave_key = get_api_key("BRAVE_API_KEY")
+    openai_key = OPENAI_API_KEY
+    brave_key = BRAVE_API_KEY
 
     if not openai_key:
-        log.error("OPENAI_API_KEY not set (env or ~/.fintool/config.toml)")
+        log.error("OPENAI_API_KEY not set — edit the constant at the top of this file")
         sys.exit(1)
     if not brave_key:
-        log.error("BRAVE_API_KEY not set (env or ~/.fintool/config.toml)")
+        log.error("BRAVE_API_KEY not set — edit the constant at the top of this file")
         sys.exit(1)
 
     log.info("=== Metal Pairs Bot Starting ===")

@@ -61,6 +61,9 @@ async fn main() -> Result<()> {
         }
         Commands::Quote { symbol } => commands::quote::run_spot(&symbol, json_output).await,
         Commands::News { symbol } => commands::news::run(&symbol, json_output).await,
+        Commands::Orderbook { symbol, levels } => {
+            commands::orderbook::run_spot(&symbol, levels, &cli.exchange, json_output).await
+        }
         Commands::Order(cmd) => match cmd {
             OrderCmd::Buy {
                 symbol,
@@ -83,6 +86,9 @@ async fn main() -> Result<()> {
         Commands::Positions => commands::positions::run(&cli.exchange, json_output).await,
         Commands::Perp(cmd) => match cmd {
             PerpCmd::Quote { symbol } => commands::quote::run_perp(&symbol, json_output).await,
+            PerpCmd::Orderbook { symbol, levels } => {
+                commands::orderbook::run_perp(&symbol, levels, &cli.exchange, json_output).await
+            }
             PerpCmd::Buy {
                 symbol,
                 amount,

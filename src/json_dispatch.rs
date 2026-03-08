@@ -27,6 +27,10 @@ fn default_predict_limit() -> i32 {
     10
 }
 
+fn default_levels() -> usize {
+    5
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum JsonCommand {
@@ -70,8 +74,22 @@ pub enum JsonCommand {
         #[serde(default = "default_exchange")]
         exchange: String,
     },
+    Orderbook {
+        symbol: String,
+        #[serde(default = "default_levels")]
+        levels: usize,
+        #[serde(default = "default_exchange")]
+        exchange: String,
+    },
     PerpQuote {
         symbol: String,
+    },
+    PerpOrderbook {
+        symbol: String,
+        #[serde(default = "default_levels")]
+        levels: usize,
+        #[serde(default = "default_exchange")]
+        exchange: String,
     },
     PerpBuy {
         symbol: String,
@@ -134,6 +152,8 @@ pub enum JsonCommand {
         amount: f64,
         to: Option<String>,
         network: Option<String>,
+        #[serde(default = "default_exchange")]
+        exchange: String,
         #[serde(default)]
         dry_run: bool,
     },
@@ -208,6 +228,16 @@ pub async fn run(json_str: &str) -> Result<()> {
             Ok(())
         }
         JsonCommand::Quote { symbol } => commands::quote::run_spot(&symbol, true).await,
+        JsonCommand::Orderbook {
+            symbol,
+            levels,
+            exchange,
+        } => commands::orderbook::run_spot(&symbol, levels, &exchange, true).await,
+        JsonCommand::PerpOrderbook {
+            symbol,
+            levels,
+            exchange,
+        } => commands::orderbook::run_perp(&symbol, levels, &exchange, true).await,
         JsonCommand::News { symbol } => commands::news::run(&symbol, true).await,
         JsonCommand::OrderBuy {
             symbol,
@@ -328,6 +358,7 @@ pub async fn run(json_str: &str) -> Result<()> {
             amount,
             to,
             network,
+            exchange,
             dry_run,
         } => {
             let amount = fmt_num(amount);
@@ -338,7 +369,7 @@ pub async fn run(json_str: &str) -> Result<()> {
                 &asset,
                 resolved_to.as_deref(),
                 resolved_network.as_deref(),
-                "auto",
+                &exchange,
                 dry_run,
                 true,
             )

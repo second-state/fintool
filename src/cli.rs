@@ -37,6 +37,14 @@ pub enum Commands {
     #[command(subcommand)]
     Order(OrderCmd),
 
+    /// Show L2 orderbook / market depth for a spot pair
+    Orderbook {
+        symbol: String,
+        /// Number of price levels per side (default: 5)
+        #[arg(long, default_value = "5")]
+        levels: usize,
+    },
+
     /// List open orders (spot and perp)
     Orders { symbol: Option<String> },
 
@@ -233,6 +241,13 @@ pub enum OrderCmd {
 pub enum PerpCmd {
     /// Get perpetual futures price quote
     Quote { symbol: String },
+    /// Show L2 orderbook / market depth for a perpetual
+    Orderbook {
+        symbol: String,
+        /// Number of price levels per side (default: 5)
+        #[arg(long, default_value = "5")]
+        levels: usize,
+    },
     /// Place a perp limit buy (long) order
     Buy {
         symbol: String,
