@@ -27,6 +27,9 @@ enum Commands {
     /// Print the configured wallet address
     Address,
 
+    /// Get perpetual futures price quote (same as `perp quote`)
+    Quote { symbol: String },
+
     /// Place a spot limit buy order
     Buy {
         symbol: String,
@@ -213,6 +216,9 @@ fn default_levels() -> usize {
 #[serde(tag = "command", rename_all = "snake_case")]
 enum JsonCommand {
     Address,
+    Quote {
+        symbol: String,
+    },
     Buy {
         symbol: String,
         amount: f64,
@@ -315,6 +321,9 @@ async fn run_json(json_str: &str) -> Result<()> {
             println!("{}", serde_json::json!({"address": address}));
             Ok(())
         }
+        JsonCommand::Quote { symbol } | JsonCommand::PerpQuote { symbol } => {
+            commands::quote::run_perp(&symbol, true).await
+        }
         JsonCommand::Buy {
             symbol,
             amount,
@@ -336,7 +345,6 @@ async fn run_json(json_str: &str) -> Result<()> {
         JsonCommand::Cancel { order_id } => commands::cancel::run(&order_id, EXCHANGE, true).await,
         JsonCommand::Balance => commands::balance::run(EXCHANGE, true).await,
         JsonCommand::Positions => commands::positions::run(EXCHANGE, true).await,
-        JsonCommand::PerpQuote { symbol } => commands::quote::run_perp(&symbol, true).await,
         JsonCommand::PerpOrderbook { symbol, levels } => {
             commands::orderbook::run_perp(&symbol, levels, EXCHANGE, true).await
         }
@@ -493,6 +501,7 @@ async fn main() -> Result<()> {
             println!("{}", address);
             Ok(())
         }
+        Commands::Quote { symbol } => commands::quote::run_perp(&symbol, json_output).await,
         Commands::Buy {
             symbol,
             amount,
