@@ -77,13 +77,13 @@ enum Commands {
     #[command(subcommand)]
     Options(OptionsCmd),
 
-    /// Deposit to Hyperliquid: address for ETH/BTC/SOL, or bridge USDC
+    /// Deposit to Hyperliquid: bridge ETH/USDC, or show deposit address for BTC/SOL
     Deposit {
         /// Asset: ETH, BTC, SOL, USDC, etc.
         asset: String,
-        /// Amount (required for USDC bridge)
+        /// Amount to deposit (e.g. 0.01)
         #[arg(long)]
-        amount: Option<String>,
+        amount: String,
         /// Source chain for USDC: ethereum or base
         #[arg(long)]
         from: Option<String>,
@@ -283,7 +283,7 @@ enum JsonCommand {
     },
     Deposit {
         asset: String,
-        amount: Option<f64>,
+        amount: f64,
         from: Option<String>,
         #[serde(default)]
         dry_run: bool,
@@ -420,10 +420,10 @@ async fn run_json(json_str: &str) -> Result<()> {
             from,
             dry_run,
         } => {
-            let amount = amount.map(fmt_num);
+            let amount = fmt_num(amount);
             commands::deposit::run(
                 &asset,
-                amount.as_deref(),
+                Some(amount.as_str()),
                 from.as_deref(),
                 EXCHANGE,
                 dry_run,
@@ -586,7 +586,7 @@ async fn main() -> Result<()> {
         } => {
             commands::deposit::run(
                 &asset,
-                amount.as_deref(),
+                Some(amount.as_str()),
                 from.as_deref(),
                 EXCHANGE,
                 dry_run,

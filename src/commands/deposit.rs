@@ -38,7 +38,7 @@ pub async fn run(
             if asset_lower == "usdc" {
                 deposit_usdc_hl(amount, from, dry_run, json_out).await
             } else {
-                deposit_unit(asset, json_out).await
+                deposit_unit(asset, amount, dry_run, json_out).await
             }
         }
         other => bail!(
@@ -50,7 +50,12 @@ pub async fn run(
 
 // ── Unit bridge (ETH/BTC/SOL → HL) ──────────────────────────────────
 
-async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
+async fn deposit_unit(
+    asset: &str,
+    amount: Option<&str>,
+    dry_run: bool,
+    json_out: bool,
+) -> Result<()> {
     let asset_lower = asset.to_lowercase();
 
     if !unit::is_supported(&asset_lower) {
@@ -59,6 +64,14 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
             asset
         );
     }
+
+    let amount = amount.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Deposits require --amount.\n\
+             Usage: hyperliquid deposit {} --amount <AMOUNT>",
+            asset.to_uppercase()
+        )
+    })?;
 
     let cfg = config::load_hl_config()?;
     let chain = unit::native_chain(&asset_lower).unwrap();
@@ -75,16 +88,36 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
 
     let fees = unit::estimate_fees(cfg.testnet).await.ok();
 
+    // ETH can be bridged automatically (same key signs on Ethereum L1)
+    if asset_lower == "eth" {
+        return deposit_eth_via_unit(
+            amount,
+            &resp.address,
+            &cfg,
+            min,
+            chain,
+            &fees,
+            dry_run,
+            json_out,
+        )
+        .await;
+    }
+
+    // BTC, SOL: cannot bridge automatically — show deposit address with error
     if json_out {
         let mut out = json!({
             "action": "deposit",
             "exchange": "hyperliquid",
             "asset": asset.to_uppercase(),
+            "status": "manual_required",
+            "error": format!(
+                "{} cannot be bridged automatically. Send {} {} on {} to the deposit address below.",
+                asset.to_uppercase(), amount, asset.to_uppercase(), chain
+            ),
             "source_chain": chain,
-            "destination": "hyperliquid",
-            "hl_address": cfg.address,
             "deposit_address": resp.address,
             "minimum": min,
+            "hl_address": cfg.address,
         });
         if let Some(ref f) = fees {
             if let Some(chain_fees) = f.get(chain) {
@@ -93,21 +126,40 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
         }
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
+        eprintln!(
+            "{}: {} cannot be bridged automatically from this wallet.",
+            "Error".red().bold(),
+            asset.to_uppercase()
+        );
+        eprintln!(
+            "Send {} {} on {} to the deposit address below.\n",
+            amount,
+            asset.to_uppercase(),
+            chain
+        );
         println!("{}", "━".repeat(50).dimmed());
         println!(
-            "  {} {} → Hyperliquid",
+            "  {} {} → Hyperliquid  {}",
             "Deposit".green().bold(),
-            asset.to_uppercase().cyan()
+            asset.to_uppercase().cyan(),
+            "(manual)".dimmed()
         );
         println!("{}", "━".repeat(50).dimmed());
         println!();
         println!("  {} {}", "Source chain:".dimmed(), chain.yellow());
         println!("  {} {}", "HL address:  ".dimmed(), cfg.address.cyan());
+        println!(
+            "  {} {} {}",
+            "Amount:      ".dimmed(),
+            amount,
+            asset.to_uppercase()
+        );
         println!("  {} {}", "Minimum:     ".dimmed(), min);
         println!();
         println!(
-            "  {} Send {} on {} to:",
+            "  {} Send {} {} on {} to:",
             "→".green().bold(),
+            amount,
             asset.to_uppercase(),
             chain
         );
@@ -133,11 +185,204 @@ async fn deposit_unit(asset: &str, json_out: bool) -> Result<()> {
             }
         }
         println!();
+        println!("  {} Track status: hyperliquid bridge-status", "ℹ".blue());
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Bridge ETH automatically via Unit: send ETH from wallet to Unit deposit address on Ethereum L1
+#[allow(clippy::too_many_arguments)]
+async fn deposit_eth_via_unit(
+    amount: &str,
+    unit_address: &str,
+    cfg: &config::HlConfig,
+    min: &str,
+    chain: &str,
+    fees: &Option<serde_json::Value>,
+    dry_run: bool,
+    json_out: bool,
+) -> Result<()> {
+    let amount_f: f64 = amount
+        .parse()
+        .context("Invalid amount — expected a number (e.g. 0.01)")?;
+
+    // Validate minimum
+    if amount_f < 0.007 {
+        bail!(
+            "Unit bridge requires a minimum deposit of 0.007 ETH.\n\
+             You requested {} ETH. Please use --amount 0.007 or higher.",
+            amount
+        );
+    }
+
+    let amount_wei = ethers::utils::parse_ether(amount).context("Invalid ETH amount")?;
+
+    if dry_run {
+        if json_out {
+            let mut out = json!({
+                "action": "deposit_eth_quote",
+                "exchange": "hyperliquid",
+                "asset": "ETH",
+                "source_chain": chain,
+                "amount": amount,
+                "unit_deposit_address": unit_address,
+                "minimum": min,
+                "hl_address": cfg.address,
+                "bridge": "unit",
+            });
+            if let Some(ref f) = fees {
+                if let Some(chain_fees) = f.get(chain) {
+                    out["estimated_fees"] = chain_fees.clone();
+                }
+            }
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        } else {
+            println!("{}", "━".repeat(55).dimmed());
+            println!(
+                "  {} {} ETH  Ethereum → Hyperliquid  {}",
+                "Deposit".green().bold(),
+                amount,
+                "(dry run)".dimmed()
+            );
+            println!("{}", "━".repeat(55).dimmed());
+            println!();
+            println!(
+                "  {} Ethereum → Unit → Hyperliquid",
+                "Route:      ".dimmed()
+            );
+            println!("  {} Unit (HyperUnit)", "Bridge:     ".dimmed());
+            println!("  {} {} ETH", "Amount:     ".dimmed(), amount.cyan());
+            println!("  {} {}", "Minimum:    ".dimmed(), min);
+            println!("  {} {}", "HL address: ".dimmed(), cfg.address.cyan());
+            println!("  {} {}", "Deposit to: ".dimmed(), unit_address);
+            if let Some(ref f) = fees {
+                let key_eta = format!("{}-depositEta", chain);
+                let key_fee = format!("{}-depositFee", chain);
+                if let Some(eta) = f.get(chain).and_then(|c| c.get(&key_eta)) {
+                    println!(
+                        "  {} ~{}",
+                        "Est. time:  ".dimmed(),
+                        eta.as_str().unwrap_or("unknown")
+                    );
+                }
+                if let Some(fee) = f.get(chain).and_then(|c| c.get(&key_fee)) {
+                    let fee_str =
+                        unit::format_amount(&fee.as_f64().unwrap_or(0.0).to_string(), "eth");
+                    println!("  {} {}", "Est. fee:   ".dimmed(), fee_str);
+                }
+            }
+            println!();
+            println!("  {} Remove --dry-run to execute.", "ℹ".blue());
+            println!();
+        }
+        return Ok(());
+    }
+
+    // Execute: send ETH from wallet to Unit deposit address on Ethereum L1
+    eprintln!(
+        "Sending {} ETH to Unit deposit address on Ethereum...",
+        amount
+    );
+
+    let provider =
+        ethers::providers::Provider::<ethers::providers::Http>::try_from(bridge::RPC_ETHEREUM)
+            .context("Failed to connect to Ethereum RPC")?;
+    let wallet = cfg
+        .private_key
+        .parse::<ethers::signers::LocalWallet>()
+        .context("Invalid private key")?
+        .with_chain_id(1u64); // Ethereum mainnet
+    let client = std::sync::Arc::new(ethers::middleware::SignerMiddleware::new(provider, wallet));
+
+    // Check ETH balance (need amount + gas)
+    let balance = bridge::get_eth_balance(bridge::RPC_ETHEREUM, &cfg.address).await?;
+    let gas_buffer = ethers::utils::parse_ether("0.001").unwrap_or_default();
+    if balance < amount_wei + gas_buffer {
+        bail!(
+            "Insufficient ETH on Ethereum. Have {} ETH, need {} ETH + ~0.001 ETH for gas.\n\
+             Send ETH to {} on Ethereum first.",
+            ethers::utils::format_ether(balance),
+            amount,
+            cfg.address
+        );
+    }
+
+    let unit_addr: ethers::types::Address = unit_address
+        .parse()
+        .context("Invalid Unit deposit address")?;
+
+    let tx = ethers::types::TransactionRequest::new()
+        .to(unit_addr)
+        .value(amount_wei)
+        .chain_id(1u64);
+
+    let pending = client
+        .send_transaction(tx, None)
+        .await
+        .context("Failed to send ETH deposit tx")?;
+
+    let receipt = pending
+        .await
+        .context("ETH deposit tx failed")?
+        .ok_or_else(|| anyhow::anyhow!("ETH deposit tx dropped"))?;
+
+    let tx_hash = format!("{:?}", receipt.transaction_hash);
+    eprintln!("  ✅ ETH sent to Unit: {}", tx_hash);
+    eprintln!("  Waiting for Unit bridge to deliver ETH to Hyperliquid...");
+
+    // Output result
+    if json_out {
+        let mut out = json!({
+            "action": "deposit_eth",
+            "exchange": "hyperliquid",
+            "status": "completed",
+            "asset": "ETH",
+            "amount": amount,
+            "source_chain": chain,
+            "unit_deposit_address": unit_address,
+            "hl_address": cfg.address,
+            "tx_hash": tx_hash,
+            "bridge": "unit",
+            "note": "ETH sent to Unit bridge. Delivery to Hyperliquid typically takes a few minutes.",
+        });
+        if let Some(ref f) = fees {
+            if let Some(chain_fees) = f.get(chain) {
+                out["estimated_fees"] = chain_fees.clone();
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!();
+        println!("{}", "━".repeat(55).dimmed());
         println!(
-            "  {} This address is permanent — send any amount, any time.",
+            "  {} {} ETH sent to Unit bridge",
+            "✅".green(),
+            amount.green().bold()
+        );
+        println!("{}", "━".repeat(55).dimmed());
+        println!();
+        println!("  {} Ethereum", "Source:     ".dimmed());
+        println!("  {} {} ETH", "Amount:     ".dimmed(), amount);
+        println!("  {} {}", "TX:         ".dimmed(), tx_hash.cyan());
+        println!("  {} {}", "HL address: ".dimmed(), cfg.address.cyan());
+        if let Some(ref f) = fees {
+            let key_eta = format!("{}-depositEta", chain);
+            if let Some(eta) = f.get(chain).and_then(|c| c.get(&key_eta)) {
+                println!(
+                    "  {} ~{}",
+                    "Est. time:  ".dimmed(),
+                    eta.as_str().unwrap_or("unknown")
+                );
+            }
+        }
+        println!();
+        println!(
+            "  {} ETH will appear on Hyperliquid after bridge confirmation.",
             "ℹ".blue()
         );
-        println!("  {} Track status: fintool bridge-status", "ℹ".blue());
+        println!("  {} Track status: hyperliquid bridge-status", "ℹ".blue());
         println!();
     }
 
