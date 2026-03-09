@@ -2,7 +2,7 @@
 #
 # Deposit $10 USDC from Base to Polymarket
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses polymarket --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Get Polymarket deposit address
@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $POLYMARKET --json "$1" 2>/dev/null; }
 
 DEPOSIT_AMOUNT=${1:-10}
 
@@ -23,7 +23,7 @@ log "Deposit \$${DEPOSIT_AMOUNT} USDC from Base to Polymarket (JSON API)"
 
 info "Requesting Polymarket deposit address..."
 
-RESULT=$(ft "{\"command\":\"deposit\",\"asset\":\"USDC\",\"amount\":$DEPOSIT_AMOUNT,\"from\":\"base\",\"exchange\":\"polymarket\"}")
+RESULT=$(ft "{\"command\":\"deposit\",\"asset\":\"USDC\",\"amount\":$DEPOSIT_AMOUNT,\"from\":\"base\"}")
 
 if [[ -z "$RESULT" ]]; then
     fail "Deposit command returned empty"

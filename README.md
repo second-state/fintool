@@ -1,55 +1,46 @@
 # fintool
 
-A Rust CLI tool for agentic trading and market intelligence — spot and perpetual futures on **Hyperliquid**, **Binance**, and **Coinbase**, plus prediction market trading on **Polymarket**. Supports crypto, stocks, commodities, and prediction markets. Seamlessly deposit, withdraw, and bridge across major blockchains and wallets with a single command. Get real-time price quotes, momentums, trends, funding rates, LLM-enriched analysis, SEC filings, and news.
+A suite of Rust CLI tools for agentic trading and market intelligence. Each exchange has its own dedicated binary — **`hyperliquid`**, **`binance`**, **`coinbase`**, **`polymarket`** — plus a shared **`fintool`** for exchange-agnostic market intelligence (quotes, news, SEC filings). Supports crypto, stocks, commodities, and prediction markets. All CLIs support `--json` mode for scripting and agent integration.
 
 ## Table of Contents
 
 - [Install as an OpenClaw Skill](#install-as-an-openclaw-skill)
 - [Installation (Manual)](#installation-manual)
+- [CLI Overview](#cli-overview)
 - [Quick Guides](#quick-guides)
   - [Setup](#setup)
-  - [Deposit funds into the exchange](#deposit-funds-into-the-exchange)
-  - [Withdraw funds from the exchange](#withdraw-funds-from-the-exchange)
+  - [Deposit funds](#deposit-funds)
+  - [Withdraw funds](#withdraw-funds)
   - [Get price quotes and news](#get-price-quotes-and-news)
   - [Spot buy and sell](#spot-buy-and-sell)
   - [Open and close perp positions](#open-and-close-perp-positions)
   - [Commodity perp on Hyperliquid (USDT0 conversion)](#commodity-perp-on-hyperliquid-usdt0-conversion)
   - [Prediction market trading (Polymarket)](#prediction-market-trading-polymarket)
-- [Exchange Support](#exchange-support)
-  - [Exchange Capability Matrix](#exchange-capability-matrix)
-  - [Global Exchange Flag](#global-exchange-flag)
-  - [Auto Mode Routing](#auto-mode-routing)
-  - [Symbol Formats by Exchange](#symbol-formats-by-exchange)
 - [Configuration](#configuration)
   - [Config Options](#config-options)
   - [What Needs Configuration](#what-needs-configuration)
-- [Commands](#commands)
-  - [`fintool init`](#fintool-init)
-  - [`fintool address`](#fintool-address)
-  - [`fintool quote`](#fintool-quote-symbol)
-  - [`fintool perp quote`](#fintool-perp-quote-symbol)
-  - [`fintool orderbook`](#fintool-orderbook-symbol)
-  - [`fintool perp orderbook`](#fintool-perp-orderbook-symbol)
-  - [`fintool news`](#fintool-news-symbol)
-  - [`fintool report`](#fintool-report-annual-symbol)
-  - [`fintool order buy/sell`](#fintool-order-buy-symbol---amount-size---price-price)
-  - [`fintool perp buy/sell`](#fintool-perp-buy-symbol---amount-size---price-price---close)
-  - [`fintool perp leverage`](#fintool-perp-leverage-symbol---leverage-n---cross)
-  - [`fintool perp set-mode`](#fintool-perp-set-mode-mode)
-  - [`fintool orders`](#fintool-orders-symbol)
-  - [`fintool cancel`](#fintool-cancel-order_id)
-  - [`fintool balance`](#fintool-balance)
-  - [`fintool positions`](#fintool-positions)
-  - [`fintool options`](#fintool-options-buysell-symbol-type-strike-expiry-size)
-  - [`fintool deposit`](#fintool-deposit-asset)
-  - [`fintool withdraw`](#fintool-withdraw-asset---amount-amt)
-  - [`fintool transfer`](#fintool-transfer-asset---amount-amt---from-src---to-dst)
-  - [`fintool bridge-status`](#fintool-bridge-status)
+- [CLIs and Commands](#clis-and-commands)
+  - [`fintool` — Market Intelligence](#fintool--market-intelligence)
+  - [`hyperliquid` — Hyperliquid Exchange](#hyperliquid--hyperliquid-exchange)
+  - [`binance` — Binance Exchange](#binance--binance-exchange)
+  - [`coinbase` — Coinbase Exchange](#coinbase--coinbase-exchange)
+  - [`polymarket` — Polymarket Prediction Markets](#polymarket--polymarket-prediction-markets)
+- [Common Commands Reference](#common-commands-reference)
+  - [`quote`](#quote-symbol)
+  - [`buy / sell` (spot)](#buy--sell-spot)
+  - [`perp buy / perp sell`](#perp-buy--perp-sell)
+  - [`perp leverage`](#perp-leverage)
+  - [`orderbook / perp orderbook`](#orderbook--perp-orderbook)
+  - [`orders`](#orders)
+  - [`cancel`](#cancel-order_id)
+  - [`balance`](#balance)
+  - [`positions`](#positions)
+  - [`deposit`](#deposit-asset)
+  - [`withdraw`](#withdraw-asset---amount-amt)
 - [Command Summary](#command-summary)
 - [Data Sources](#data-sources)
-- [Technical Notes](#technical-notes)
-- [Architecture](#architecture)
 - [JSON Mode](#json-mode)
+- [Architecture](#architecture)
 - [Key Dependencies](#key-dependencies)
 - [License](#license)
 
@@ -59,17 +50,46 @@ Tell your [OpenClaw](https://openclaw.ai) agent:
 
 > Read https://raw.githubusercontent.com/second-state/fintool/refs/heads/main/skills/install.md and install the fintool skill.
 
-The agent will download the correct binary for your platform, set up the skill, and walk you through configuration.
+The agent will download the correct binaries for your platform, set up the skill, and walk you through configuration.
 
 ## Installation (Manual)
 
 ```bash
 cd fintool
 cargo build --release
-# Binary at ./target/release/fintool
+# Binaries at ./target/release/{fintool,hyperliquid,binance,coinbase,polymarket}
 ```
 
-Or download a pre-built binary from [Releases](https://github.com/second-state/fintool/releases).
+Or download pre-built binaries from [Releases](https://github.com/second-state/fintool/releases).
+
+## CLI Overview
+
+| Binary | Purpose | Exchange |
+|--------|---------|----------|
+| `fintool` | Market intelligence — quotes, news, SEC filings | None (read-only data) |
+| `hyperliquid` | Spot + perp + HIP-3 trading, deposits, withdrawals, transfers | Hyperliquid |
+| `binance` | Spot + perp trading, deposits, withdrawals | Binance |
+| `coinbase` | Spot trading, deposits, withdrawals | Coinbase |
+| `polymarket` | Prediction market trading, deposits, withdrawals | Polymarket (Polygon) |
+
+All CLIs support `--json` mode for programmatic use. See [JSON Mode](#json-mode).
+
+### Exchange Capability Matrix
+
+| Feature | `hyperliquid` | `binance` | `coinbase` | `polymarket` |
+|---------|---------------|-----------|------------|--------------|
+| Spot Trading | buy, sell | buy, sell | buy, sell | — |
+| Perpetual Futures | perp buy/sell | perp buy/sell | — | — |
+| Prediction Markets | — | — | — | buy, sell, list, quote |
+| Orderbook | spot + perp | spot + perp | spot | — |
+| Options | options buy/sell | — | — | — |
+| Balance | balance | balance | balance | balance |
+| Positions | positions | positions | — | positions |
+| Orders/Cancel | orders, cancel | orders, cancel | orders, cancel | — |
+| Deposit | deposit | deposit | deposit | deposit |
+| Withdraw | withdraw | withdraw | withdraw | withdraw |
+| Transfer | transfer | — | — | — |
+| Bridge Status | bridge-status | — | — | — |
 
 ## Quick Guides
 
@@ -80,39 +100,39 @@ fintool init                    # create config file
 vim ~/.fintool/config.toml      # add your wallet key and API keys
 ```
 
-### Deposit funds into the exchange
+### Deposit funds
 
-Bridge USDC from Base (or Ethereum) to Hyperliquid. You must bridge more than $5 USDC. Your Hyperliquid address is the same as your Base/Ethereum address. The command handles all bridging transactions automatically.
+Bridge USDC from Base (or Ethereum) to Hyperliquid. You must bridge more than $5 USDC.
 
 ```bash
-fintool deposit USDC --amount 15 --from base
+hyperliquid deposit USDC --amount 15 --from base
 ```
 
 The deposited USDC goes into the Hyperliquid perp margin account. To use it for spot trading as well, set the account to unified mode:
 
 ```bash
-fintool perp set-mode unified
+hyperliquid perp set-mode unified
 ```
 
 Check your balance:
 
 ```bash
-fintool balance
+hyperliquid balance
 ```
 
-### Withdraw funds from the exchange
+### Withdraw funds
 
-Withdraw USDC from Hyperliquid back to Base. The command reverses the deposit bridges (Hyperliquid → Arbitrum → Base).
+Withdraw USDC from Hyperliquid back to Base:
 
 ```bash
-fintool withdraw USDC --amount 10 --to base
+hyperliquid withdraw USDC --amount 10 --to base
 ```
 
 You can also withdraw to Arbitrum (default, fastest) or Ethereum:
 
 ```bash
-fintool withdraw USDC --amount 10                      # → Arbitrum (~3-4 min)
-fintool withdraw USDC --amount 10 --to ethereum         # → Ethereum (~5-7 min)
+hyperliquid withdraw USDC --amount 10                      # → Arbitrum (~3-4 min)
+hyperliquid withdraw USDC --amount 10 --to ethereum         # → Ethereum (~5-7 min)
 ```
 
 ### Get price quotes and news
@@ -129,16 +149,16 @@ fintool quote GOLD                # commodity alias
 Get a perpetual futures quote with funding rate, open interest, and leverage info:
 
 ```bash
-fintool perp quote ETH
-fintool perp quote SILVER         # HIP-3 commodity perp
+hyperliquid quote ETH
+hyperliquid quote SILVER         # HIP-3 commodity perp
 ```
 
 View the L2 orderbook (bids/asks, spread, depth):
 
 ```bash
-fintool orderbook HYPE             # spot orderbook (default 5 levels)
-fintool perp orderbook BTC         # perp orderbook
-fintool orderbook ETH --levels 20  # more depth
+hyperliquid orderbook HYPE             # spot orderbook (default 5 levels)
+hyperliquid perp orderbook BTC         # perp orderbook
+hyperliquid orderbook ETH --levels 20  # more depth
 ```
 
 Get the latest news headlines and SEC filings:
@@ -155,21 +175,21 @@ Get the current price, then place a limit buy order. The command below buys 1.0 
 
 ```bash
 fintool quote HYPE
-fintool order buy HYPE --amount 1.0 --price 25.00
+hyperliquid buy HYPE --amount 1.0 --price 25.00
 ```
 
-Check your balance, then sell. The command below sells 0.48 HYPE at a minimum price of $30/HYPE:
+Check your balance, then sell:
 
 ```bash
-fintool balance
-fintool order sell HYPE --amount 0.48 --price 30.00
+hyperliquid balance
+hyperliquid sell HYPE --amount 0.48 --price 30.00
 ```
 
-You can force a specific exchange with `--exchange`:
+Use different exchange CLIs for different exchanges:
 
 ```bash
-fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
-fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
+coinbase buy BTC --amount 0.002 --price 65000
+binance buy BTC --amount 0.002 --price 65000
 ```
 
 ### Open and close perp positions
@@ -177,22 +197,22 @@ fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
 Get the perp quote, set leverage, and open a long position:
 
 ```bash
-fintool perp quote ETH
-fintool perp leverage ETH --leverage 2
-fintool perp buy ETH --amount 0.006 --price 2100.00
+hyperliquid quote ETH
+hyperliquid perp leverage ETH --leverage 2
+hyperliquid perp buy ETH --amount 0.006 --price 2100.00
 ```
 
 Check positions and balance:
 
 ```bash
-fintool positions
-fintool balance
+hyperliquid positions
+hyperliquid balance
 ```
 
 Close the position with `--close` (reduce-only — won't open a new short):
 
 ```bash
-fintool perp sell ETH --amount 0.006 --price 2150.00 --close
+hyperliquid perp sell ETH --amount 0.006 --price 2150.00 --close
 ```
 
 ### Commodity perp on Hyperliquid (USDT0 conversion)
@@ -202,158 +222,64 @@ The HIP-3 commodity/stock perp market on Hyperliquid (SILVER, GOLD, TSLA, etc.) 
 **Buy USDT0 on the spot market and transfer to the HIP-3 dex:**
 
 ```bash
-fintool order buy USDT0 --amount 30 --price 1.002
-fintool transfer USDT0 --amount 30 --from spot --to cash
+hyperliquid buy USDT0 --amount 30 --price 1.002
+hyperliquid transfer USDT0 --amount 30 --from spot --to cash
 ```
 
 **Trade the commodity perp:**
 
 ```bash
-fintool perp quote SILVER
-fintool perp leverage SILVER --leverage 2
-fintool perp buy SILVER --amount 0.13 --price 89.00
+hyperliquid quote SILVER
+hyperliquid perp leverage SILVER --leverage 2
+hyperliquid perp buy SILVER --amount 0.13 --price 89.00
 ```
 
 **Close the position and convert back to USDC:**
 
 ```bash
-fintool perp sell SILVER --amount 0.14 --price 91.00 --close
-fintool transfer USDT0 --amount 30 --from cash --to spot
-fintool order sell USDT0 --amount 30 --price 0.998
+hyperliquid perp sell SILVER --amount 0.14 --price 91.00 --close
+hyperliquid transfer USDT0 --amount 30 --from cash --to spot
+hyperliquid sell USDT0 --amount 30 --price 0.998
 ```
 
 Check everything:
 
 ```bash
-fintool positions
-fintool orders
-fintool balance
+hyperliquid positions
+hyperliquid orders
+hyperliquid balance
 ```
 
 ### Prediction market trading (Polymarket)
 
 ```bash
 # List/search prediction markets
-fintool predict list --query "bitcoin"
-fintool predict list --query "election" --limit 5
+polymarket list --query "bitcoin"
+polymarket list --query "election" --limit 5
 
 # Only show markets ending 7+ days from now (default: 3)
-fintool predict list --query "bitcoin" --min-end-days 7
+polymarket list --query "bitcoin" --min-end-days 7
 
 # Show all markets including ones closing today
-fintool predict list --query "bitcoin" --min-end-days 0
+polymarket list --query "bitcoin" --min-end-days 0
 
 # Get market details/quote
-fintool predict quote will-bitcoin-hit-100k
+polymarket quote will-bitcoin-hit-100k
 
 # Buy shares (yes outcome at $0.65)
-fintool predict buy will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.65
+polymarket buy will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.65
 
 # Sell shares
-fintool predict sell will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.70
+polymarket sell will-bitcoin-hit-100k --outcome yes --amount 10 --price 0.70
 
 # View positions
-fintool predict positions
+polymarket positions
 
 # Deposit USDC to Polymarket
-fintool predict deposit --amount 100 --from base
+polymarket deposit --amount 100 --from base
 ```
 
-> **Note:** fintool also supports a `--json` mode for scripting and agent integration — pass a full command as a JSON string and get JSON output. See [JSON Mode](#json-mode) for details.
-
-## Exchange Support
-
-`fintool` supports three exchanges with automatic routing: **Hyperliquid**, **Binance**, and **Coinbase**.
-
-### Exchange Capability Matrix
-
-| Feature | Hyperliquid | Binance | Coinbase | Polymarket |
-|---------|-------------|---------|----------|------------|
-| Spot Trading | ✅ | ✅ | ✅ | — |
-| Perpetual Futures | ✅ | ✅ | ❌ | — |
-| Orderbook | ✅ | ✅ | ✅ | — |
-| Options | ❌ | ✅ | ❌ | — |
-| Prediction Markets | — | — | — | ✅ |
-| Balance | ✅ | ✅ | ✅ | — |
-| Positions | ✅ | ✅ | ❌ | ✅ |
-| Orders/Cancellation | ✅ | ✅ | ✅ | ✅ |
-
-### Global Exchange Flag
-
-All trading commands support `--exchange <EXCHANGE>`:
-
-| Value | Behavior |
-|-------|----------|
-| `auto` (default) | Auto-select based on configured exchanges and command type |
-| `hyperliquid` | Force Hyperliquid (requires wallet config) |
-| `binance` | Force Binance (requires API keys) |
-| `coinbase` | Force Coinbase (requires API keys) |
-| `polymarket` | Force Polymarket (uses wallet config, Polygon network) |
-
-### Auto Mode Routing
-
-When `--exchange auto` (default):
-
-1. **Options commands** → Always Binance (only exchange that supports options)
-2. **Prediction markets** → Always Polymarket (only exchange that supports predictions)
-3. **Perpetual futures** → Hyperliquid > Binance (Coinbase doesn't support perps)
-4. **Spot trading** → Hyperliquid > Coinbase > Binance (priority order)
-5. **If only one exchange configured** → Use that one
-
-**Prediction market routing:** The `predict` command always routes to Polymarket — no `--exchange` flag needed, just like `perp set-mode` always routes to Hyperliquid. Each exchange has exclusive command domains:
-
-| Command Domain | Exchange | Routing |
-|----------------|----------|---------|
-| `predict` (list, quote, buy, sell, positions) | Polymarket | Always Polymarket (exclusive) |
-| `options` (buy, sell) | Binance | Always Binance (exclusive) |
-| `perp set-mode` | Hyperliquid | Always Hyperliquid (exclusive) |
-| `order`, `perp`, `balance`, `positions` | All | Auto-routed by `--exchange` flag |
-| `deposit` | All | Requires `--exchange` for non-default (e.g. `--exchange polymarket`) |
-
-**Deposit routing:** Use `--exchange polymarket` to deposit USDC to Polymarket. Without `--exchange`, deposits default to Hyperliquid.
-
-```bash
-fintool deposit USDC --amount 50 --from base                         # → Hyperliquid (default)
-fintool deposit USDC --amount 50 --from base --exchange polymarket   # → Polymarket
-fintool deposit USDC --exchange binance                              # → Binance
-```
-
-### Symbol Formats by Exchange
-
-| Exchange | Spot Format | Perp Format | Predict Format | Notes |
-|----------|-------------|-------------|----------------|-------|
-| Hyperliquid | `BTC`, `TSLA` | `BTC`, `ETH` | — | Symbol only, no pair suffix |
-| Binance | `BTCUSDT` | `BTCUSDT` | — | Auto-appends USDT in code |
-| Coinbase | `BTC-USD` | — | — | Dash-separated, USD quote |
-| Polymarket | — | — | Market slug or ID | e.g. `will-btc-hit-100k` |
-
-**Note:** `fintool` handles format conversion automatically. Just use the base symbol (e.g., `BTC`) and it will convert to the right format for each exchange. For prediction markets, use the market slug (from `fintool predict list`) or numeric market ID.
-
-### Examples
-
-```bash
-# Auto routing (uses configured exchange with priority)
-fintool order buy BTC --amount 0.002 --price 65000
-
-# Force Hyperliquid
-fintool order buy BTC --amount 0.002 --price 65000 --exchange hyperliquid
-
-# Force Binance
-fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
-
-# Force Coinbase (uses BTC-USD internally)
-fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
-
-# Options require Binance
-fintool options buy BTC call 70000 260328 0.1 --exchange binance
-
-# Prediction markets always route to Polymarket
-fintool predict list --query "bitcoin"
-fintool predict buy will-btc-hit-100k --outcome yes --amount 20 --price 0.50
-
-# Deposit to Polymarket
-fintool deposit USDC --amount 50 --from base --exchange polymarket
-```
+> **Note:** All CLIs support a `--json` mode for scripting and agent integration — pass a full command as a JSON string and get JSON output. See [JSON Mode](#json-mode) for details.
 
 ---
 
@@ -363,7 +289,7 @@ Config file: `~/.fintool/config.toml`
 
 Run `fintool init` to generate a template, or copy `config.toml.default` from the release zip.
 
-### Example Configuration (All Four Exchanges)
+### Example Configuration
 
 ```toml
 [wallet]
@@ -401,73 +327,51 @@ coinbase_api_secret = "..."
 
 | Section | Key | Type | Default | Description |
 |---------|-----|------|---------|-------------|
-| `wallet` | `private_key` | string | — | Hyperliquid wallet hex private key (with or without `0x`). **Takes priority** over keystore. |
+| `wallet` | `private_key` | string | — | Wallet hex private key (with or without `0x`). Used by Hyperliquid and Polymarket. |
 | `wallet` | `wallet_json` | string | — | Path to encrypted Ethereum keystore JSON file. Supports `~` expansion. |
 | `wallet` | `wallet_passcode` | string | — | Passcode to decrypt the keystore file. |
 | `network` | `testnet` | bool | `false` | Use Hyperliquid testnet. |
 | `api_keys` | `openai_api_key` | string | — | OpenAI API key. Enables LLM-enriched quotes with trend/momentum analysis. |
-| `api_keys` | `openai_model` | string | `gpt-4.1-mini` | OpenAI model for quote analysis. Any chat completions model works. |
+| `api_keys` | `openai_model` | string | `gpt-4.1-mini` | OpenAI model for quote analysis. |
 | `api_keys` | `binance_api_key` | string | — | Binance API key for spot/futures/options trading. |
 | `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
 | `api_keys` | `coinbase_api_key` | string | — | Coinbase Advanced Trade API key. |
 | `api_keys` | `coinbase_api_secret` | string | — | Coinbase Advanced Trade API secret (HMAC-SHA256 signing). |
 | `polymarket` | `signature_type` | string | `proxy` | Polymarket signing mode: `proxy`, `eoa`, or `gnosis-safe`. Uses `wallet.private_key`. |
+
 ### What Needs Configuration
 
-| Command | Hyperliquid Wallet | Binance Keys | Coinbase Keys | OpenAI Key | Exchange Support |
-|---------|-------------------|--------------|---------------|------------|------------------|
-| `quote` | No | No | No | Optional (enriches) | N/A (read-only) |
-| `perp quote` | No | No | No | No | Hyperliquid (read-only) |
-| `news`, `init` | No | No | No | No | N/A |
-| `address` | Yes | No | No | No | Hyperliquid |
-| `report` | No | No | No | No | N/A |
-| `order buy/sell` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
-| `perp buy/sell` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
-| `perp leverage` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
-| `perp set-mode` | Yes | No | No | No | Hyperliquid only |
-| `orders` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
-| `cancel` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
-| `balance` | Yes (HL) | Yes (Binance) | Yes (Coinbase) | No | All three |
-| `positions` | Yes (HL) | Yes (Binance) | No | No | HL + Binance |
-| `options buy/sell` | No | Yes (Binance) | No | No | Binance only |
-| `deposit` (HL) | Yes | No | No | No | Hyperliquid |
-| `deposit` (Binance) | No | Yes | No | No | Binance |
-| `deposit` (Coinbase) | No | No | Yes | No | Coinbase |
-| `withdraw` (HL) | Yes | No | No | No | Hyperliquid |
-| `withdraw` (Binance) | No | Yes | No | No | Binance |
-| `withdraw` (Coinbase) | No | No | Yes | No | Coinbase |
-| `bridge-status` | Yes | No | No | No | Hyperliquid |
-| `transfer` | Yes | No | No | No | Hyperliquid only |
-| `predict list/quote` | No | No | No | No | Polymarket (read-only) |
-| `predict buy/sell` | Polymarket key | No | No | No | Polymarket |
-| `predict positions` | Polymarket key | No | No | No | Polymarket |
-| `predict deposit` | Polymarket key | No | No | No | Polymarket |
+| CLI / Command | Wallet Key | Binance Keys | Coinbase Keys | OpenAI Key |
+|---------------|-----------|--------------|---------------|------------|
+| `fintool quote` | No | No | No | Optional (enriches) |
+| `fintool news`, `fintool init` | No | No | No | No |
+| `fintool report` | No | No | No | No |
+| `hyperliquid` (all commands) | Yes | — | — | — |
+| `hyperliquid quote` | No | — | — | — |
+| `binance` (all commands) | — | Yes | — | — |
+| `coinbase` (all commands) | — | — | Yes | — |
+| `polymarket list`, `polymarket quote` | No | — | — | — |
+| `polymarket` (buy/sell/positions/deposit) | Yes | — | — | — |
 
 ---
 
-## Commands
+## CLIs and Commands
 
-### `fintool init`
+### `fintool` — Market Intelligence
 
-Create a default config file at `~/.fintool/config.toml`.
+Exchange-agnostic price data, news, and SEC filings.
 
-```bash
-fintool init
-```
+| Command | Description |
+|---------|-------------|
+| `fintool init` | Create config file at `~/.fintool/config.toml` |
+| `fintool quote <SYMBOL>` | Multi-source price + LLM analysis |
+| `fintool news <SYMBOL>` | Latest news headlines |
+| `fintool report annual <SYMBOL>` | SEC 10-K annual filing |
+| `fintool report quarterly <SYMBOL>` | SEC 10-Q quarterly filing |
+| `fintool report list <SYMBOL>` | List recent SEC filings |
+| `fintool report get <SYMBOL> <ACCESSION>` | Fetch specific filing |
 
----
-
-### `fintool address`
-
-Print the configured Hyperliquid wallet address (derived from the private key in config).
-
-```bash
-fintool address          # 0x...
-```
-
----
-
-### `fintool quote <SYMBOL>`
+#### `fintool quote <SYMBOL>`
 
 Get the current price with multi-source aggregation and optional LLM analysis.
 
@@ -480,7 +384,7 @@ Get the current price with multi-source aggregation and optional LLM analysis.
 
 **Without OpenAI key:** Returns merged data from the best available source.
 
-#### Symbol Aliases
+##### Symbol Aliases
 
 Common indices, commodities, and treasuries are aliased for convenience:
 
@@ -502,18 +406,7 @@ Common indices, commodities, and treasuries are aliased for convenience:
 | `10Y`, `TNX` | `^TNX` | 10-Year Treasury Yield |
 | `30Y`, `TYX` | `^TYX` | 30-Year Treasury Yield |
 
-#### Examples
-
-```bash
-fintool quote BTC          # crypto — Hyperliquid + CoinGecko + Yahoo
-fintool quote AAPL         # stock — Yahoo Finance
-fintool quote SP500        # index alias
-fintool quote GOLD         # commodity alias
-fintool quote USD1         # stablecoin
-fintool quote ETH
-```
-
-#### JSON Schema — Enriched (with OpenAI)
+##### JSON Schema — Enriched (with OpenAI)
 
 ```json
 {
@@ -528,868 +421,290 @@ fintool quote ETH
   "market_cap": 1291834932905.0,
   "trend": "bearish",
   "trend_strength": "strong",
-  "momentum": "Bitcoin has declined 4.28% in the last 24 hours and nearly 6% over the past week, indicating sustained bearish pressure.",
-  "volume_analysis": "The 24-hour volume of $56.8B indicates significant market activity despite the downturn.",
-  "summary": "Bitcoin is in a strong bearish trend with a 27.5% decline over the past month. High trading volumes suggest active selling pressure rather than low-liquidity drift.",
+  "momentum": "Bitcoin has declined 4.28% in the last 24 hours...",
+  "volume_analysis": "The 24-hour volume of $56.8B indicates significant market activity.",
+  "summary": "Bitcoin is in a strong bearish trend with a 27.5% decline over the past month.",
   "sources_used": ["Yahoo Finance", "CoinGecko"],
   "confidence": "high"
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `symbol` | string | Asset symbol |
-| `name` | string | Full asset name |
-| `price` | number | Best available current price (USD) |
-| `price_currency` | string | Always `"USD"` |
-| `change_24h_pct` | number\|null | 24-hour price change (%) |
-| `change_7d_pct` | number\|null | 7-day price change (%) — crypto only via CoinGecko |
-| `change_30d_pct` | number\|null | 30-day price change (%) — crypto only via CoinGecko |
-| `volume_24h` | number\|null | 24-hour trading volume (USD) |
-| `market_cap` | number\|null | Market capitalization (USD) |
-| `trend` | string | `"bullish"`, `"bearish"`, or `"neutral"` |
-| `trend_strength` | string | `"strong"`, `"moderate"`, or `"weak"` |
-| `momentum` | string | 1-2 sentence momentum analysis |
-| `volume_analysis` | string | 1 sentence volume context |
-| `summary` | string | 2-3 sentence market overview |
-| `sources_used` | array | Data sources that contributed to the analysis |
-| `confidence` | string | `"high"`, `"medium"`, or `"low"` |
+---
 
-#### JSON Schema — Basic (without OpenAI)
+### `hyperliquid` — Hyperliquid Exchange
 
-When no OpenAI key is configured, returns merged raw data:
+Spot and perpetual futures trading, HIP-3 dex (commodities, stocks), deposits, withdrawals, and transfers.
 
-```json
-{
-  "symbol": "AAPL",
-  "price": "266.18",
-  "change24h": "4.07",
-  "volume24h": 34926242.0,
-  "sources_used": ["Yahoo Finance"]
-}
-```
+| Command | Description |
+|---------|-------------|
+| `hyperliquid address` | Print wallet address |
+| `hyperliquid quote <SYMBOL>` | Perp price + funding/OI/premium |
+| `hyperliquid buy <SYMBOL> --amount N --price P` | Spot limit buy |
+| `hyperliquid sell <SYMBOL> --amount N --price P` | Spot limit sell |
+| `hyperliquid perp buy <SYM> --amount N --price P [--close]` | Perp long / close short |
+| `hyperliquid perp sell <SYM> --amount N --price P [--close]` | Perp short / close long |
+| `hyperliquid perp leverage <SYM> --leverage N [--cross]` | Set perp leverage |
+| `hyperliquid perp set-mode <MODE>` | Set account mode (unified/standard/disabled) |
+| `hyperliquid perp orderbook <SYM> [--levels N]` | Perp L2 orderbook |
+| `hyperliquid orderbook <SYMBOL> [--levels N]` | Spot L2 orderbook |
+| `hyperliquid orders [SYMBOL]` | List open orders |
+| `hyperliquid cancel <ORDER_ID>` | Cancel an order |
+| `hyperliquid balance` | Account balances |
+| `hyperliquid positions` | Open positions + PnL |
+| `hyperliquid options buy/sell ...` | Options trading |
+| `hyperliquid deposit <ASSET> [--amount N] [--from CHAIN]` | Deposit (Unit bridge / USDC bridge) |
+| `hyperliquid withdraw <ASSET> --amount N [--to DST]` | Withdraw (Bridge2 / Unit) |
+| `hyperliquid transfer <ASSET> --amount N --from SRC --to DST` | Transfer: perp ↔ spot ↔ dex |
+| `hyperliquid bridge-status` | Unit bridge operation status |
 
-#### Human Output Example
+#### Hyperliquid-Specific Features
 
-```
-  📊 BTC (Bitcoin)
-  Price:      $64,683.00
-  24h Change: -4.31%
+**HIP-3 Perps (commodities, stocks):** The `cash` dex on Hyperliquid supports commodity and stock perps using USDT0 collateral. Symbols like `SILVER`, `GOLD`, `TSLA` are auto-detected and routed to the correct dex.
 
-  📉 Trend:  bearish (strong)
+**Perp Quote:** `hyperliquid quote` returns perpetual futures data including funding rate, open interest, premium, and max leverage.
 
-  💫 Momentum: Bitcoin has declined over 4% in the last 24 hours and
-     nearly 6% over the past week, indicating sustained bearish pressure.
-  📊 Volume:   The 24-hour volume of $56.8B indicates significant activity.
+**Transfer:** Move funds between `spot`, `perp`, `cash` (HIP-3), and other dex accounts. One side must always be `spot`.
 
-  📝 Summary:
-     Bitcoin is in a strong bearish trend with a 27.5% decline over
-     the past month. High volumes suggest active selling pressure.
-
-  Sources: Yahoo Finance, CoinGecko | Confidence: high
-```
+**Bridge Status:** Track HyperUnit bridge operations for ETH/BTC/SOL deposits and withdrawals.
 
 ---
 
-### `fintool perp quote <SYMBOL>`
+### `binance` — Binance Exchange
 
-Get the current **perpetual futures** price with funding rate, open interest, premium, and leverage info.
+Spot and perpetual futures trading.
 
-**Supported exchanges:** Hyperliquid only (including HIP-3 dexes like `cash`/dreamcash)
+| Command | Description |
+|---------|-------------|
+| `binance buy <SYMBOL> --amount N --price P` | Spot limit buy |
+| `binance sell <SYMBOL> --amount N --price P` | Spot limit sell |
+| `binance perp buy <SYM> --amount N --price P [--close]` | Perp long / close short |
+| `binance perp sell <SYM> --amount N --price P [--close]` | Perp short / close long |
+| `binance perp leverage <SYM> --leverage N [--cross]` | Set perp leverage |
+| `binance perp orderbook <SYM> [--levels N]` | Perp L2 orderbook |
+| `binance orderbook <SYMBOL> [--levels N]` | Spot L2 orderbook |
+| `binance orders [SYMBOL]` | List open orders |
+| `binance cancel <ORDER_ID>` | Cancel an order |
+| `binance balance` | Account balances |
+| `binance positions` | Open positions |
+| `binance deposit <ASSET> [--from CHAIN]` | Deposit address |
+| `binance withdraw <ASSET> --amount N [--to DST] [--network NET]` | Withdraw |
 
-Fintool automatically searches across Hyperliquid's main perp universe and HIP-3 builder-deployed dexes (like `cash`/dreamcash) to find the most liquid market for any symbol.
+---
 
-#### Examples
+### `coinbase` — Coinbase Exchange
+
+Spot trading only (no perps or options).
+
+| Command | Description |
+|---------|-------------|
+| `coinbase buy <SYMBOL> --amount N --price P` | Spot limit buy |
+| `coinbase sell <SYMBOL> --amount N --price P` | Spot limit sell |
+| `coinbase orderbook <SYMBOL> [--levels N]` | Spot L2 orderbook |
+| `coinbase orders [SYMBOL]` | List open orders |
+| `coinbase cancel <ORDER_ID>` | Cancel an order |
+| `coinbase balance` | Account balances |
+| `coinbase deposit <ASSET> [--from CHAIN]` | Deposit address |
+| `coinbase withdraw <ASSET> --amount N [--to DST] [--network NET]` | Withdraw |
+
+---
+
+### `polymarket` — Polymarket Prediction Markets
+
+Prediction market trading on Polygon.
+
+| Command | Description |
+|---------|-------------|
+| `polymarket list [--query Q] [--limit N] [--min-end-days N]` | Search/browse markets |
+| `polymarket quote <MARKET>` | Market details/prices |
+| `polymarket buy <MARKET> --outcome O --amount N --price P` | Buy outcome shares |
+| `polymarket sell <MARKET> --outcome O --amount N --price P` | Sell outcome shares |
+| `polymarket positions` | Open positions |
+| `polymarket balance` | USDC balance |
+| `polymarket deposit [--amount N] [--from CHAIN]` | Deposit USDC |
+| `polymarket withdraw --amount N` | Withdraw USDC |
+
+#### Polymarket-Specific Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--query` | string | *(none)* | Search query for `list` (e.g., "bitcoin", "election") |
+| `--limit` | integer | `10` | Max results for `list` |
+| `--sort` | string | *(none)* | Sort by `"volume"` or `"liquidity"` |
+| `--min-end-days` | integer | `3` | Minimum days before market closes |
+| `--outcome` | string | — | Outcome name for buy/sell (e.g., `yes`, `no`) |
+
+---
+
+## Common Commands Reference
+
+These commands work the same across exchange CLIs. The only difference is which binary you use.
+
+### `quote <SYMBOL>`
+
+| CLI | What it returns |
+|-----|----------------|
+| `fintool quote` | Multi-source spot price + LLM analysis |
+| `hyperliquid quote` | Perp price + funding/OI/premium |
+
+### `buy / sell` (spot)
+
+Place a spot limit buy or sell order. `--amount` is in symbol units. `--price` is the limit price.
 
 ```bash
-# Crypto perps (main HL dex)
-fintool perp quote BTC
-fintool perp quote ETH
-fintool perp quote SOL
-
-# Commodity perps (HIP-3 cash dex)
-fintool perp quote SILVER        # silver ~$89/oz, 20x leverage
-fintool perp quote GOLD          # gold ~$5,184/oz, 20x leverage
-
-# Stock perps (HIP-3 cash dex)
-fintool perp quote TSLA          # Tesla stock perp
-fintool perp quote NVDA          # NVIDIA stock perp
-fintool perp quote GOOGL         # Alphabet stock perp
-
-# US index perps (HIP-3 cash dex)
-fintool perp quote USA500        # S&P 500 index perp
+hyperliquid buy HYPE --amount 1.0 --price 25.00
+binance sell BTC --amount 0.01 --price 67000
+coinbase buy ETH --amount 0.5 --price 2000
 ```
 
-#### Available HIP-3 Assets (cash dex)
+### `perp buy / perp sell`
 
-| Category | Symbols |
-|----------|---------|
-| Commodities | `SILVER`, `GOLD` |
-| US Stocks | `TSLA`, `NVDA`, `GOOGL`, `AMZN`, `MSFT`, `META`, `INTC`, `HOOD` |
-| Indices | `USA500` (S&P 500) |
-
-Aliases: `XAG` → SILVER, `XAU` → GOLD, `SP500`/`SPX` → USA500
-
-#### JSON Schema (main perps)
-
-```json
-{
-  "symbol": "BTC",
-  "markPx": "65785.0",
-  "oraclePx": "65825.0",
-  "change24h": "-3.27",
-  "funding": "0.0000083791",
-  "premium": "-0.0003797949",
-  "openInterest": "21206.37062",
-  "volume24h": "1862590179.97",
-  "prevDayPx": "68011.0",
-  "maxLeverage": 40,
-  "source": "Hyperliquid"
-}
-```
-
-#### JSON Schema (HIP-3 perps)
-
-```json
-{
-  "symbol": "SILVER",
-  "hip3Asset": "cash:SILVER",
-  "dex": "cash",
-  "markPx": "89.478",
-  "oraclePx": "89.425",
-  "change24h": "2.83",
-  "funding": "0.0000079076",
-  "premium": "0.0005093654",
-  "openInterest": "37801.7",
-  "volume24h": "37711686.30",
-  "prevDayPx": "87.015",
-  "maxLeverage": 20,
-  "source": "Hyperliquid HIP-3 (cash)"
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `symbol` | string | User-facing symbol |
-| `hip3Asset` | string | HIP-3 dex-qualified asset name (e.g. `cash:SILVER`) |
-| `dex` | string | HIP-3 dex name (e.g. `cash`) |
-| `markPx` | string | Current mark price (USD) |
-| `oraclePx` | string | Oracle price (USD) |
-| `change24h` | string | 24-hour price change (%) |
-| `funding` | string | Current funding rate (per 8h) |
-| `premium` | string | Mark-oracle premium |
-| `openInterest` | string | Open interest in asset units |
-| `volume24h` | string | 24-hour notional volume (USD) |
-| `prevDayPx` | string | Previous day price (USD) |
-| `maxLeverage` | number | Maximum allowed leverage |
-| `source` | string | `"Hyperliquid"` or `"Hyperliquid HIP-3 (cash)"` |
-
----
-
-### `fintool orderbook <SYMBOL>`
-
-Show the L2 orderbook (bids and asks) for a **spot** pair.
-
-**Supported exchanges:** Hyperliquid (default, no auth), Binance (no auth), Coinbase (requires API keys)
-
-#### Examples
+Place a perpetual futures limit order. Use `--close` for reduce-only.
 
 ```bash
-fintool orderbook HYPE
-fintool orderbook ETH --levels 20
-fintool orderbook BTC --exchange binance
+hyperliquid perp buy ETH --amount 0.1 --price 2000
+hyperliquid perp sell BTC --amount 0.01 --price 70000 --close
+binance perp buy ETH --amount 0.1 --price 2000
 ```
 
-#### Options
+### `perp leverage`
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--levels N` | 5 | Number of price levels per side |
-| `--exchange` | auto | Exchange to query (auto defaults to Hyperliquid) |
-
-#### JSON Schema
-
-```json
-{
-  "symbol": "HYPE",
-  "market": "spot",
-  "exchange": "hyperliquid",
-  "bids": [
-    {"price": "30.322", "size": "12.5", "numOrders": 1}
-  ],
-  "asks": [
-    {"price": "30.323", "size": "138.07", "numOrders": 1}
-  ],
-  "spread": "0.0010",
-  "spreadPct": "0.0033",
-  "midPrice": "30.3225"
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `bids` | array | Bid levels sorted by price descending (best bid first) |
-| `asks` | array | Ask levels sorted by price ascending (best ask first) |
-| `spread` | string | Best ask minus best bid (USD) |
-| `spreadPct` | string | Spread as percentage of mid price |
-| `midPrice` | string | (best bid + best ask) / 2 |
-| `numOrders` | number | Number of orders at that level (Hyperliquid only) |
-
----
-
-### `fintool perp orderbook <SYMBOL>`
-
-Show the L2 orderbook for a **perpetual futures** market.
-
-**Supported exchanges:** Hyperliquid (default, no auth), Binance (no auth). Coinbase does not support perps.
-
-#### Examples
+Set leverage for a perp asset. Use `--cross` for cross margin (isolated by default).
 
 ```bash
-fintool perp orderbook BTC
-fintool perp orderbook ETH --levels 10
-fintool perp orderbook SOL --exchange binance
+hyperliquid perp leverage ETH --leverage 5
+hyperliquid perp leverage BTC --leverage 10 --cross
+binance perp leverage ETH --leverage 5
 ```
 
-Uses the same options and JSON schema as [`fintool orderbook`](#fintool-orderbook-symbol), with `"market": "perp"`.
+### `orderbook / perp orderbook`
 
----
-
-### `fintool news <SYMBOL>`
-
-Get the latest news headlines via Google News RSS.
-
-#### Examples
+Show L2 orderbook with bids, asks, spread, and depth. Default: 5 levels.
 
 ```bash
-fintool news ETH
-fintool news TSLA
-fintool news AAPL
+hyperliquid orderbook HYPE
+hyperliquid perp orderbook BTC --levels 20
+binance orderbook ETH
+coinbase orderbook BTC
 ```
 
-#### JSON Schema
+### `orders`
 
-Returns an array of up to 10 articles:
-
-```json
-[
-  {
-    "title": "Bitcoin Surges Past $70K",
-    "source": "CoinDesk",
-    "url": "https://news.google.com/rss/articles/...",
-    "published": "Mon, 23 Feb 2026 04:51:05 GMT"
-  }
-]
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | string | Article headline |
-| `source` | string | Publisher name |
-| `url` | string | Article URL |
-| `published` | string | Publication date (RFC 2822) |
-
----
-
-### `fintool report annual <SYMBOL>`
-
-Fetch the latest 10-K (annual) filing from SEC EDGAR. Use `--output <file>` to save the full text.
-
-### `fintool report quarterly <SYMBOL>`
-
-Fetch the latest 10-Q (quarterly) filing from SEC EDGAR.
-
-### `fintool report list <SYMBOL>`
-
-List recent SEC filings for a company.
-
-### `fintool report get <SYMBOL> <ACCESSION>`
-
-Fetch a specific filing by accession number.
-
-#### Examples
+List open orders (spot and perp). Optionally filter by symbol.
 
 ```bash
-fintool report annual AAPL
-fintool report quarterly TSLA --output tsla_10q.txt
-fintool report list MSFT
-fintool report list AAPL
-fintool report get AAPL 0000320193-24-000123
+hyperliquid orders
+hyperliquid orders BTC
+binance orders
 ```
 
----
-
-### `fintool order buy <SYMBOL> --amount <SIZE> --price <PRICE>`
-
-Place a **spot** limit buy order. `--amount` is in symbol units (e.g. 1.0 HYPE). `--price` is the **maximum price** you're willing to pay per unit.
-
-**Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
-
-The symbol is auto-resolved:
-- **Hyperliquid:** `TSLA` → `TSLA/USDC` spot pair
-- **Binance:** `TSLA` → `TSLAUSDT` spot pair
-- **Coinbase:** `BTC` → `BTC-USD` product ID
-
-#### Examples
-
-```bash
-fintool order buy TSLA --amount 0.01 --price 410     # buy 0.01 TSLA at max $410
-fintool order buy HYPE --amount 1.0 --price 25.00    # buy 1.0 HYPE at max $25
-fintool order buy BTC --amount 0.001 --price 66000   # buy 0.001 BTC at max $66,000
-
-# Force specific exchange
-fintool order buy BTC --amount 0.002 --price 65000 --exchange binance
-fintool order buy BTC --amount 0.002 --price 65000 --exchange coinbase
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "spot_buy",
-  "symbol": "HYPE",
-  "size": "1.0",
-  "price": "25.00",
-  "total_usdc": "25.00",
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
-```
-
----
-
-### `fintool order sell <SYMBOL> --amount <SIZE> --price <PRICE>`
-
-Place a **spot** limit sell order. `--amount` is in symbol units. `--price` is the **minimum price** you'll accept per unit.
-
-**Exchanges:** Hyperliquid, Binance, Coinbase (auto-routed based on config and `--exchange` flag)
-
-#### Examples
-
-```bash
-fintool order sell TSLA --amount 1 --price 420       # sell 1 TSLA at minimum $420
-fintool order sell HYPE --amount 10 --price 30.00    # sell 10 HYPE at minimum $30
-
-# Force specific exchange
-fintool order sell BTC --amount 0.01 --price 67000 --exchange binance
-fintool order sell BTC --amount 0.01 --price 67000 --exchange coinbase
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "spot_sell",
-  "symbol": "TSLA",
-  "size": "1",
-  "price": "420",
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
-```
-
----
-
-### `fintool perp buy <SYMBOL> --amount <SIZE> --price <PRICE> [--close]`
-
-Place a **perpetual futures** limit buy (long) order. `--amount` is in symbol units (e.g. 0.1 ETH).
-
-**Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
-
-Use `--close` to close an existing short position (reduce-only order). Without `--close`, the order opens a new long position.
-
-#### Examples
-
-```bash
-# Crypto perps (main HL dex)
-fintool perp buy BTC --amount 0.002 --price 65000     # long 0.002 BTC at $65,000
-fintool perp buy ETH --amount 0.1 --price 1800        # long 0.1 ETH at $1,800
-
-# Close an existing short position (reduce-only)
-fintool perp buy ETH --amount 0.1 --price 1800 --close
-
-# Commodity/stock perps (HIP-3 cash dex — auto-detected)
-fintool perp buy SILVER --amount 11.2 --price 89.50   # long 11.2 oz silver at $89.50
-fintool perp buy GOLD --amount 1.0 --price 5200       # long 1.0 oz gold at $5,200
-fintool perp buy TSLA --amount 2.5 --price 410        # long 2.5 TSLA at $410
-fintool perp buy NVDA --amount 10 --price 193         # long 10 NVDA at $193
-
-# Force Binance
-fintool perp buy BTC --amount 0.002 --price 65000 --exchange binance
-```
-
----
-
-### `fintool perp sell <SYMBOL> --amount <SIZE> --price <PRICE> [--close]`
-
-Place a **perpetual futures** limit sell (short) order. `--amount` is in symbol units.
-
-**Exchanges:** Hyperliquid (including HIP-3), Binance (Coinbase doesn't support perps)
-
-Use `--close` to close an existing long position (reduce-only order). Without `--close`, the order opens a new short position.
-
-#### Examples
-
-```bash
-# Crypto perps
-fintool perp sell BTC --amount 0.01 --price 70000    # short 0.01 BTC at $70,000
-fintool perp sell ETH --amount 1 --price 2000        # short 1 ETH at $2,000
-
-# Close an existing long position (reduce-only)
-fintool perp sell ETH --amount 0.5 --price 2000 --close
-
-# Commodity/stock perps (HIP-3)
-fintool perp sell SILVER --amount 10 --price 95      # short 10 silver at $95
-fintool perp sell GOLD --amount 0.5 --price 5300     # short 0.5 gold at $5,300
-fintool perp sell TSLA --amount 5 --price 420        # short 5 TSLA at $420
-
-# Force Binance
-fintool perp sell BTC --amount 0.01 --price 70000 --exchange binance
-```
-
----
-
-### `fintool perp leverage <SYMBOL> --leverage <N> [--cross]`
-
-Set leverage for a perpetual futures asset.
-
-**Exchanges:** Hyperliquid (including HIP-3), Binance
-
-By default, uses isolated margin. Use `--cross` for cross margin (main perps only — HIP-3 dex perps only support isolated margin).
-
-#### Examples
-
-```bash
-# Crypto perps (main HL dex)
-fintool perp leverage ETH --leverage 5              # 5x isolated
-fintool perp leverage BTC --leverage 10 --cross     # 10x cross margin
-
-# HIP-3 perps (commodities, stocks — isolated only)
-fintool perp leverage SILVER --leverage 2
-fintool perp leverage TSLA --leverage 3
-
-# Binance
-fintool perp leverage ETH --leverage 5 --exchange binance
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "set_leverage",
-  "exchange": "hyperliquid",
-  "symbol": "ETH",
-  "leverage": 5,
-  "marginType": "isolated",
-  "network": "mainnet",
-  "result": "Ok(...)"
-}
-```
-
----
-
-### `fintool perp set-mode <MODE>`
-
-Set the account abstraction mode on Hyperliquid. **Hyperliquid only.**
-
-| Mode | Description |
-|------|-------------|
-| `unified` | Single USDC balance shared across all perp dexes and spot |
-| `standard` | Separate balances per dex (default for new accounts) |
-| `disabled` | No abstraction |
-
-#### Examples
-
-```bash
-fintool perp set-mode unified    # share margin across all dexes
-fintool perp set-mode standard   # separate balances per dex
-```
-
----
-
-### `fintool orders [SYMBOL]`
-
-List open orders (both spot and perp). Optionally filter by symbol.
-
-**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
-
-```bash
-fintool orders
-fintool orders BTC
-fintool orders --exchange binance
-fintool orders --exchange coinbase
-```
-
----
-
-### `fintool cancel <ORDER_ID>`
+### `cancel <ORDER_ID>`
 
 Cancel an open order.
 
-**Order ID formats:**
+**Order ID formats by CLI:**
 
-| Exchange | Format | Example |
-|----------|--------|---------|
-| Hyperliquid | `SYMBOL:OID` | `BTC:91490942` |
-| Binance spot | `binance_spot:SYMBOL:ORDERID` | `binance_spot:BTCUSDT:12345678` |
-| Binance futures | `binance_futures:SYMBOL:ORDERID` | `binance_futures:BTCUSDT:87654321` |
-| Coinbase | `coinbase:UUID` | `coinbase:abc123-def456-...` |
+| CLI | Format | Example |
+|-----|--------|---------|
+| `hyperliquid` | `SYMBOL:OID` | `BTC:91490942` |
+| `binance` | `binance_spot:SYMBOL:ID` or `binance_futures:SYMBOL:ID` | `binance_spot:BTCUSDT:12345678` |
+| `coinbase` | `coinbase:UUID` | `coinbase:abc123-def456-...` |
 
-**Note:** Use `fintool orders` to get the correct order ID format for each exchange.
-
-#### Examples
-
-```bash
-# Hyperliquid
-fintool cancel BTC:91490942
-
-# Binance spot
-fintool cancel binance_spot:BTCUSDT:12345678
-
-# Binance futures
-fintool cancel binance_futures:BTCUSDT:87654321
-
-# Coinbase
-fintool cancel coinbase:abc123-def456-ghi789
-```
-
----
-
-### `fintool balance`
+### `balance`
 
 Show account balances and margin summary.
 
-**Exchanges:** All three supported (Hyperliquid, Binance, Coinbase)
+```bash
+hyperliquid balance
+binance balance
+coinbase balance
+polymarket balance
+```
+
+### `positions`
+
+Show open positions with PnL.
 
 ```bash
-fintool balance
-fintool balance --exchange binance
-fintool balance --exchange coinbase
+hyperliquid positions    # includes HIP-3 dex positions
+binance positions
+polymarket positions     # prediction market positions
 ```
 
----
+### `deposit <ASSET>`
 
-### `fintool positions`
+Deposit assets to the exchange. Behavior varies by CLI:
 
-Show open positions with PnL. Includes HIP-3 dex positions on Hyperliquid.
-
-**Exchanges:** Hyperliquid, Binance (Coinbase is spot-only — no positions)
-
+**Hyperliquid:**
 ```bash
-fintool positions
-fintool positions --exchange binance
+hyperliquid deposit ETH              # get ETH deposit address (HyperUnit bridge)
+hyperliquid deposit USDC --amount 100 --from base    # bridge USDC from Base
 ```
 
----
-
-### `fintool options buy/sell <SYMBOL> <TYPE> <STRIKE> <EXPIRY> <SIZE>`
-
-Place an options order. **Binance only** — Hyperliquid and Coinbase don't support options.
-
-**Binance options symbol format:** `BTC-260328-80000-C`
-- Format: `BASE-YYMMDD-STRIKE-C/P`
-- `C` = Call, `P` = Put
-
-#### Examples
-
+**Binance / Coinbase:**
 ```bash
-# Buy a BTC call option (strike $80k, expiry 2026-03-28)
-fintool options buy BTC call 80000 260328 0.1
-
-# Sell a BTC put option
-fintool options sell BTC put 60000 260328 0.1
-
-# Explicit exchange flag (optional for options)
-fintool options buy BTC call 70000 260328 0.1 --exchange binance
+binance deposit ETH --from ethereum
+coinbase deposit USDC
 ```
 
-**Note:** Hyperliquid and Coinbase will return an error: *"Options trading requires Binance"*
-
----
-
-### `fintool deposit <ASSET>`
-
-Deposit assets to an exchange. The behavior depends on the asset and exchange.
-
-#### Hyperliquid (default)
-
-**ETH, BTC, SOL** — Generates a permanent deposit address via the [HyperUnit](https://docs.hyperunit.xyz) bridge. Send any amount, any number of times.
-
+**Polymarket:**
 ```bash
-fintool deposit ETH              # get your ETH deposit address
-fintool deposit BTC              # get your BTC deposit address
-fintool deposit SOL              # get your SOL deposit address
+polymarket deposit --amount 100 --from base
 ```
 
-Minimums: 0.007 ETH, 0.0003 BTC, 0.12 SOL. Estimated time: ~3 min (ETH), ~20 min (BTC), ~1 min (SOL).
+### `withdraw <ASSET> --amount <AMT>`
 
-**USDC** — Bridges USDC from Ethereum or Base to Hyperliquid via [Across Protocol](https://across.to) → Arbitrum → HL Bridge2. Executes automatically.
+Withdraw assets from the exchange. Behavior varies by CLI:
 
+**Hyperliquid:**
 ```bash
-fintool deposit USDC --amount 100 --from ethereum    # ETH mainnet → HL
-fintool deposit USDC --amount 500 --from base         # Base → HL
-fintool deposit USDC --amount 100 --from ethereum --dry-run   # quote only
+hyperliquid withdraw USDC --amount 100               # → Arbitrum (default)
+hyperliquid withdraw USDC --amount 100 --to base     # → Base
+hyperliquid withdraw ETH --amount 0.5                # → Ethereum (HyperUnit)
 ```
 
-The USDC bridge executes 3 transactions with your configured private key:
-1. Approve USDC spend on source chain (if needed)
-2. Bridge via Across SpokePool (source → Arbitrum, ~2-10s)
-3. Transfer USDC to HL Bridge2 on Arbitrum (auto-credited to your HL account)
-
-#### Binance
-
-Fetches your Binance deposit address via API. Use `--from` to specify the network.
-
+**Binance / Coinbase:**
 ```bash
-fintool deposit ETH --exchange binance                    # default network
-fintool deposit USDC --exchange binance --from ethereum   # USDC on Ethereum
-fintool deposit USDC --exchange binance --from base       # USDC on Base
-fintool deposit BTC --exchange binance --from bitcoin     # BTC on Bitcoin
+binance withdraw USDC --amount 100 --to 0x... --network ethereum
+coinbase withdraw ETH --amount 0.5 --to 0x...
 ```
 
-#### Coinbase
-
-Creates a Coinbase deposit address via API.
-
+**Polymarket:**
 ```bash
-fintool deposit ETH --exchange coinbase
-fintool deposit USDC --exchange coinbase
-fintool deposit BTC --exchange coinbase
-```
-
-#### JSON Schema (Hyperliquid ETH/BTC/SOL)
-
-```json
-{
-  "action": "deposit",
-  "exchange": "hyperliquid",
-  "asset": "ETH",
-  "source_chain": "ethereum",
-  "destination": "hyperliquid",
-  "hl_address": "0x...",
-  "deposit_address": "0x...",
-  "minimum": "0.007 ETH",
-  "estimated_fees": { ... }
-}
-```
-
-#### JSON Schema (USDC bridge)
-
-```json
-{
-  "action": "deposit_usdc",
-  "exchange": "hyperliquid",
-  "status": "completed",
-  "source_chain": "ethereum",
-  "amount_in": "100 USDC",
-  "amount_deposited": "99.98 USDC",
-  "hl_address": "0x...",
-  "bridge_tx": "0x...",
-  "hl_deposit_tx": "0x..."
-}
-```
-
----
-
-### `fintool withdraw <ASSET> --amount <AMT>`
-
-Withdraw assets from an exchange to an external address. Executes by default; use `--dry-run` for quote-only.
-
-#### Hyperliquid (default)
-
-**USDC** — Withdraws via HL Bridge2. Default destination is Arbitrum; use `--to` with a chain name for Ethereum or Base (chained via Across).
-
-```bash
-# USDC → Arbitrum (direct, ~3-4 min)
-fintool withdraw USDC --amount 100
-fintool withdraw USDC --amount 100 --to 0xOtherAddress
-
-# USDC → Ethereum mainnet (HL → Arbitrum → Ethereum, ~5-7 min)
-fintool withdraw USDC --amount 100 --to ethereum
-
-# USDC → Base (HL → Arbitrum → Base, ~5-6 min)
-fintool withdraw USDC --amount 100 --to base
-
-# Quote only
-fintool withdraw USDC --amount 100 --to ethereum --dry-run
-```
-
-For `--to ethereum` or `--to base`, the chained withdrawal:
-1. Withdraws USDC from HL to your Arbitrum address (~4 min)
-2. Bridges USDC from Arbitrum to destination via Across (~2-10s)
-
-**ETH, BTC, SOL** — Withdraws via [HyperUnit](https://docs.hyperunit.xyz) bridge. Transfers the tokenized asset (uETH/uBTC/uSOL) on Hyperliquid to a Unit withdrawal address, which releases native asset on the destination chain.
-
-```bash
-# ETH → Ethereum (defaults to your wallet address)
-fintool withdraw ETH --amount 0.5
-
-# SOL → Solana
-fintool withdraw SOL --amount 1 --to SomeSolanaAddress
-
-# BTC → Bitcoin (--to required)
-fintool withdraw BTC --amount 0.01 --to bc1q...
-```
-
-#### Binance
-
-Withdraws via Binance API. Requires `--to` (address) and optionally `--network`.
-
-```bash
-fintool withdraw USDC --amount 100 --to 0x... --exchange binance --network ethereum
-fintool withdraw ETH --amount 0.5 --to 0x... --exchange binance --network arbitrum
-fintool withdraw BTC --amount 0.01 --to bc1q... --exchange binance
-```
-
-Network name mapping: `ethereum`→ETH, `base`→BASE, `arbitrum`→ARBITRUM, `solana`→SOL, `bitcoin`→BTC, `bsc`→BSC, `polygon`→MATIC, `optimism`→OPTIMISM, `avalanche`→AVAXC.
-
-#### Coinbase
-
-Withdraws (sends) via Coinbase API. Requires `--to` (address).
-
-```bash
-fintool withdraw USDC --amount 100 --to 0x... --exchange coinbase
-fintool withdraw ETH --amount 0.5 --to 0x... --exchange coinbase --network base
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "withdraw",
-  "exchange": "hyperliquid",
-  "status": "submitted",
-  "asset": "USDC",
-  "amount": "100",
-  "destination_chain": "arbitrum",
-  "destination_address": "0x...",
-  "result": "Ok(...)"
-}
-```
-
----
-
-### `fintool transfer <ASSET> --amount <AMT> --from <SRC> --to <DST>`
-
-Transfer assets between perp, spot, and HIP-3 dex accounts on Hyperliquid. **Hyperliquid only** — other exchanges will return an error.
-
-On Hyperliquid, perp margin, spot balances, and HIP-3 dex margins are separate pools. This command lets you move funds between them.
-
-#### Source/Destination Values
-
-| Value | Description |
-|-------|-------------|
-| `spot` | Spot account |
-| `perp` | Main perp margin account |
-| `cash` | HIP-3 cash dex (SILVER, GOLD, stocks — uses USDT0 collateral) |
-| `xyz` | HIP-3 xyz dex (uses USDC collateral) |
-| `km`, `flx`, etc. | Other HIP-3 dexes |
-
-**Note:** One side must always be `spot`. Direct perp-to-dex transfers are not supported.
-
-#### HIP-3 Dex Collateral
-
-| Dex | Auto-Resolved Assets | Collateral |
-|-----|---------------------|------------|
-| `cash` | SILVER, GOLD, TSLA, NVDA, GOOGL, AMZN, MSFT, META, INTC, HOOD, USA500 | USDT0 |
-| `xyz` | (use `xyz:SYMBOL` prefix) | USDC |
-| `km` | (use `km:SYMBOL` prefix) | varies |
-| `flx` | (use `flx:SYMBOL` prefix) | varies |
-
-#### Examples
-
-```bash
-# Spot ↔ main perp
-fintool transfer USDC --amount 10 --from perp --to spot
-fintool transfer USDC --amount 10 --from spot --to perp
-
-# Spot ↔ HIP-3 dex (required for SILVER, GOLD, stocks)
-# Note: cash dex uses USDT0 collateral — swap USDC→USDT0 on spot first
-fintool transfer USDT0 --amount 10 --from spot --to cash
-fintool transfer USDT0 --amount 10 --from cash --to spot
-```
-
-#### JSON Schema
-
-```json
-{
-  "action": "transfer",
-  "asset": "USDT0",
-  "amount": "10",
-  "from": "spot",
-  "to": "cash",
-  "token": "USDT0",
-  "status": "ok"
-}
-```
-
----
-
-### `fintool bridge-status`
-
-Show all HyperUnit bridge operations (deposits and withdrawals) for your configured wallet.
-
-```bash
-fintool bridge-status
-```
-
-#### JSON Schema
-
-```json
-{
-  "address": "0x...",
-  "operations": [
-    {
-      "id": "0xabc...",
-      "asset": "eth",
-      "source_chain": "ethereum",
-      "destination_chain": "hyperliquid",
-      "amount": "0.500000 ETH",
-      "state": "done",
-      "source_tx": "0x...",
-      "destination_tx": "0x..."
-    }
-  ]
-}
+polymarket withdraw --amount 100
 ```
 
 ---
 
 ## Command Summary
 
-| Command | Description | Exchanges |
-|---------|-------------|-----------|
-| `fintool init` | Create config file | N/A |
-| `fintool address` | Print wallet address | Hyperliquid |
-| `fintool quote <SYM>` | Multi-source price + LLM analysis | N/A (read-only) |
-| `fintool perp quote <SYM>` | Perp price + funding/OI/premium | Hyperliquid |
-| `fintool orderbook <SYM>` | Spot L2 orderbook (bids/asks/spread) | Hyperliquid, Binance, Coinbase |
-| `fintool perp orderbook <SYM>` | Perp L2 orderbook (bids/asks/spread) | Hyperliquid, Binance |
-| `fintool news <SYM>` | Latest news headlines | N/A |
-| `fintool report annual/quarterly <SYM>` | SEC 10-K/10-Q filings | N/A |
-| `fintool report list <SYM>` | List recent SEC filings | N/A |
-| `fintool report get <SYM> <ACC>` | Fetch specific filing | N/A |
-| `fintool order buy <SYM> --amount N --price P` | Spot limit buy | Hyperliquid, Binance, Coinbase |
-| `fintool order sell <SYM> --amount N --price P` | Spot limit sell | Hyperliquid, Binance, Coinbase |
-| `fintool perp buy <SYM> --amount N --price P` | Perp limit long / close short (`--close`) | Hyperliquid, Binance |
-| `fintool perp sell <SYM> --amount N --price P` | Perp limit short / close long (`--close`) | Hyperliquid, Binance |
-| `fintool perp leverage <SYM> --leverage N` | Set perp leverage (incl. HIP-3) | Hyperliquid, Binance |
-| `fintool perp set-mode <MODE>` | Set account abstraction mode | Hyperliquid only |
-| `fintool orders [SYM]` | List open orders | Hyperliquid, Binance, Coinbase |
-| `fintool cancel <ORDER_ID>` | Cancel an order | Hyperliquid, Binance, Coinbase |
-| `fintool balance` | Account balances | Hyperliquid, Binance, Coinbase |
-| `fintool positions` | Open positions + PnL (incl. HIP-3) | Hyperliquid, Binance |
-| `fintool options buy/sell ...` | Options trading | Binance only |
-| `fintool deposit <ASSET>` | Deposit to exchange | Hyperliquid, Binance, Coinbase |
-| `fintool withdraw <ASSET> --amount N` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
-| `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
-| `fintool transfer <ASSET> --amount N --from X --to Y` | Transfer: perp ↔ spot ↔ dex | Hyperliquid only |
-| `fintool predict list [--query Q] [--min-end-days N]` | Search prediction markets (default: 3 days min) | Polymarket |
-| `fintool predict quote <MARKET>` | Market details/prices | Polymarket |
-| `fintool predict buy <MARKET> --outcome O --amount N --price P` | Buy prediction shares | Polymarket |
-| `fintool predict sell <MARKET> --outcome O --amount N --price P` | Sell prediction shares | Polymarket |
-| `fintool predict positions` | Show prediction positions | Polymarket |
-| `fintool predict deposit --amount N --from CHAIN` | Deposit USDC to Polymarket | Polymarket |
+| Command | Description | CLIs |
+|---------|-------------|------|
+| `init` | Create config file | `fintool` |
+| `address` | Print wallet address | `hyperliquid` |
+| `quote <SYM>` | Price quote | `fintool` (spot), `hyperliquid` (perp) |
+| `news <SYM>` | Latest news headlines | `fintool` |
+| `report annual/quarterly/list/get` | SEC filings | `fintool` |
+| `buy <SYM> --amount N --price P` | Spot limit buy | `hyperliquid`, `binance`, `coinbase` |
+| `sell <SYM> --amount N --price P` | Spot limit sell | `hyperliquid`, `binance`, `coinbase` |
+| `perp buy <SYM> --amount N --price P` | Perp long / close short | `hyperliquid`, `binance` |
+| `perp sell <SYM> --amount N --price P` | Perp short / close long | `hyperliquid`, `binance` |
+| `perp leverage <SYM> --leverage N` | Set perp leverage | `hyperliquid`, `binance` |
+| `perp set-mode <MODE>` | Account mode | `hyperliquid` |
+| `orderbook <SYM>` | Spot L2 orderbook | `hyperliquid`, `binance`, `coinbase` |
+| `perp orderbook <SYM>` | Perp L2 orderbook | `hyperliquid`, `binance` |
+| `orders [SYM]` | List open orders | `hyperliquid`, `binance`, `coinbase` |
+| `cancel <ORDER_ID>` | Cancel an order | `hyperliquid`, `binance`, `coinbase` |
+| `balance` | Account balances | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
+| `positions` | Open positions + PnL | `hyperliquid`, `binance`, `polymarket` |
+| `options buy/sell ...` | Options trading | `hyperliquid` |
+| `deposit <ASSET>` | Deposit to exchange | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
+| `withdraw <ASSET> --amount N` | Withdraw from exchange | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
+| `transfer <ASSET> --amount N` | Transfer: perp ↔ spot ↔ dex | `hyperliquid` |
+| `bridge-status` | Unit bridge status | `hyperliquid` |
+| `list [--query Q]` | Search prediction markets | `polymarket` |
+| `quote <MARKET>` | Market details/prices | `polymarket` |
+| `buy <MARKET> --outcome O ...` | Buy prediction shares | `polymarket` |
+| `sell <MARKET> --outcome O ...` | Sell prediction shares | `polymarket` |
 
 ## Data Sources
 
@@ -1406,86 +721,43 @@ fintool bridge-status
 | Trading — Hyperliquid spot + perps | Hyperliquid Exchange API | Wallet private key | EIP-712 signing |
 | Trading — Binance spot | Binance Spot API `/api/v3/order` | API key + secret | HMAC-SHA256 signing |
 | Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
-| Trading — Binance options | Binance Options API `/eapi/v1/order` | API key + secret | HMAC-SHA256 signing |
-| Prediction markets — Polymarket | Polymarket Gamma + CLOB APIs | Wallet key (for trading) | EIP-712 signing via polymarket-client-sdk |
-| Trading — Coinbase spot | Coinbase Advanced Trade API `/api/v3/brokerage/orders` | API key + secret | HMAC-SHA256 signing |
+| Prediction markets — Polymarket | Polymarket Gamma + CLOB APIs | Wallet key (for trading) | EIP-712 signing |
+| Trading — Coinbase spot | Coinbase Advanced Trade API | API key + secret | HMAC-SHA256 signing |
 | Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
 | Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
-| Deposit/Withdraw — HL USDC | Hyperliquid Bridge2 | Wallet private key | Arbitrum ↔ Hyperliquid |
-| Deposit/Withdraw — Binance | Binance SAPI | API key + secret | `/sapi/v1/capital/` endpoints |
-| Deposit/Withdraw — Coinbase | Coinbase v2 API | API key + secret | `/v2/accounts/` endpoints |
-
-## Technical Notes
-
-- **[HIP-3 Implementation](docs/HIP3-IMPLEMENTATION.md)** — How fintool implements EIP-712 signing for Hyperliquid's builder-deployed perpetuals (commodities, stocks, indices). Covers asset index resolution, msgpack wire format, and the signing flow that bypasses the Rust SDK's limitations.
-
-## Architecture
-
-```
-fintool/
-├── src/
-│   ├── main.rs          # Entry point, command dispatch
-│   ├── cli.rs           # Clap CLI definitions (global --exchange flag)
-│   ├── config.rs        # Config loading (~/.fintool/config.toml)
-│   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution, dex transfers
-│   ├── hip3.rs          # HIP-3 builder-deployed perps: EIP-712 signing, order/leverage for dex assets
-│   ├── binance.rs       # Binance API client (spot/futures/options, deposit/withdraw, HMAC-SHA256)
-│   ├── coinbase.rs      # Coinbase Advanced Trade API client (spot, deposit/withdraw, HMAC-SHA256)
-│   ├── bridge.rs        # Across Protocol cross-chain USDC bridge (Ethereum/Base ↔ Arbitrum)
-│   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw, fee estimation)
-│   ├── polymarket.rs    # Polymarket SDK client helpers (gamma, CLOB, data, bridge)
-│   ├── format.rs        # Color formatting helpers
-│   └── commands/
-│       ├── quote.rs     # Multi-source quotes + LLM enrichment
-│       ├── news.rs      # News via Google News RSS
-│       ├── report.rs    # SEC filings via EDGAR
-│       ├── order.rs     # Spot limit buy/sell with exchange routing
-│       ├── perp.rs      # Perp limit buy/sell with exchange routing
-│       ├── orders.rs    # List open orders
-│       ├── cancel.rs    # Cancel orders (supports all three exchange formats)
-│       ├── balance.rs   # Account balance
-│       ├── positions.rs # Open positions
-│       ├── options.rs   # Options trading (Binance only)
-│       ├── deposit.rs   # Multi-exchange deposit (Unit, Across, Binance, Coinbase)
-│       ├── withdraw.rs  # Multi-exchange withdraw (Bridge2, Unit, Across, Binance, Coinbase)
-│       ├── predict.rs   # Prediction market commands (Polymarket)
-│       └── bridge_status.rs # HyperUnit bridge operation tracker
-├── config.toml.default  # Config template
-├── Cargo.toml
-└── README.md
-```
-
-### Key Modules
-
-**`binance.rs`** — Binance exchange integration:
-- HMAC-SHA256 request signing
-- Spot orders: `/api/v3/order`
-- Futures orders: `/fapi/v1/order`
-- Options orders: `/eapi/v1/order`
-- Account balances, positions, open orders, cancellation
-
-**`coinbase.rs`** — Coinbase Advanced Trade integration:
-- HMAC-SHA256 request signing (timestamp + method + path + body)
-- Spot orders: `/api/v3/brokerage/orders`
-- Product ID format: `BTC-USD` (not `BTCUSDT`)
-- Account balances, open orders, cancellation
-- **No perp or options support** (Coinbase doesn't offer these products)
-
-**Exchange Routing** — Commands with `--exchange` flag:
-- `resolve_exchange()` in each command module
-- Auto mode logic: check configured exchanges, priority = Hyperliquid > Coinbase > Binance for spot
-- Perps: Hyperliquid > Binance (Coinbase excluded)
-- Options always require Binance
 
 ## JSON Mode
 
 For scripts, bots, and programmatic use, pass the entire command as a JSON string via the `--json` flag. In this mode, **all output is JSON** (including errors).
 
+Each CLI has its own JSON command set — no `exchange` field needed.
+
 ```bash
+# Market intelligence
 fintool --json '{"command":"quote","symbol":"BTC"}'
-fintool --json '{"command":"balance"}'
-fintool --json '{"command":"order_buy","symbol":"HYPE","amount":"1.0","price":"25.00"}'
-fintool --json '{"command":"withdraw","asset":"USDC","amount":"10","to":"base"}'
+fintool --json '{"command":"news","symbol":"ETH"}'
+
+# Hyperliquid trading
+hyperliquid --json '{"command":"buy","symbol":"HYPE","amount":1.0,"price":25.00}'
+hyperliquid --json '{"command":"perp_buy","symbol":"ETH","amount":0.1,"price":3000}'
+hyperliquid --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
+hyperliquid --json '{"command":"balance"}'
+hyperliquid --json '{"command":"transfer","asset":"USDT0","amount":30,"from":"spot","to":"cash"}'
+hyperliquid --json '{"command":"deposit","asset":"USDC","amount":15,"from":"base"}'
+
+# Binance trading
+binance --json '{"command":"buy","symbol":"BTC","amount":0.002,"price":65000}'
+binance --json '{"command":"perp_sell","symbol":"ETH","amount":0.1,"price":3100,"close":true}'
+binance --json '{"command":"balance"}'
+
+# Coinbase trading
+coinbase --json '{"command":"buy","symbol":"ETH","amount":0.5,"price":2000}'
+coinbase --json '{"command":"balance"}'
+
+# Polymarket prediction markets
+polymarket --json '{"command":"list","query":"bitcoin"}'
+polymarket --json '{"command":"buy","market":"will-btc-hit-100k","outcome":"yes","amount":20,"price":0.50}'
+polymarket --json '{"command":"positions"}'
 ```
 
 Errors are returned as JSON too:
@@ -1494,70 +766,150 @@ Errors are returned as JSON too:
 {"error": "Invalid JSON command: missing field `symbol`"}
 ```
 
-### JSON Command Schema
+### JSON Command Schema by CLI
+
+#### `fintool`
 
 | `command` | Required fields | Optional fields |
 |-----------|----------------|-----------------|
 | `init` | — | — |
-| `address` | — | — |
 | `quote` | `symbol` | — |
 | `news` | `symbol` | — |
-| `order_buy` | `symbol`, `amount`, `price` | `exchange` |
-| `order_sell` | `symbol`, `amount`, `price` | `exchange` |
-| `orders` | — | `symbol`, `exchange` |
-| `cancel` | `order_id` | `exchange` |
-| `balance` | — | `exchange` |
-| `positions` | — | `exchange` |
-| `perp_quote` | `symbol` | — |
-| `perp_buy` | `symbol`, `amount`, `price` | `close`, `exchange` |
-| `perp_sell` | `symbol`, `amount`, `price` | `close`, `exchange` |
-| `perp_leverage` | `symbol`, `leverage` | `cross`, `exchange` |
-| `perp_set_mode` | `mode` | — |
-| `options_buy` | `symbol`, `option_type`, `strike`, `expiry`, `size` | `exchange` |
-| `options_sell` | `symbol`, `option_type`, `strike`, `expiry`, `size` | `exchange` |
-| `deposit` | `asset` | `amount`, `from`, `exchange`, `dry_run` |
-| `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
-| `transfer` | `asset`, `amount`, `from`, `to` | — |
-| `bridge_status` | — | — |
 | `report_annual` | `symbol` | `output` |
 | `report_quarterly` | `symbol` | `output` |
 | `report_list` | `symbol` | `limit` |
 | `report_get` | `symbol`, `accession` | `output` |
 
+#### `hyperliquid`
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `address` | — | — |
+| `quote` | `symbol` | — |
+| `buy` | `symbol`, `amount`, `price` | — |
+| `sell` | `symbol`, `amount`, `price` | — |
+| `orderbook` | `symbol` | `levels` |
+| `orders` | — | `symbol` |
+| `cancel` | `order_id` | — |
+| `balance` | — | — |
+| `positions` | — | — |
+| `perp_quote` | `symbol` | — |
+| `perp_orderbook` | `symbol` | `levels` |
+| `perp_buy` | `symbol`, `amount`, `price` | `close` |
+| `perp_sell` | `symbol`, `amount`, `price` | `close` |
+| `perp_leverage` | `symbol`, `leverage` | `cross` |
+| `perp_set_mode` | `mode` | — |
+| `options_buy` | `symbol`, `option_type`, `strike`, `expiry`, `size` | — |
+| `options_sell` | `symbol`, `option_type`, `strike`, `expiry`, `size` | — |
+| `deposit` | `asset` | `amount`, `from`, `dry_run` |
+| `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
+| `transfer` | `asset`, `amount`, `from`, `to` | — |
+| `bridge_status` | — | — |
+
+#### `binance`
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `buy` | `symbol`, `amount`, `price` | — |
+| `sell` | `symbol`, `amount`, `price` | — |
+| `orderbook` | `symbol` | `levels` |
+| `orders` | — | `symbol` |
+| `cancel` | `order_id` | — |
+| `balance` | — | — |
+| `positions` | — | — |
+| `perp_orderbook` | `symbol` | `levels` |
+| `perp_buy` | `symbol`, `amount`, `price` | `close` |
+| `perp_sell` | `symbol`, `amount`, `price` | `close` |
+| `perp_leverage` | `symbol`, `leverage` | `cross` |
+| `deposit` | `asset` | `amount`, `from`, `dry_run` |
+| `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
+
+#### `coinbase`
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `buy` | `symbol`, `amount`, `price` | — |
+| `sell` | `symbol`, `amount`, `price` | — |
+| `orderbook` | `symbol` | `levels` |
+| `orders` | — | `symbol` |
+| `cancel` | `order_id` | — |
+| `balance` | — | — |
+| `deposit` | `asset` | `amount`, `from`, `dry_run` |
+| `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
+
+#### `polymarket`
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `list` | — | `query`, `limit`, `active`, `sort`, `min_end_days` |
+| `quote` | `market` | — |
+| `buy` | `market`, `outcome`, `amount`, `price` | — |
+| `sell` | `market`, `outcome`, `amount`, `price` | — |
+| `positions` | — | — |
+| `balance` | — | — |
+| `deposit` | — | `amount`, `from`, `dry_run` |
+| `withdraw` | `amount` | `dry_run` |
+
 **Notes:**
-- `exchange` defaults to `"auto"` when omitted
-- `amount` and `price` are strings (e.g. `"0.1"`, `"2500.00"`)
+- `amount` and `price` are numbers (e.g. `0.1`, `2500.00`)
 - `leverage` is a number (e.g. `10`)
 - `close` and `dry_run` are booleans (default `false`)
 - `limit` is a number (default `10`)
-
-### Examples
-
-```bash
-# Get a price quote
-fintool --json '{"command":"quote","symbol":"ETH"}'
-
-# Place a perp buy with leverage
-fintool --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
-fintool --json '{"command":"perp_buy","symbol":"ETH","amount":"0.1","price":"3000"}'
-
-# Close a perp position
-fintool --json '{"command":"perp_sell","symbol":"ETH","amount":"0.1","price":"3100","close":true}'
-
-# Transfer USDT0 to cash dex for commodity trading
-fintool --json '{"command":"transfer","asset":"USDT0","amount":"30","from":"spot","to":"cash"}'
-
-# Deposit and withdraw
-fintool --json '{"command":"deposit","asset":"USDC","amount":"15","from":"base"}'
-fintool --json '{"command":"withdraw","asset":"USDC","amount":"10","to":"base"}'
-
-# Check account state
-fintool --json '{"command":"balance"}'
-fintool --json '{"command":"positions"}'
-fintool --json '{"command":"orders"}'
-```
+- `min_end_days` is a number (default `3`)
 
 ---
+
+## Architecture
+
+```
+fintool/
+├── src/
+│   ├── lib.rs          # Library crate — module re-exports, shared helpers
+│   ├── bin/
+│   │   ├── fintool.rs      # CLI: market intelligence (quote, news, report)
+│   │   ├── hyperliquid.rs  # CLI: Hyperliquid exchange
+│   │   ├── binance.rs      # CLI: Binance exchange
+│   │   ├── coinbase.rs     # CLI: Coinbase exchange
+│   │   └── polymarket.rs   # CLI: Polymarket prediction markets
+│   ├── config.rs        # Config loading (~/.fintool/config.toml)
+│   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
+│   ├── hip3.rs          # HIP-3 builder-deployed perps: EIP-712 signing
+│   ├── binance.rs       # Binance API client (spot/futures/options, HMAC-SHA256)
+│   ├── coinbase.rs      # Coinbase Advanced Trade API client (HMAC-SHA256)
+│   ├── bridge.rs        # Across Protocol cross-chain USDC bridge
+│   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw)
+│   ├── polymarket.rs    # Polymarket SDK client helpers
+│   ├── format.rs        # Color formatting + number formatting helpers
+│   └── commands/
+│       ├── quote.rs     # Multi-source quotes + LLM enrichment
+│       ├── news.rs      # News via Google News RSS
+│       ├── report.rs    # SEC filings via EDGAR
+│       ├── order.rs     # Spot limit buy/sell
+│       ├── perp.rs      # Perp limit buy/sell
+│       ├── orders.rs    # List open orders
+│       ├── cancel.rs    # Cancel orders
+│       ├── balance.rs   # Account balance
+│       ├── positions.rs # Open positions
+│       ├── options.rs   # Options trading
+│       ├── orderbook.rs # L2 orderbooks
+│       ├── deposit.rs   # Multi-exchange deposit
+│       ├── withdraw.rs  # Multi-exchange withdraw
+│       ├── transfer.rs  # Spot ↔ perp ↔ dex transfers (Hyperliquid)
+│       ├── predict.rs   # Prediction market commands (Polymarket)
+│       └── bridge_status.rs # HyperUnit bridge tracker
+├── tests/
+│   ├── helpers.sh       # Shell test utilities
+│   ├── hyperliquid/     # E2E tests for Hyperliquid
+│   └── polymarket/      # E2E tests for Polymarket
+├── examples/
+│   ├── funding_arb/     # Funding rate arbitrage bot
+│   └── metal_pair/      # Metal pairs trading bot
+├── skills/
+│   ├── SKILL.md         # OpenClaw skill reference
+│   └── install.md       # OpenClaw install instructions
+├── Cargo.toml
+└── README.md
+```
 
 ## Key Dependencies
 

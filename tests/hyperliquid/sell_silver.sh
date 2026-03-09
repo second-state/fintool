@@ -2,7 +2,7 @@
 #
 # Sell ALL SILVER perp on Hyperliquid + transfer USDT0 back + swap to USDC
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Get positions, find SILVER
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Sell ALL SILVER perp on Hyperliquid (JSON API)"
 
@@ -75,7 +75,7 @@ RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"SILVER\",\"amount\":$SELL_S
 
 if [[ -z "$RESULT" ]]; then
     fail "SILVER perp sell failed"
-    warn "Position may still be open -- check manually with 'fintool positions'"
+    warn "Position may still be open -- check manually with 'hyperliquid positions'"
     exit 1
 fi
 
@@ -112,7 +112,7 @@ if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     RESULT=$(ft "{\"command\":\"transfer\",\"asset\":\"USDT0\",\"amount\":$TRANSFER_AMT,\"from\":\"cash\",\"to\":\"spot\"}")
     if [[ -z "$RESULT" ]]; then
         warn "USDT0 transfer from cash dex failed"
-        warn "USDT0 may still be in cash dex. Use: fintool transfer USDT0 --amount <amount> --from cash --to spot"
+        warn "USDT0 may still be in cash dex. Use: hyperliquid transfer USDT0 --amount <amount> --from cash --to spot"
     else
         ok "Transferred $TRANSFER_AMT USDT0 from cash dex to spot"
     fi
@@ -132,10 +132,10 @@ SELL_AMT=$(echo "$SPOT_USDT0 $USDT0_HOLD" | awk '{v = int(($1 - $2) * 100) / 100
 
 if [[ "$SELL_AMT" != "0" && "$SELL_AMT" != "0.00" ]]; then
     info "Swapping $SELL_AMT USDT0 -> USDC on spot..."
-    RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"USDT0\",\"amount\":$SELL_AMT,\"price\":0.998}")
+    RESULT=$(ft "{\"command\":\"sell\",\"symbol\":\"USDT0\",\"amount\":$SELL_AMT,\"price\":0.998}")
     if [[ -z "$RESULT" ]]; then
         warn "USDT0 -> USDC spot swap failed"
-        warn "USDT0 still in spot. Sell manually: fintool order sell USDT0 --amount $SELL_AMT --price 0.998"
+        warn "USDT0 still in spot. Sell manually: hyperliquid sell USDT0 --amount $SELL_AMT --price 0.998"
     else
         SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
         info "USDT0->USDC swap fill: $SWAP_FILL"

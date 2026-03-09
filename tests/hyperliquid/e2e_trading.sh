@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# End-to-end fintool workflow using the JSON API
+# End-to-end hyperliquid workflow using the JSON API
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # This script illustrates the full deposit -> trade -> withdraw cycle.
-# Every fintool call uses --json mode with structured JSON input/output.
+# Every hyperliquid call uses --json mode with structured JSON input/output.
 #
 # Workflow:
 #   1. Deposit USDC from Base
@@ -31,7 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 # ══════════════════════════════════════════════════════════════════════
 # 1. Deposit USDC from Base to Hyperliquid
@@ -106,7 +106,7 @@ HYPE_PRICE=$(echo "$QUOTE" | jq -r '.price // .markPx')
 info "HYPE price: \$$HYPE_PRICE"
 
 info "Buying 0.48 HYPE at \$25.00 limit..."
-RESULT=$(ft '{"command":"order_buy","symbol":"HYPE","amount":0.48,"price":25.00}')
+RESULT=$(ft '{"command":"buy","symbol":"HYPE","amount":0.48,"price":25.00}')
 BUY_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "HYPE buy fill: $BUY_FILL"
 
@@ -114,7 +114,7 @@ info "Checking balance..."
 ft '{"command":"balance"}' | jq .
 
 info "Selling 0.48 HYPE at \$24.50 limit..."
-RESULT=$(ft '{"command":"order_sell","symbol":"HYPE","amount":0.48,"price":24.50}')
+RESULT=$(ft '{"command":"sell","symbol":"HYPE","amount":0.48,"price":24.50}')
 SELL_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "HYPE sell fill: $SELL_FILL"
 
@@ -124,7 +124,7 @@ info "HYPE sell fill: $SELL_FILL"
 log "Step 5: Fund cash dex with USDT0"
 
 info "Buying 30 USDT0 (swapping USDC -> USDT0)..."
-RESULT=$(ft '{"command":"order_buy","symbol":"USDT0","amount":30,"price":1.002}')
+RESULT=$(ft '{"command":"buy","symbol":"USDT0","amount":30,"price":1.002}')
 SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "USDT0 buy fill: $SWAP_FILL"
 
@@ -177,7 +177,7 @@ else
 fi
 
 info "Selling 30 USDT0 (swapping USDT0 -> USDC)..."
-RESULT=$(ft '{"command":"order_sell","symbol":"USDT0","amount":30,"price":0.998}')
+RESULT=$(ft '{"command":"sell","symbol":"USDT0","amount":30,"price":0.998}')
 SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
 info "USDT0 sell fill: $SWAP_FILL"
 

@@ -2,7 +2,7 @@
 #
 # Buy ~$12 worth of SILVER perp on Hyperliquid (HIP-3 cash dex)
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # The cash dex uses USDT0 as collateral (not USDC), so the workflow is:
 #   1. Set SILVER leverage to 2x
@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Buy ~\$12 SILVER perp on Hyperliquid (JSON API)"
 
@@ -45,7 +45,7 @@ SWAP_AMT=$(echo "$SPOT_USDC" | awk '{v = int($1 * 100) / 100; if (v > 0.5) print
 # ── Step 3: Swap USDC -> USDT0 on spot ───────────────────────────────
 if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
     info "Swapping \$$SWAP_AMT USDC -> USDT0 on spot (cash dex collateral)..."
-    RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"USDT0\",\"amount\":$SWAP_AMT,\"price\":1.002}")
+    RESULT=$(ft "{\"command\":\"buy\",\"symbol\":\"USDT0\",\"amount\":$SWAP_AMT,\"price\":1.002}")
     if [[ -z "$RESULT" ]]; then
         fail "USDC -> USDT0 spot swap failed"
         exit 1

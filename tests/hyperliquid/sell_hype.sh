@@ -2,7 +2,7 @@
 #
 # Sell ALL HYPE spot on Hyperliquid
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Get balance via balance command
@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Sell ALL HYPE spot on Hyperliquid (JSON API)"
 
@@ -72,11 +72,11 @@ info "Current price: \$$HYPE_PRICE"
 info "Sell limit:    \$$SELL_LIMIT (-0.5% buffer)"
 
 # ── Place sell order ─────────────────────────────────────────────────
-RESULT=$(ft "{\"command\":\"order_sell\",\"symbol\":\"HYPE\",\"amount\":$SELL_SIZE,\"price\":$SELL_LIMIT}")
+RESULT=$(ft "{\"command\":\"sell\",\"symbol\":\"HYPE\",\"amount\":$SELL_SIZE,\"price\":$SELL_LIMIT}")
 
 if [[ -z "$RESULT" ]]; then
     fail "HYPE spot sell failed"
-    warn "Tokens may still be held -- check manually with 'fintool balance'"
+    warn "Tokens may still be held -- check manually with 'hyperliquid balance'"
     exit 1
 fi
 

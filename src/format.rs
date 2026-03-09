@@ -2,6 +2,13 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
+/// Format f64 to string with 8 decimal places, then strip trailing zeros.
+/// Matches Hyperliquid SDK's float_to_string_for_hashing convention.
+pub fn fmt_num(val: f64) -> String {
+    let s = format!("{:.8}", val);
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 pub fn color_change(value: &str) -> String {
     match Decimal::from_str(value) {
         Ok(d) if d > Decimal::ZERO => format!("+{}%", value).green().to_string(),
