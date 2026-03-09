@@ -76,7 +76,7 @@ info "Setting ETH leverage to 2x..."
 ft '{"command":"perp_leverage","symbol":"ETH","leverage":2}'
 
 info "Fetching ETH quote..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"ETH"}')
+QUOTE=$(ft '{"command":"quote","symbol":"ETH"}')
 echo "$QUOTE" | jq .
 ETH_PRICE=$(echo "$QUOTE" | jq -r '.markPx')
 info "ETH mark price: \$$ETH_PRICE"
@@ -100,7 +100,7 @@ info "ETH sell fill: $SELL_FILL"
 log "Step 4: Trade HYPE spot"
 
 info "Fetching HYPE quote..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"HYPE"}')
+QUOTE=$(ft '{"command":"quote","symbol":"HYPE"}')
 echo "$QUOTE" | jq .
 HYPE_PRICE=$(echo "$QUOTE" | jq -r '.markPx // empty')
 info "HYPE price: \$$HYPE_PRICE"
@@ -145,7 +145,7 @@ info "Setting SILVER leverage to 2x..."
 ft '{"command":"perp_leverage","symbol":"SILVER","leverage":2}'
 
 info "Fetching SILVER quote..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"SILVER"}')
+QUOTE=$(ft '{"command":"quote","symbol":"SILVER"}')
 echo "$QUOTE" | jq .
 SILVER_PRICE=$(echo "$QUOTE" | jq -r '.markPx')
 info "SILVER mark price: \$$SILVER_PRICE"

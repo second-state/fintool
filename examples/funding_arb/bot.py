@@ -198,7 +198,7 @@ def gather_candidates(cfg: dict) -> list:
     candidates = []
 
     for spot_ticker, perp_ticker in SPOT_TO_PERP.items():
-        ctx = cli({"command": "perp_quote", "symbol": perp_ticker}, hyperliquid)
+        ctx = cli({"command": "quote", "symbol": perp_ticker}, hyperliquid)
         if "error" in ctx:
             continue
 
@@ -237,10 +237,10 @@ def open_position(spot_ticker: str, perp_ticker: str, usdc_amount: float, cfg: d
              spot_ticker, perp_ticker, usdc_amount, half)
 
     # Get current prices
-    perp_quote = cli({"command": "perp_quote", "symbol": perp_ticker}, hyperliquid)
+    quote = cli({"command": "quote", "symbol": perp_ticker}, hyperliquid)
     spot_quote = cli({"command": "quote", "symbol": spot_ticker}, fintool)
 
-    perp_price = float(perp_quote.get("markPx") or 0)
+    perp_price = float(quote.get("markPx") or 0)
     spot_price = float(spot_quote.get("price") or spot_quote.get("markPx") or 0)
 
     if not perp_price or not spot_price:
@@ -301,7 +301,7 @@ def close_all_positions(cfg: dict):
             abs_size = abs(size)
             log.info("  Closing perp: %s size=%s", symbol, size_str)
 
-            quote = cli({"command": "perp_quote", "symbol": symbol}, hyperliquid)
+            quote = cli({"command": "quote", "symbol": symbol}, hyperliquid)
             price = float(quote.get("markPx") or 0)
             if not price:
                 continue
@@ -368,7 +368,7 @@ def check_current_funding(cfg: dict) -> str:
     if not short_symbol:
         return "none"
 
-    quote = cli({"command": "perp_quote", "symbol": short_symbol}, hyperliquid)
+    quote = cli({"command": "quote", "symbol": short_symbol}, hyperliquid)
     funding = float(quote.get("funding") or 0)
     log.info("Current position: %s | Funding rate: %s", short_symbol, funding)
 

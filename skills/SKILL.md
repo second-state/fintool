@@ -95,7 +95,7 @@ cat ~/.fintool/config.toml 2>/dev/null
 {"command": "sell", "symbol": "ETH", "amount": 0.1, "price": 4000}
 {"command": "orderbook", "symbol": "HYPE"}
 {"command": "orderbook", "symbol": "BTC", "levels": 10}
-{"command": "perp_quote", "symbol": "ETH"}
+{"command": "quote", "symbol": "ETH"}
 {"command": "perp_orderbook", "symbol": "BTC"}
 {"command": "perp_buy", "symbol": "ETH", "amount": 0.5, "price": 3800}
 {"command": "perp_sell", "symbol": "BTC", "amount": 0.01, "price": 100000}
@@ -221,9 +221,9 @@ Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity before
 
 **Goal**: Research and take a leveraged position via perpetual futures.
 
-**Step 1 — Get perp quote with funding/OI:**
+**Step 1 — Get quote with funding/OI:**
 ```bash
-{baseDir}/scripts/hyperliquid --json '{"command":"perp_quote","symbol":"ETH"}'
+{baseDir}/scripts/hyperliquid --json '{"command":"quote","symbol":"ETH"}'
 ```
 
 **Step 1b — Check perp orderbook depth and spread:**

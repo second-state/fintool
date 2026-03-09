@@ -359,8 +359,8 @@ def run(cfg: dict):
 
     # ── Step 3: Get price quotes and funding rates ────────────────────────
     log.info("Fetching price quotes...")
-    gold_quote = cli({"command": "perp_quote", "symbol": "GOLD"}, hyperliquid)
-    silver_quote = cli({"command": "perp_quote", "symbol": "SILVER"}, hyperliquid)
+    gold_quote = cli({"command": "quote", "symbol": "GOLD"}, hyperliquid)
+    silver_quote = cli({"command": "quote", "symbol": "SILVER"}, hyperliquid)
 
     gold_price = float(gold_quote.get("markPx") or 0)
     silver_price = float(silver_quote.get("markPx") or 0)

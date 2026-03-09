@@ -6,7 +6,7 @@
 #
 # Workflow:
 #   1. Get positions, find SILVER
-#   2. Get SILVER price from perp_quote
+#   2. Get SILVER price from quote
 #   3. Sell SILVER perp with close flag
 #   4. Get wallet address via address command
 #   5. Query cash dex withdrawable via HL API (curl)
@@ -57,7 +57,7 @@ info "SILVER position size: $SILVER_SIZE oz (selling $SELL_SIZE)"
 
 # ── Step 2: Get SILVER price ─────────────────────────────────────────
 info "Fetching SILVER mark price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"SILVER"}')
+QUOTE=$(ft '{"command":"quote","symbol":"SILVER"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "SILVER perp quote failed"

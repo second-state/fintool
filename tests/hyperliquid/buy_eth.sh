@@ -6,7 +6,7 @@
 #
 # Workflow:
 #   1. Set ETH leverage to 2x
-#   2. Get ETH mark price via perp_quote
+#   2. Get ETH mark price via quote
 #   3. Compute buy size (~$12 worth) and limit price (+0.5%)
 #   4. Place ETH perp buy order
 #
@@ -32,7 +32,7 @@ ok "ETH leverage set to 2x"
 
 # ── Get ETH price ────────────────────────────────────────────────────
 info "Fetching ETH mark price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"ETH"}')
+QUOTE=$(ft '{"command":"quote","symbol":"ETH"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "ETH perp quote failed"

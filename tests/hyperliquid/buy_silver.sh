@@ -10,7 +10,7 @@
 #   3. Swap USDC -> USDT0 on spot (buy USDT0)
 #   4. Wait for settlement, check USDT0 balance
 #   5. Transfer USDT0 from spot to cash dex
-#   6. Get SILVER price via perp_quote
+#   6. Get SILVER price via quote
 #   7. Place SILVER perp buy order
 #
 # Usage: ./tests/json/buy_silver.sh
@@ -82,7 +82,7 @@ fi
 
 # ── Step 6: Get SILVER price ─────────────────────────────────────────
 info "Fetching SILVER mark price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"SILVER"}')
+QUOTE=$(ft '{"command":"quote","symbol":"SILVER"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "SILVER perp quote failed"

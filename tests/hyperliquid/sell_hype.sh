@@ -58,7 +58,7 @@ info "HYPE balance: $HYPE_TOTAL (hold: $HYPE_HOLD, selling: $SELL_SIZE)"
 
 # ── Get HYPE price ───────────────────────────────────────────────────
 info "Fetching HYPE price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"HYPE"}')
+QUOTE=$(ft '{"command":"quote","symbol":"HYPE"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "HYPE quote failed"

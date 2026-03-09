@@ -10,7 +10,7 @@
 #   3. Swap USDC -> USDT0 on spot (buy USDT0)
 #   4. Wait for settlement, check USDT0 balance
 #   5. Transfer USDT0 from spot to cash dex
-#   6. Get TSLA price via perp_quote
+#   6. Get TSLA price via quote
 #   7. Place TSLA perp buy order
 #
 # Usage: ./tests/hyperliquid/buy_tsla.sh
@@ -82,7 +82,7 @@ fi
 
 # ── Step 6: Get TSLA price ───────────────────────────────────────────
 info "Fetching TSLA perp price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"TSLA"}')
+QUOTE=$(ft '{"command":"quote","symbol":"TSLA"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "TSLA perp quote failed"

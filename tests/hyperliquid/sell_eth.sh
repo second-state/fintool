@@ -8,7 +8,7 @@
 #   1. Get positions via positions command
 #   2. Extract ETH position size (szi)
 #   3. If no position, warn and exit
-#   4. Get ETH price via perp_quote
+#   4. Get ETH price via quote
 #   5. Sell with close flag at -0.5% below mark
 #
 # Usage: ./tests/json/sell_eth.sh
@@ -55,7 +55,7 @@ info "ETH position size: $ETH_SIZE (selling $SELL_SIZE)"
 
 # ── Get ETH price ────────────────────────────────────────────────────
 info "Fetching ETH mark price..."
-QUOTE=$(ft '{"command":"perp_quote","symbol":"ETH"}')
+QUOTE=$(ft '{"command":"quote","symbol":"ETH"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "ETH perp quote failed"
