@@ -141,6 +141,9 @@ pub enum PredictCmd {
         /// Sort by: volume, liquidity
         #[arg(long)]
         sort: Option<String>,
+        /// Minimum days from now before market closes (default: 3)
+        #[arg(long, default_value = "3")]
+        min_end_days: i64,
     },
     /// Get prediction market quote/details
     Quote {

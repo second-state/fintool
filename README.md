@@ -237,6 +237,12 @@ fintool balance
 fintool predict list --query "bitcoin"
 fintool predict list --query "election" --limit 5
 
+# Only show markets ending 7+ days from now (default: 3)
+fintool predict list --query "bitcoin" --min-end-days 7
+
+# Show all markets including ones closing today
+fintool predict list --query "bitcoin" --min-end-days 0
+
 # Get market details/quote
 fintool predict quote will-bitcoin-hit-100k
 
@@ -1378,7 +1384,7 @@ fintool bridge-status
 | `fintool withdraw <ASSET> --amount N` | Withdraw from exchange | Hyperliquid, Binance, Coinbase |
 | `fintool bridge-status` | Unit bridge operation status | Hyperliquid |
 | `fintool transfer <ASSET> --amount N --from X --to Y` | Transfer: perp ↔ spot ↔ dex | Hyperliquid only |
-| `fintool predict list [--query Q]` | Search prediction markets | Polymarket |
+| `fintool predict list [--query Q] [--min-end-days N]` | Search prediction markets (default: 3 days min) | Polymarket |
 | `fintool predict quote <MARKET>` | Market details/prices | Polymarket |
 | `fintool predict buy <MARKET> --outcome O --amount N --price P` | Buy prediction shares | Polymarket |
 | `fintool predict sell <MARKET> --outcome O --amount N --price P` | Sell prediction shares | Polymarket |

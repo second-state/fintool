@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
+use chrono::{Days, Utc};
 use colored::Colorize;
 use serde_json::json;
 
@@ -11,9 +12,13 @@ pub async fn list(
     limit: i32,
     _active: Option<bool>,
     sort: Option<&str>,
+    min_end_days: i64,
     json: bool,
 ) -> Result<()> {
     let client = polymarket::create_gamma_client();
+    let min_end_date = Utc::now()
+        .checked_add_days(Days::new(min_end_days.max(0) as u64))
+        .unwrap();
 
     if let Some(q) = query {
         use polymarket_client_sdk::gamma::types::request::SearchRequest;
@@ -25,12 +30,23 @@ pub async fn list(
             client.search(&req).await?
         };
 
-        // Extract markets from events
+        // Extract markets from events, filtering out closed and soon-ending markets
+        let min_end_naive = min_end_date.date_naive();
         let mut markets = Vec::new();
         if let Some(events) = &results.events {
             for event in events {
                 if let Some(ref mks) = event.markets {
-                    markets.extend(mks.iter());
+                    for m in mks {
+                        if m.closed == Some(true) {
+                            continue;
+                        }
+                        if let Some(end) = m.end_date_iso {
+                            if end < min_end_naive {
+                                continue;
+                            }
+                        }
+                        markets.push(m);
+                    }
                 }
             }
         }
@@ -55,6 +71,8 @@ pub async fn list(
         use polymarket_client_sdk::gamma::types::request::MarketsRequest;
         let mut req = MarketsRequest::default();
         req.limit = Some(limit);
+        req.end_date_min = Some(min_end_date);
+        req.closed = Some(false);
         if let Some(s) = sort {
             req.order = Some(s.to_string());
         }
@@ -288,6 +306,9 @@ fn print_market_human(m: &polymarket_client_sdk::gamma::types::response::Market)
     }
     if let Some(ref liq) = m.liquidity {
         println!("  Liquidity: ${}", liq);
+    }
+    if let Some(end) = m.end_date_iso {
+        println!("  End date: {}", end);
     }
     println!();
 }

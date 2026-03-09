@@ -161,6 +161,28 @@ All commands use: `{baseDir}/scripts/fintool --json '<JSON>'`
 {"command": "report_get", "symbol": "AAPL", "accession": "0000320193-24-000123"}
 ```
 
+### Prediction Markets (Polymarket)
+
+```json
+{"command": "predict_list", "query": "bitcoin"}
+{"command": "predict_list", "query": "election", "limit": 5}
+{"command": "predict_list", "query": "bitcoin", "min_end_days": 7}
+{"command": "predict_list", "query": "bitcoin", "min_end_days": 0}
+{"command": "predict_quote", "market": "will-bitcoin-hit-100k"}
+{"command": "predict_buy", "market": "will-bitcoin-hit-100k", "outcome": "yes", "amount": 10, "price": 0.65}
+{"command": "predict_sell", "market": "will-bitcoin-hit-100k", "outcome": "yes", "amount": 10, "price": 0.70}
+{"command": "predict_positions"}
+{"command": "predict_deposit", "amount": 100, "from": "base"}
+{"command": "predict_balance"}
+{"command": "predict_withdraw", "amount": 50}
+```
+
+**Notes:**
+- `predict_list` defaults to `min_end_days: 3`, filtering out markets that close within 3 days (which often have odds near 1:0). Set to `0` to see all markets.
+- `predict_list` and `predict_quote` are read-only and don't require Polymarket credentials.
+- Trading commands (`predict_buy`, `predict_sell`, `predict_deposit`, `predict_withdraw`) require `wallet.private_key` in config.
+- Use the market slug (from `predict_list`) or condition ID as the `market` value.
+
 ## Workflows
 
 ### Workflow 1: Spot Trading
@@ -358,6 +380,39 @@ Automatically chains: HL Bridge2 → Arbitrum → Across bridge → destination.
 ```bash
 {baseDir}/scripts/fintool --json '{"command":"bridge_status"}'
 ```
+
+### Workflow 6: Prediction Market Trading (Polymarket)
+
+**Goal**: Research and trade on prediction markets.
+
+**Step 1 — Search for markets:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"predict_list","query":"bitcoin"}'
+```
+Returns: matching markets with question, outcomes, prices, volume, liquidity, and end date. By default filters out markets closing within 3 days (which have odds near 1:0). Use `"min_end_days": 7` for markets ending further out, or `"min_end_days": 0` to see all.
+
+**Step 2 — Get detailed quote:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"predict_quote","market":"will-bitcoin-hit-100k"}'
+```
+Returns: full market details including condition ID, CLOB token IDs, prices, and volume.
+
+**Step 3 — Place a trade:**
+```bash
+# Buy "yes" shares at $0.65
+{baseDir}/scripts/fintool --json '{"command":"predict_buy","market":"will-bitcoin-hit-100k","outcome":"yes","amount":10,"price":0.65}'
+
+# Sell "yes" shares at $0.70
+{baseDir}/scripts/fintool --json '{"command":"predict_sell","market":"will-bitcoin-hit-100k","outcome":"yes","amount":10,"price":0.70}'
+```
+
+**Step 4 — Monitor positions:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"predict_positions"}'
+{baseDir}/scripts/fintool --json '{"command":"predict_balance"}'
+```
+
+**Note**: Use the market slug from `predict_list` output as the `market` value.
 
 ## Symbol Aliases
 
