@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Buy ~$1 worth of TSLA perp on Hyperliquid (HIP-3 stock perp)
+# Buy ~$12 worth of TSLA perp on Hyperliquid (HIP-3 stock perp)
 #
 # Uses hyperliquid --json API for all commands. Output is always JSON.
 #
@@ -22,7 +22,7 @@ ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
-log "Buy ~\$1 TSLA perp on Hyperliquid (JSON API)"
+log "Buy ~\$12 TSLA perp on Hyperliquid (JSON API)"
 
 # ── Step 1: Set leverage ─────────────────────────────────────────────
 info "Setting TSLA leverage to 2x..."
@@ -98,11 +98,11 @@ fi
 
 # ── Step 7: Place TSLA perp buy ──────────────────────────────────────
 BUY_LIMIT=$(echo "$PRICE" | awk '{printf "%.2f", $1 * 1.005}')
-BUY_SIZE=$(echo "$PRICE" | awk '{printf "%.6f", 1.0 / $1}')
+BUY_SIZE=$(echo "$PRICE" | awk '{printf "%.6f", 12.0 / $1}')
 
 info "Mark price:       \$$PRICE"
 info "Limit buy price:  \$$BUY_LIMIT (+0.5% buffer)"
-info "Buy size:         $BUY_SIZE TSLA (~\$1)"
+info "Buy size:         $BUY_SIZE TSLA (~\$12)"
 
 RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"TSLA\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT,\"close\":false}")
 
