@@ -3,6 +3,7 @@
 # Shared helpers for e2e test scripts
 #
 
+FINTOOL="${FINTOOL:-./target/release/fintool}"
 HYPERLIQUID="${HYPERLIQUID:-./target/release/hyperliquid}"
 BINANCE="${BINANCE:-./target/release/binance}"
 COINBASE="${COINBASE:-./target/release/coinbase}"
@@ -69,7 +70,7 @@ check_fail() {
 
 ensure_built() {
     local need_build=false
-    for bin in "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
+    for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
         if [[ ! -x "$bin" ]]; then
             need_build=true
             break
@@ -79,7 +80,7 @@ ensure_built() {
     if $need_build; then
         info "Building all binaries..."
         cargo build --release 2>&1
-        for bin in "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
+        for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
             if [[ ! -x "$bin" ]]; then
                 fail "Build failed — binary not found at $bin"
                 exit 1

@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
+fq() { $FINTOOL --json "$1" 2>/dev/null; }
 
 log "Sell ALL HYPE spot on Hyperliquid (JSON API)"
 
@@ -58,14 +59,14 @@ info "HYPE balance: $HYPE_TOTAL (hold: $HYPE_HOLD, selling: $SELL_SIZE)"
 
 # ── Get HYPE price ───────────────────────────────────────────────────
 info "Fetching HYPE spot price..."
-QUOTE=$(ft '{"command":"quote","symbol":"HYPE"}')
+QUOTE=$(fq '{"command":"quote","symbol":"HYPE"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "HYPE spot quote failed"
     exit 1
 fi
 
-HYPE_PRICE=$(echo "$QUOTE" | jq -r '.price // .markPx // empty')
+HYPE_PRICE=$(echo "$QUOTE" | jq -r '.price // empty')
 SELL_LIMIT=$(echo "$HYPE_PRICE" | awk '{printf "%.4f", $1 * 0.995}')
 
 info "Current price: \$$HYPE_PRICE"

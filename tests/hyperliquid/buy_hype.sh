@@ -17,19 +17,20 @@ source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
+fq() { $FINTOOL --json "$1" 2>/dev/null; }
 
 log "Buy ~\$12 HYPE spot on Hyperliquid (JSON API)"
 
 # ── Get HYPE price ───────────────────────────────────────────────────
 info "Fetching HYPE spot price..."
-QUOTE=$(ft '{"command":"quote","symbol":"HYPE"}')
+QUOTE=$(fq '{"command":"quote","symbol":"HYPE"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "HYPE spot quote failed"
     exit 1
 fi
 
-PRICE=$(echo "$QUOTE" | jq -r '.price // .markPx')
+PRICE=$(echo "$QUOTE" | jq -r '.price // empty')
 
 if [[ -z "$PRICE" || "$PRICE" == "null" ]]; then
     fail "HYPE quote returned but price field is missing"

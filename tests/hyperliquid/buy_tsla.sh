@@ -17,12 +17,13 @@ source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
+fq() { $FINTOOL --json "$1" 2>/dev/null; }
 
 log "Buy ~\$1 TSLA on Coinbase (JSON API)"
 
 # ── Get TSLA price ───────────────────────────────────────────────────
 info "Fetching TSLA spot price..."
-QUOTE=$(ft '{"command":"quote","symbol":"TSLA"}')
+QUOTE=$(fq '{"command":"quote","symbol":"TSLA"}')
 
 if [[ -z "$QUOTE" ]]; then
     fail "TSLA spot quote failed"
