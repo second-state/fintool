@@ -27,6 +27,10 @@ fn default_predict_limit() -> i32 {
     10
 }
 
+fn default_min_end_days() -> i64 {
+    3
+}
+
 fn default_levels() -> usize {
     5
 }
@@ -188,6 +192,8 @@ pub enum JsonCommand {
         limit: i32,
         active: Option<bool>,
         sort: Option<String>,
+        #[serde(default = "default_min_end_days")]
+        min_end_days: i64,
     },
     PredictQuote {
         market: String,
@@ -404,7 +410,18 @@ pub async fn run(json_str: &str) -> Result<()> {
             limit,
             active,
             sort,
-        } => commands::predict::list(query.as_deref(), limit, active, sort.as_deref(), true).await,
+            min_end_days,
+        } => {
+            commands::predict::list(
+                query.as_deref(),
+                limit,
+                active,
+                sort.as_deref(),
+                min_end_days,
+                true,
+            )
+            .await
+        }
         JsonCommand::PredictQuote { market } => commands::predict::quote(&market, true).await,
         JsonCommand::PredictBuy {
             market,

@@ -212,12 +212,14 @@ async fn main() -> Result<()> {
                 limit,
                 active,
                 sort,
+                min_end_days,
             } => {
                 commands::predict::list(
                     query.as_deref(),
                     limit,
                     active,
                     sort.as_deref(),
+                    min_end_days,
                     json_output,
                 )
                 .await
