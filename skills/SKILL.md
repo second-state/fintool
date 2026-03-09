@@ -222,7 +222,7 @@ Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity before
 
 **Step 1 — Get perp quote with funding/OI:**
 ```bash
-{baseDir}/scripts/hyperliquid --json '{"command":"quote","symbol":"ETH"}'
+{baseDir}/scripts/hyperliquid --json '{"command":"perp_quote","symbol":"ETH"}'
 ```
 
 **Step 1b — Check perp orderbook depth and spread:**

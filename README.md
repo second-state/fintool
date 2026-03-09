@@ -149,8 +149,8 @@ fintool quote GOLD                # commodity alias
 Get a perpetual futures quote with funding rate, open interest, and leverage info:
 
 ```bash
-hyperliquid quote ETH
-hyperliquid quote SILVER         # HIP-3 commodity perp
+hyperliquid perp quote ETH
+hyperliquid perp quote SILVER         # HIP-3 commodity perp
 ```
 
 View the L2 orderbook (bids/asks, spread, depth):
@@ -197,7 +197,7 @@ binance buy BTC --amount 0.002 --price 65000
 Get the perp quote, set leverage, and open a long position:
 
 ```bash
-hyperliquid quote ETH
+hyperliquid perp quote ETH
 hyperliquid perp leverage ETH --leverage 2
 hyperliquid perp buy ETH --amount 0.006 --price 2100.00
 ```
@@ -229,7 +229,7 @@ hyperliquid transfer USDT0 --amount 30 --from spot --to cash
 **Trade the commodity perp:**
 
 ```bash
-hyperliquid quote SILVER
+hyperliquid perp quote SILVER
 hyperliquid perp leverage SILVER --leverage 2
 hyperliquid perp buy SILVER --amount 0.13 --price 89.00
 ```
@@ -347,7 +347,7 @@ coinbase_api_secret = "..."
 | `fintool news`, `fintool init` | No | No | No | No |
 | `fintool report` | No | No | No | No |
 | `hyperliquid` (all commands) | Yes | — | — | — |
-| `hyperliquid quote` | No | — | — | — |
+| `hyperliquid perp quote` | No | — | — | — |
 | `binance` (all commands) | — | Yes | — | — |
 | `coinbase` (all commands) | — | — | Yes | — |
 | `polymarket list`, `polymarket quote` | No | — | — | — |
@@ -438,7 +438,7 @@ Spot and perpetual futures trading, HIP-3 dex (commodities, stocks), deposits, w
 | Command | Description |
 |---------|-------------|
 | `hyperliquid address` | Print wallet address |
-| `hyperliquid quote <SYMBOL>` | Perp price + funding/OI/premium |
+| `hyperliquid perp quote <SYMBOL>` | Perp price + funding/OI/premium |
 | `hyperliquid buy <SYMBOL> --amount N --price P` | Spot limit buy |
 | `hyperliquid sell <SYMBOL> --amount N --price P` | Spot limit sell |
 | `hyperliquid perp buy <SYM> --amount N --price P [--close]` | Perp long / close short |
@@ -461,7 +461,7 @@ Spot and perpetual futures trading, HIP-3 dex (commodities, stocks), deposits, w
 
 **HIP-3 Perps (commodities, stocks):** The `cash` dex on Hyperliquid supports commodity and stock perps using USDT0 collateral. Symbols like `SILVER`, `GOLD`, `TSLA` are auto-detected and routed to the correct dex.
 
-**Perp Quote:** `hyperliquid quote` returns perpetual futures data including funding rate, open interest, premium, and max leverage.
+**Perp Quote:** `hyperliquid perp quote` returns perpetual futures data including funding rate, open interest, premium, and max leverage.
 
 **Transfer:** Move funds between `spot`, `perp`, `cash` (HIP-3), and other dex accounts. One side must always be `spot`.
 
@@ -544,7 +544,7 @@ These commands work the same across exchange CLIs. The only difference is which 
 | CLI | What it returns |
 |-----|----------------|
 | `fintool quote` | Multi-source spot price + LLM analysis |
-| `hyperliquid quote` | Perp price + funding/OI/premium |
+| `hyperliquid perp quote` | Perp price + funding/OI/premium |
 
 ### `buy / sell` (spot)
 

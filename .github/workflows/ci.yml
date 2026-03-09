@@ -68,18 +68,18 @@ jobs:
 
       - name: Perp quote - crypto
         run: |
-          ./target/release/hyperliquid quote BTC
-          ./target/release/hyperliquid quote ETH
+          ./target/release/hyperliquid perp quote BTC
+          ./target/release/hyperliquid perp quote ETH
 
       - name: Perp quote - commodity
         run: |
-          ./target/release/hyperliquid quote GOLD
-          ./target/release/hyperliquid quote SILVER
+          ./target/release/hyperliquid perp quote GOLD
+          ./target/release/hyperliquid perp quote SILVER
 
       - name: Perp quote - stock
         run: |
-          ./target/release/hyperliquid quote TSLA
-          ./target/release/hyperliquid quote NVDA
+          ./target/release/hyperliquid perp quote TSLA
+          ./target/release/hyperliquid perp quote NVDA
 
       - name: News - crypto
         run: ./target/release/fintool news BTC
