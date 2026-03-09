@@ -41,8 +41,10 @@ BALANCE=$(ft '{"command":"balance"}')
 SPOT_USDC=$(echo "$BALANCE" | jq -r '.spot.balances[]? | select(.coin == "USDC") | .total // "0"' 2>/dev/null || echo "0")
 info "Spot USDC: \$$SPOT_USDC"
 
-# We need enough USDC to swap for USDT0 collateral
-SWAP_AMT=$(echo "$SPOT_USDC" | awk -v trade="$TRADE_USD" '{v = trade + 0.50; if ($1 >= v) printf "%.2f", v; else if ($1 > 0.5) printf "%.2f", $1 - 0.50; else print "0"}')
+# Hyperliquid spot minimum order is ~$10, so swap at least $10 of USDT0
+# even if we only trade $1 of TSLA (extra stays as collateral)
+MIN_SWAP=10
+SWAP_AMT=$(echo "$SPOT_USDC" | awk -v min="$MIN_SWAP" '{if ($1 >= min + 0.50) printf "%.2f", min; else if ($1 > 0.5) printf "%.2f", $1 - 0.50; else print "0"}')
 
 # ── Step 3: Swap USDC -> USDT0 on spot ───────────────────────────────
 if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
@@ -69,7 +71,8 @@ SPOT_USDT0=$(echo "$BALANCE" | jq -r '.spot.balances[]? | select(.coin == "USDT0
 info "Spot USDT0: $SPOT_USDT0"
 
 # ── Step 5: Transfer USDT0 from spot to cash dex ─────────────────────
-TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v > 0) printf "%.2f", v; else print "0"}')
+# Floor to 2 decimal places; transfer if >= 0.01
+TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v >= 0.01) printf "%.2f", v; else print "0"}')
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from spot to cash dex..."
