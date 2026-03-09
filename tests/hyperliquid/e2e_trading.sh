@@ -32,7 +32,6 @@ source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
-fq() { $FINTOOL --json "$1" 2>/dev/null; }
 
 # ══════════════════════════════════════════════════════════════════════
 # 1. Deposit USDC from Base to Hyperliquid
@@ -101,9 +100,9 @@ info "ETH sell fill: $SELL_FILL"
 log "Step 4: Trade HYPE spot"
 
 info "Fetching HYPE quote..."
-QUOTE=$(fq '{"command":"quote","symbol":"HYPE"}')
+QUOTE=$(ft '{"command":"perp_quote","symbol":"HYPE"}')
 echo "$QUOTE" | jq .
-HYPE_PRICE=$(echo "$QUOTE" | jq -r '.price // empty')
+HYPE_PRICE=$(echo "$QUOTE" | jq -r '.markPx // empty')
 info "HYPE price: \$$HYPE_PRICE"
 
 info "Buying 0.48 HYPE at \$25.00 limit..."
