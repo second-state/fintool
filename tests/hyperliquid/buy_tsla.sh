@@ -22,9 +22,7 @@ ensure_built
 
 ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
-TRADE_USD=1
-
-log "Buy ~\$$TRADE_USD TSLA perp on Hyperliquid (JSON API)"
+log "Buy ~\$1 TSLA perp on Hyperliquid (JSON API)"
 
 # ── Step 1: Set leverage ─────────────────────────────────────────────
 info "Setting TSLA leverage to 2x..."
@@ -41,10 +39,8 @@ BALANCE=$(ft '{"command":"balance"}')
 SPOT_USDC=$(echo "$BALANCE" | jq -r '.spot.balances[]? | select(.coin == "USDC") | .total // "0"' 2>/dev/null || echo "0")
 info "Spot USDC: \$$SPOT_USDC"
 
-# Hyperliquid spot minimum order is ~$10, so swap at least $10 of USDT0
-# even if we only trade $1 of TSLA (extra stays as collateral)
-MIN_SWAP=10
-SWAP_AMT=$(echo "$SPOT_USDC" | awk -v min="$MIN_SWAP" '{if ($1 >= min + 0.50) printf "%.2f", min; else if ($1 > 0.5) printf "%.2f", $1 - 0.50; else print "0"}')
+# Round down and leave a small buffer
+SWAP_AMT=$(echo "$SPOT_USDC" | awk '{v = int($1 * 100) / 100; if (v > 0.5) printf "%.2f", v - 0.50; else print "0"}')
 
 # ── Step 3: Swap USDC -> USDT0 on spot ───────────────────────────────
 if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
@@ -57,8 +53,6 @@ if [[ "$SWAP_AMT" != "0" ]] && (( $(echo "$SWAP_AMT > 0" | bc -l) )); then
     SWAP_FILL=$(echo "$RESULT" | jq -r '.fillStatus // empty')
     info "Swap fill status: $SWAP_FILL"
     sleep 1
-else
-    warn "Insufficient USDC to swap for USDT0 collateral"
 fi
 
 # ── Step 4: Wait and check USDT0 balance ─────────────────────────────
@@ -71,8 +65,7 @@ SPOT_USDT0=$(echo "$BALANCE" | jq -r '.spot.balances[]? | select(.coin == "USDT0
 info "Spot USDT0: $SPOT_USDT0"
 
 # ── Step 5: Transfer USDT0 from spot to cash dex ─────────────────────
-# Floor to 2 decimal places; transfer if >= 0.01
-TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v >= 0.01) printf "%.2f", v; else print "0"}')
+TRANSFER_AMT=$(echo "$SPOT_USDT0" | awk '{v = int($1 * 100) / 100; if (v > 0) printf "%.2f", v; else print "0"}')
 
 if [[ "$TRANSFER_AMT" != "0" && "$TRANSFER_AMT" != "0.00" ]]; then
     info "Transferring $TRANSFER_AMT USDT0 from spot to cash dex..."
@@ -104,12 +97,12 @@ if [[ -z "$PRICE" || "$PRICE" == "null" ]]; then
 fi
 
 # ── Step 7: Place TSLA perp buy ──────────────────────────────────────
-BUY_LIMIT=$(echo "$PRICE" | awk '{printf "%.2f", $1 * 1.01}')
-BUY_SIZE=$(echo "$PRICE" | awk -v usd="$TRADE_USD" '{printf "%.6f", usd / $1}')
+BUY_LIMIT=$(echo "$PRICE" | awk '{printf "%.2f", $1 * 1.005}')
+BUY_SIZE=$(echo "$PRICE" | awk '{printf "%.6f", 1.0 / $1}')
 
 info "Mark price:       \$$PRICE"
-info "Limit buy price:  \$$BUY_LIMIT (+1% buffer)"
-info "Buy size:         $BUY_SIZE TSLA (~\$$TRADE_USD)"
+info "Limit buy price:  \$$BUY_LIMIT (+0.5% buffer)"
+info "Buy size:         $BUY_SIZE TSLA (~\$1)"
 
 RESULT=$(ft "{\"command\":\"perp_buy\",\"symbol\":\"TSLA\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT,\"close\":false}")
 
