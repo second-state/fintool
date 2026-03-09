@@ -10,7 +10,7 @@ Usage:
     python3 bot.py --dry-run
     python3 bot.py --target-usdt0 100 --position-size 100 --leverage 3
 
-Requires: fintool CLI, OpenAI and Brave API keys (set below)
+Requires: hyperliquid + fintool CLI binaries, OpenAI and Brave API keys (set below)
 """
 
 import argparse
@@ -37,6 +37,7 @@ REPO_DIR = SCRIPT_DIR.parent.parent
 
 DEFAULTS = {
     "fintool": os.environ.get("FINTOOL", str(REPO_DIR / "target" / "release" / "fintool")),
+    "hyperliquid": os.environ.get("HYPERLIQUID", str(REPO_DIR / "target" / "release" / "hyperliquid")),
     "target_usdt0": 50,           # target USDT0 balance (margin for both legs)
     "position_size_usd": 50,      # notional per leg
     "leverage": 2,
@@ -64,13 +65,13 @@ def setup_logging(log_dir: str):
     log.addHandler(fh)
 
 
-# ── Fintool JSON helper ──────────────────────────────────────────────────────
+# ── CLI JSON helper ─────────────────────────────────────────────────────────
 
-def ft(cmd: dict, fintool: str) -> dict:
-    """Call fintool in JSON mode. Returns parsed JSON output."""
+def cli(cmd: dict, binary: str) -> dict:
+    """Call a CLI binary in JSON mode. Returns parsed JSON output."""
     try:
         result = subprocess.run(
-            [fintool, "--json", json.dumps(cmd)],
+            [binary, "--json", json.dumps(cmd)],
             capture_output=True, text=True, timeout=30,
         )
         return json.loads(result.stdout)
@@ -219,7 +220,7 @@ Respond in EXACTLY this JSON (no markdown):
 
 # ── Step 6: Close positions ──────────────────────────────────────────────────
 
-def close_position(symbol: str, positions: list | dict, fintool: str, dry_run: bool):
+def close_position(symbol: str, positions: list | dict, hyperliquid: str, dry_run: bool):
     """Close a single perp position if it exists."""
     if not isinstance(positions, list):
         return
@@ -246,30 +247,30 @@ def close_position(symbol: str, positions: list | dict, fintool: str, dry_run: b
         if size > 0:
             close_price = f"{entry_px * 0.95:.2f}"
             log.info("  Closing LONG %s: sell %s @ %s --close", symbol, abs_size, close_price)
-            ft({"command": "perp_sell", "symbol": symbol,
-                "amount": str(abs_size), "price": close_price, "close": True}, fintool)
+            cli({"command": "perp_sell", "symbol": symbol,
+                 "amount": str(abs_size), "price": close_price, "close": True}, hyperliquid)
         else:
             close_price = f"{entry_px * 1.05:.2f}"
             log.info("  Closing SHORT %s: buy %s @ %s --close", symbol, abs_size, close_price)
-            ft({"command": "perp_buy", "symbol": symbol,
-                "amount": str(abs_size), "price": close_price, "close": True}, fintool)
+            cli({"command": "perp_buy", "symbol": symbol,
+                 "amount": str(abs_size), "price": close_price, "close": True}, hyperliquid)
         time.sleep(3)
         return
 
 
 # ── Step 7: USDT0 rebalancing ────────────────────────────────────────────────
 
-def normalize_usdt0(target: float, fintool: str, dry_run: bool):
+def normalize_usdt0(target: float, hyperliquid: str, dry_run: bool):
     """Ensure exactly $target USDT0 is in the HIP-3 dex."""
 
     # Transfer all USDT0 from HIP-3 dex back to spot
     log.info("Transferring all USDT0 from HIP-3 dex to spot...")
-    ft({"command": "transfer", "asset": "USDT0", "amount": "999999",
-        "from": "cash", "to": "spot"}, fintool)
+    cli({"command": "transfer", "asset": "USDT0", "amount": "999999",
+         "from": "cash", "to": "spot"}, hyperliquid)
     time.sleep(3)
 
     # Check balances
-    balance = ft({"command": "balance"}, fintool)
+    balance = cli({"command": "balance"}, hyperliquid)
 
     usdt0_balance = 0.0
     usdc_balance = 0.0
@@ -295,20 +296,20 @@ def normalize_usdt0(target: float, fintool: str, dry_run: bool):
     elif diff > 1:
         sell_amount = int(diff)
         log.info("Excess USDT0: selling %d USDT0 -> USDC", sell_amount)
-        ft({"command": "order_sell", "symbol": "USDT0",
-            "amount": str(sell_amount), "price": "0.998"}, fintool)
+        cli({"command": "sell", "symbol": "USDT0",
+             "amount": str(sell_amount), "price": "0.998"}, hyperliquid)
         time.sleep(5)
     elif diff < -1:
         buy_amount = int(abs(diff))
         if usdc_balance < buy_amount:
             bridge_amount = int(buy_amount - usdc_balance + 10)
             log.info("Insufficient USDC (%.2f). Bridging %d USDC from Base...", usdc_balance, bridge_amount)
-            ft({"command": "deposit", "asset": "USDC",
-                "amount": str(bridge_amount), "from": "base"}, fintool)
+            cli({"command": "deposit", "asset": "USDC",
+                 "amount": str(bridge_amount), "from": "base"}, hyperliquid)
             time.sleep(10)
         log.info("Buying %d USDT0 with USDC", buy_amount)
-        ft({"command": "order_buy", "symbol": "USDT0",
-            "amount": str(buy_amount), "price": "1.003"}, fintool)
+        cli({"command": "buy", "symbol": "USDT0",
+             "amount": str(buy_amount), "price": "1.003"}, hyperliquid)
         time.sleep(5)
     else:
         log.info("USDT0 balance is within target range (diff: %.2f)", diff)
@@ -316,14 +317,15 @@ def normalize_usdt0(target: float, fintool: str, dry_run: bool):
     # Transfer target amount to HIP-3 dex
     log.info("Transferring $%d USDT0 to HIP-3 dex...", target)
     if not dry_run:
-        ft({"command": "transfer", "asset": "USDT0", "amount": str(int(target)),
-            "from": "spot", "to": "cash"}, fintool)
+        cli({"command": "transfer", "asset": "USDT0", "amount": str(int(target)),
+             "from": "spot", "to": "cash"}, hyperliquid)
         time.sleep(3)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run(cfg: dict):
+    hyperliquid = cfg["hyperliquid"]
     fintool = cfg["fintool"]
     dry_run = cfg["dry_run"]
 
@@ -357,8 +359,8 @@ def run(cfg: dict):
 
     # ── Step 3: Get price quotes and funding rates ────────────────────────
     log.info("Fetching price quotes...")
-    gold_quote = ft({"command": "perp_quote", "symbol": "GOLD"}, fintool)
-    silver_quote = ft({"command": "perp_quote", "symbol": "SILVER"}, fintool)
+    gold_quote = cli({"command": "perp_quote", "symbol": "GOLD"}, hyperliquid)
+    silver_quote = cli({"command": "perp_quote", "symbol": "SILVER"}, hyperliquid)
 
     gold_price = float(gold_quote.get("markPx") or 0)
     silver_price = float(silver_quote.get("markPx") or 0)
@@ -400,15 +402,15 @@ def run(cfg: dict):
 
     # ── Step 5: Close existing positions ──────────────────────────────────
     log.info("Closing all existing positions...")
-    positions = ft({"command": "positions"}, fintool)
-    close_position("GOLD", positions, fintool, dry_run)
-    close_position("SILVER", positions, fintool, dry_run)
+    positions = cli({"command": "positions"}, hyperliquid)
+    close_position("GOLD", positions, hyperliquid, dry_run)
+    close_position("SILVER", positions, hyperliquid, dry_run)
     time.sleep(5)
 
     # ── Step 6: Normalize USDT0 ──────────────────────────────────────────
     target_usdt0 = cfg["target_usdt0"]
     log.info("Normalizing USDT0 balance to $%d...", target_usdt0)
-    normalize_usdt0(target_usdt0, fintool, dry_run)
+    normalize_usdt0(target_usdt0, hyperliquid, dry_run)
 
     # ── Step 7: Set leverage and open positions ──────────────────────────
     leverage = cfg["leverage"]
@@ -416,8 +418,8 @@ def run(cfg: dict):
 
     log.info("Setting leverage to %dx...", leverage)
     if not dry_run:
-        ft({"command": "perp_leverage", "symbol": long_metal, "leverage": leverage}, fintool)
-        ft({"command": "perp_leverage", "symbol": short_metal, "leverage": leverage}, fintool)
+        cli({"command": "perp_leverage", "symbol": long_metal, "leverage": leverage}, hyperliquid)
+        cli({"command": "perp_leverage", "symbol": short_metal, "leverage": leverage}, hyperliquid)
 
     # Calculate sizes and limits
     long_price = gold_price if long_metal == "GOLD" else silver_price
@@ -433,24 +435,24 @@ def run(cfg: dict):
              long_metal, long_size, position_size, long_limit, margin_per_leg)
 
     if not dry_run:
-        result = ft({"command": "perp_buy", "symbol": long_metal,
-                     "amount": long_size, "price": long_limit}, fintool)
+        result = cli({"command": "perp_buy", "symbol": long_metal,
+                      "amount": long_size, "price": long_limit}, hyperliquid)
         log.info("  Result: %s", json.dumps(result))
 
     log.info("Opening SHORT %s: %s units ($%d notional) @ limit %s (margin: $%.0f)",
              short_metal, short_size, position_size, short_limit, margin_per_leg)
 
     if not dry_run:
-        result = ft({"command": "perp_sell", "symbol": short_metal,
-                     "amount": short_size, "price": short_limit}, fintool)
+        result = cli({"command": "perp_sell", "symbol": short_metal,
+                      "amount": short_size, "price": short_limit}, hyperliquid)
         log.info("  Result: %s", json.dumps(result))
 
     time.sleep(5)
 
     # ── Step 8: Verify positions ─────────────────────────────────────────
     log.info("Verifying positions...")
-    final_positions = ft({"command": "positions"}, fintool)
-    final_balance = ft({"command": "balance"}, fintool)
+    final_positions = cli({"command": "positions"}, hyperliquid)
+    final_balance = cli({"command": "balance"}, hyperliquid)
     log.info("Positions: %s", json.dumps(final_positions, indent=2))
     log.info("Balance: %s", json.dumps(final_balance, indent=2))
 
@@ -484,7 +486,8 @@ def run(cfg: dict):
 def main():
     parser = argparse.ArgumentParser(description="Metal Pairs Trading Bot (GOLD vs SILVER)")
     parser.add_argument("--dry-run", action="store_true", help="Log actions without executing trades")
-    parser.add_argument("--fintool", default=DEFAULTS["fintool"], help="Path to fintool binary")
+    parser.add_argument("--fintool", default=DEFAULTS["fintool"], help="Path to fintool binary (market intelligence)")
+    parser.add_argument("--hyperliquid", default=DEFAULTS["hyperliquid"], help="Path to hyperliquid binary (trading)")
     parser.add_argument("--target-usdt0", type=int, default=DEFAULTS["target_usdt0"],
                         help=f"Target USDT0 margin (default: {DEFAULTS['target_usdt0']})")
     parser.add_argument("--position-size", type=int, default=DEFAULTS["position_size_usd"],
@@ -498,6 +501,7 @@ def main():
 
     cfg = {
         "fintool": args.fintool,
+        "hyperliquid": args.hyperliquid,
         "dry_run": args.dry_run,
         "target_usdt0": args.target_usdt0,
         "position_size_usd": args.position_size,

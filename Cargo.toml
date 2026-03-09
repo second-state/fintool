@@ -1,11 +1,35 @@
 [package]
 name = "fintool"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
-description = "Agentic trading CLI for crypto and stocks — spot/perp/options on Hyperliquid, Unit, Binance, and Coinbase"
+description = "Agentic trading CLIs for crypto, stocks, and prediction markets — Hyperliquid, Binance, Coinbase, and Polymarket"
 license = "MIT"
 repository = "https://github.com/second-state/fintool"
 homepage = "https://github.com/second-state/fintool"
+
+[lib]
+name = "fintool_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fintool"
+path = "src/bin/fintool.rs"
+
+[[bin]]
+name = "hyperliquid"
+path = "src/bin/hyperliquid.rs"
+
+[[bin]]
+name = "binance"
+path = "src/bin/binance.rs"
+
+[[bin]]
+name = "coinbase"
+path = "src/bin/coinbase.rs"
+
+[[bin]]
+name = "polymarket"
+path = "src/bin/polymarket.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

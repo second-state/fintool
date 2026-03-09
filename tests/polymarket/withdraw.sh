@@ -2,7 +2,7 @@
 #
 # Withdraw USDC from Polymarket to Base chain
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses polymarket --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Call Polymarket bridge API to get withdrawal address
@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $POLYMARKET --json "$1" 2>/dev/null; }
 
 WITHDRAW_AMOUNT=${1:-10}
 DEST_CHAIN=${2:-base}
@@ -24,7 +24,7 @@ log "Withdraw \$${WITHDRAW_AMOUNT} USDC from Polymarket to ${DEST_CHAIN} (JSON A
 
 info "Requesting Polymarket withdrawal address..."
 
-RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"USDC\",\"amount\":$WITHDRAW_AMOUNT,\"to\":\"$DEST_CHAIN\",\"exchange\":\"polymarket\"}")
+RESULT=$(ft "{\"command\":\"withdraw\",\"asset\":\"USDC\",\"amount\":$WITHDRAW_AMOUNT,\"to\":\"$DEST_CHAIN\"}")
 
 if [[ -z "$RESULT" ]]; then
     fail "Withdraw command returned empty"

@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  BINARIES: fintool hyperliquid binance coinbase polymarket
+
 jobs:
   build:
     strategy:
@@ -24,7 +27,7 @@ jobs:
             artifact: fintool-macos-aarch64
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
-            artifact: fintool-windows-x86_64.exe
+            artifact: fintool-windows-x86_64
 
     runs-on: ${{ matrix.os }}
 
@@ -75,41 +78,45 @@ jobs:
 
       - name: Verify static linking
         run: |
-          bin="target/${{ matrix.target }}/release/fintool"
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            bin="${bin}.exe"
-          fi
-          echo "=== Binary info ==="
-          file "$bin"
-          if [[ "${{ matrix.target }}" == *"linux-musl"* ]]; then
-            # musl binaries should be statically linked
-            if ldd "$bin" 2>&1 | grep -q "not a dynamic executable\|statically linked"; then
-              echo "✅ Static binary confirmed"
-            else
-              echo "❌ Binary is dynamically linked!"
-              ldd "$bin"
-              exit 1
+          for name in $BINARIES; do
+            bin="target/${{ matrix.target }}/release/${name}"
+            if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+              bin="${bin}.exe"
             fi
-          elif [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
-            # macOS: check no non-system dylibs
-            echo "Dynamic libraries:"
-            otool -L "$bin" || true
-          elif [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            echo "Windows binary — static check via file output above"
-          fi
+            echo "=== ${name} ==="
+            file "$bin"
+            if [[ "${{ matrix.target }}" == *"linux-musl"* ]]; then
+              # musl binaries should be statically linked
+              if ldd "$bin" 2>&1 | grep -q "not a dynamic executable\|statically linked"; then
+                echo "✅ Static binary confirmed"
+              else
+                echo "❌ Binary is dynamically linked!"
+                ldd "$bin"
+                exit 1
+              fi
+            elif [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
+              # macOS: check no non-system dylibs
+              echo "Dynamic libraries:"
+              otool -L "$bin" || true
+            elif [[ "${{ matrix.target }}" == *"windows"* ]]; then
+              echo "Windows binary — static check via file output above"
+            fi
+          done
 
       - name: Package zip
         run: |
           dir="${{ matrix.artifact }}"
           mkdir -p "$dir"
-          src="target/${{ matrix.target }}/release/fintool"
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            cp "${src}.exe" "$dir/fintool.exe"
-          else
-            cp "$src" "$dir/fintool"
-            chmod +x "$dir/fintool"
-          fi
-          cp config.toml.default "$dir/"
+          for name in $BINARIES; do
+            src="target/${{ matrix.target }}/release/${name}"
+            if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+              cp "${src}.exe" "$dir/${name}.exe"
+            else
+              cp "$src" "$dir/${name}"
+              chmod +x "$dir/${name}"
+            fi
+          done
+          cp config.toml.default "$dir/" 2>/dev/null || true
           zip -r "${{ matrix.artifact }}.zip" "$dir"
 
       - name: Upload artifact
@@ -147,5 +154,5 @@ jobs:
             artifacts/fintool-linux-x86_64/fintool-linux-x86_64.zip
             artifacts/fintool-linux-aarch64/fintool-linux-aarch64.zip
             artifacts/fintool-macos-aarch64/fintool-macos-aarch64.zip
-            artifacts/fintool-windows-x86_64.exe/fintool-windows-x86_64.exe.zip
+            artifacts/fintool-windows-x86_64/fintool-windows-x86_64.zip
             checksums.txt

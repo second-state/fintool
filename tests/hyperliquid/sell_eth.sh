@@ -2,7 +2,7 @@
 #
 # Sell ALL ETH perp position on Hyperliquid
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Get positions via positions command
@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Sell ALL ETH perp on Hyperliquid (JSON API)"
 
@@ -73,7 +73,7 @@ RESULT=$(ft "{\"command\":\"perp_sell\",\"symbol\":\"ETH\",\"amount\":$SELL_SIZE
 
 if [[ -z "$RESULT" ]]; then
     fail "ETH perp sell failed"
-    warn "Position may still be open -- check manually with 'fintool positions'"
+    warn "Position may still be open -- check manually with 'hyperliquid positions'"
     exit 1
 fi
 

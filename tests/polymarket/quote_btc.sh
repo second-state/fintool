@@ -2,7 +2,7 @@
 #
 # Quote a short-term BTC prediction market on Polymarket
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses polymarket --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Search for BTC prediction markets
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $POLYMARKET --json "$1" 2>/dev/null; }
 
 MARKET_SLUG="${1:-}"
 
@@ -25,7 +25,7 @@ log "Quote BTC prediction market on Polymarket (JSON API)"
 # ── Find a market if not specified ───────────────────────────────────
 if [[ -z "$MARKET_SLUG" ]]; then
     info "Searching for BTC prediction markets..."
-    MARKETS=$(ft '{"command":"predict_list","query":"bitcoin","limit":5}')
+    MARKETS=$(ft '{"command":"list","query":"bitcoin","limit":5}')
 
     if [[ -z "$MARKETS" ]]; then
         fail "Market search returned empty"
@@ -48,7 +48,7 @@ info "Slug: $MARKET_SLUG"
 
 # ── Get quote ────────────────────────────────────────────────────────
 info "Fetching quote..."
-QUOTE=$(ft "{\"command\":\"predict_quote\",\"market\":\"$MARKET_SLUG\"}")
+QUOTE=$(ft "{\"command\":\"quote\",\"market\":\"$MARKET_SLUG\"}")
 
 if [[ -z "$QUOTE" ]]; then
     fail "Quote returned empty"

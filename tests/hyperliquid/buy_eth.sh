@@ -2,7 +2,7 @@
 #
 # Buy ~$12 worth of ETH perp on Hyperliquid
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Set ETH leverage to 2x
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Buy ~\$12 ETH perp on Hyperliquid (JSON API)"
 

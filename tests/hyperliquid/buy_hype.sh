@@ -2,7 +2,7 @@
 #
 # Buy ~$12 worth of HYPE spot on Hyperliquid
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Get HYPE spot price via quote
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 log "Buy ~\$12 HYPE spot on Hyperliquid (JSON API)"
 
@@ -45,7 +45,7 @@ info "Limit buy price: \$$BUY_LIMIT (+0.5% buffer)"
 info "Buy size:        $BUY_SIZE HYPE (~\$12)"
 
 # ── Place buy order ──────────────────────────────────────────────────
-RESULT=$(ft "{\"command\":\"order_buy\",\"symbol\":\"HYPE\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT}")
+RESULT=$(ft "{\"command\":\"buy\",\"symbol\":\"HYPE\",\"amount\":$BUY_SIZE,\"price\":$BUY_LIMIT}")
 
 if [[ -z "$RESULT" ]]; then
     fail "HYPE spot buy failed"

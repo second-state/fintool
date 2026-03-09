@@ -9,7 +9,7 @@ market-neutral. If funding turns negative, unwind and wait.
 Usage:
     python3 bot.py [--dry-run] [--interval 3600]
 
-Requires: fintool CLI, OpenAI API key (optional, set below)
+Requires: hyperliquid + fintool CLI binaries, OpenAI API key (optional, set below)
 """
 
 import argparse
@@ -33,6 +33,7 @@ REPO_DIR = SCRIPT_DIR.parent.parent
 
 DEFAULTS = {
     "fintool": os.environ.get("FINTOOL", str(REPO_DIR / "target" / "release" / "fintool")),
+    "hyperliquid": os.environ.get("HYPERLIQUID", str(REPO_DIR / "target" / "release" / "hyperliquid")),
     "check_interval": 3600,       # 1 hour (matches Hyperliquid funding interval)
     "slippage_bps": 50,           # 0.5% slippage tolerance for limit orders
     "min_funding": 0.0001,        # Minimum funding rate to enter (0.01% per hour)
@@ -71,13 +72,13 @@ def setup_logging(log_file: str):
     log.addHandler(fh)
 
 
-# ── Fintool JSON helper ──────────────────────────────────────────────────────
+# ── CLI JSON helper ─────────────────────────────────────────────────────────
 
-def ft(cmd: dict, fintool: str) -> dict:
-    """Call fintool in JSON mode. Returns parsed JSON output."""
+def cli(cmd: dict, binary: str) -> dict:
+    """Call a CLI binary in JSON mode. Returns parsed JSON output."""
     try:
         result = subprocess.run(
-            [fintool, "--json", json.dumps(cmd)],
+            [binary, "--json", json.dumps(cmd)],
             capture_output=True, text=True, timeout=30,
         )
         return json.loads(result.stdout)
@@ -85,11 +86,11 @@ def ft(cmd: dict, fintool: str) -> dict:
         return {"error": str(e)}
 
 
-def ft_or_fail(cmd: dict, fintool: str) -> dict | None:
-    """Call fintool in JSON mode; return None on failure."""
-    result = ft(cmd, fintool)
+def cli_or_fail(cmd: dict, binary: str) -> dict | None:
+    """Call a CLI binary in JSON mode; return None on failure."""
+    result = cli(cmd, binary)
     if "error" in result:
-        log.error("fintool failed: %s", result["error"])
+        log.error("cli call failed: %s", result["error"])
         return None
     return result
 
@@ -142,10 +143,10 @@ Respond in EXACTLY this JSON format, nothing else:
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 
-def get_current_state(fintool: str) -> dict:
+def get_current_state(hyperliquid: str) -> dict:
     """Get current positions and USDC balance."""
-    positions = ft({"command": "positions"}, fintool)
-    balance = ft({"command": "balance"}, fintool)
+    positions = cli({"command": "positions"}, hyperliquid)
+    balance = cli({"command": "balance"}, hyperliquid)
 
     has_positions = 0
     if isinstance(positions, list):
@@ -172,9 +173,9 @@ def get_current_state(fintool: str) -> dict:
     }
 
 
-def fetch_spot_orderbook(spot_ticker: str, fintool: str) -> dict:
-    """Fetch spot orderbook via fintool and compute spread/depth metrics."""
-    book = ft({"command": "orderbook", "symbol": spot_ticker, "levels": 5}, fintool)
+def fetch_spot_orderbook(spot_ticker: str, hyperliquid: str) -> dict:
+    """Fetch spot orderbook via hyperliquid and compute spread/depth metrics."""
+    book = cli({"command": "orderbook", "symbol": spot_ticker, "levels": 5}, hyperliquid)
     if "error" in book or not book.get("bids") or not book.get("asks"):
         return {"spread_pct": 99.0, "bid_depth_usd": 0.0, "ask_depth_usd": 0.0}
 
@@ -192,12 +193,12 @@ def fetch_spot_orderbook(spot_ticker: str, fintool: str) -> dict:
 
 
 def gather_candidates(cfg: dict) -> list:
-    """Scan all spot/perp pairs for funding arb opportunities via fintool."""
-    fintool = cfg["fintool"]
+    """Scan all spot/perp pairs for funding arb opportunities."""
+    hyperliquid = cfg["hyperliquid"]
     candidates = []
 
     for spot_ticker, perp_ticker in SPOT_TO_PERP.items():
-        ctx = ft({"command": "perp_quote", "symbol": perp_ticker}, fintool)
+        ctx = cli({"command": "perp_quote", "symbol": perp_ticker}, hyperliquid)
         if "error" in ctx:
             continue
 
@@ -210,7 +211,7 @@ def gather_candidates(cfg: dict) -> list:
             continue
 
         # Fetch spot orderbook for spread/depth analysis
-        spread_data = fetch_spot_orderbook(spot_ticker, fintool)
+        spread_data = fetch_spot_orderbook(spot_ticker, hyperliquid)
 
         candidates.append({
             "perp_ticker": perp_ticker,
@@ -228,15 +229,16 @@ def gather_candidates(cfg: dict) -> list:
 
 def open_position(spot_ticker: str, perp_ticker: str, usdc_amount: float, cfg: dict):
     """Open delta-neutral position: buy spot + short perp."""
+    hyperliquid = cfg["hyperliquid"]
     fintool = cfg["fintool"]
     half = usdc_amount / 2
 
     log.info("Opening position: spot=%s perp=%s amount=$%.2f ($%.2f each side)",
              spot_ticker, perp_ticker, usdc_amount, half)
 
-    # Get current prices via fintool JSON
-    perp_quote = ft({"command": "perp_quote", "symbol": perp_ticker}, fintool)
-    spot_quote = ft({"command": "quote", "symbol": spot_ticker}, fintool)
+    # Get current prices
+    perp_quote = cli({"command": "perp_quote", "symbol": perp_ticker}, hyperliquid)
+    spot_quote = cli({"command": "quote", "symbol": spot_ticker}, fintool)
 
     perp_price = float(perp_quote.get("markPx") or 0)
     spot_price = float(spot_quote.get("price") or spot_quote.get("markPx") or 0)
@@ -259,17 +261,17 @@ def open_position(spot_ticker: str, perp_ticker: str, usdc_amount: float, cfg: d
         return
 
     # Set leverage
-    ft({"command": "perp_leverage", "symbol": perp_ticker,
-        "leverage": cfg["leverage"], "cross": True}, fintool)
+    cli({"command": "perp_leverage", "symbol": perp_ticker,
+         "leverage": cfg["leverage"], "cross": True}, hyperliquid)
 
     # Buy spot
-    spot_result = ft({"command": "order_buy", "symbol": spot_ticker,
-                      "amount": f"{spot_size:.6f}", "price": f"{spot_limit:.6f}"}, fintool)
+    spot_result = cli({"command": "buy", "symbol": spot_ticker,
+                       "amount": f"{spot_size:.6f}", "price": f"{spot_limit:.6f}"}, hyperliquid)
     log.info("  Spot buy status: %s", spot_result.get("fillStatus", "unknown"))
 
     # Short perp
-    perp_result = ft({"command": "perp_sell", "symbol": perp_ticker,
-                      "amount": f"{spot_size:.6f}", "price": f"{perp_limit:.6f}"}, fintool)
+    perp_result = cli({"command": "perp_sell", "symbol": perp_ticker,
+                       "amount": f"{spot_size:.6f}", "price": f"{perp_limit:.6f}"}, hyperliquid)
     log.info("  Perp short status: %s", perp_result.get("fillStatus", "unknown"))
 
     log.info("  Position opened successfully")
@@ -277,13 +279,14 @@ def open_position(spot_ticker: str, perp_ticker: str, usdc_amount: float, cfg: d
 
 def close_all_positions(cfg: dict):
     """Close all perp positions and sell all spot holdings."""
+    hyperliquid = cfg["hyperliquid"]
     fintool = cfg["fintool"]
     slippage = cfg["slippage_bps"] / 10_000
 
     log.info("Closing all positions...")
 
     # Close each perp position
-    positions = ft({"command": "positions"}, fintool)
+    positions = cli({"command": "positions"}, hyperliquid)
     if isinstance(positions, list):
         for pos in positions:
             size_str = pos.get("size") or pos.get("positionSize") or "0"
@@ -298,7 +301,7 @@ def close_all_positions(cfg: dict):
             abs_size = abs(size)
             log.info("  Closing perp: %s size=%s", symbol, size_str)
 
-            quote = ft({"command": "perp_quote", "symbol": symbol}, fintool)
+            quote = cli({"command": "perp_quote", "symbol": symbol}, hyperliquid)
             price = float(quote.get("markPx") or 0)
             if not price:
                 continue
@@ -309,16 +312,16 @@ def close_all_positions(cfg: dict):
 
             if size < 0:  # short -> buy to close
                 limit = price * (1 + slippage)
-                ft({"command": "perp_buy", "symbol": symbol,
-                    "amount": f"{abs_size:.6f}", "price": f"{limit:.6f}", "close": True}, fintool)
+                cli({"command": "perp_buy", "symbol": symbol,
+                     "amount": f"{abs_size:.6f}", "price": f"{limit:.6f}", "close": True}, hyperliquid)
             else:  # long -> sell to close
                 limit = price * (1 - slippage)
-                ft({"command": "perp_sell", "symbol": symbol,
-                    "amount": f"{abs_size:.6f}", "price": f"{limit:.6f}", "close": True}, fintool)
+                cli({"command": "perp_sell", "symbol": symbol,
+                     "amount": f"{abs_size:.6f}", "price": f"{limit:.6f}", "close": True}, hyperliquid)
             log.info("  Closed perp %s", symbol)
 
     # Sell all spot holdings except USDC
-    balance = ft({"command": "balance"}, fintool)
+    balance = cli({"command": "balance"}, hyperliquid)
     if isinstance(balance, list):
         for holding in balance:
             coin = holding.get("coin") or holding.get("asset")
@@ -331,7 +334,7 @@ def close_all_positions(cfg: dict):
 
             log.info("  Selling spot: %s amount=%s", coin, amount_str)
 
-            quote = ft({"command": "quote", "symbol": coin}, fintool)
+            quote = cli({"command": "quote", "symbol": coin}, fintool)
             price = float(quote.get("price") or quote.get("markPx") or 0)
             if not price:
                 log.warning("  Cannot get price for %s, skipping", coin)
@@ -342,8 +345,8 @@ def close_all_positions(cfg: dict):
                 continue
 
             sell_limit = price * (1 - slippage)
-            ft({"command": "order_sell", "symbol": coin,
-                "amount": amount_str, "price": f"{sell_limit:.6f}"}, fintool)
+            cli({"command": "sell", "symbol": coin,
+                 "amount": amount_str, "price": f"{sell_limit:.6f}"}, hyperliquid)
             log.info("  Sold spot %s", coin)
 
     log.info("All positions closed")
@@ -351,8 +354,8 @@ def close_all_positions(cfg: dict):
 
 def check_current_funding(cfg: dict) -> str:
     """Check if current position's funding is still positive. Returns 'positive', 'negative', or 'none'."""
-    fintool = cfg["fintool"]
-    positions = ft({"command": "positions"}, fintool)
+    hyperliquid = cfg["hyperliquid"]
+    positions = cli({"command": "positions"}, hyperliquid)
 
     short_symbol = None
     if isinstance(positions, list):
@@ -365,7 +368,7 @@ def check_current_funding(cfg: dict) -> str:
     if not short_symbol:
         return "none"
 
-    quote = ft({"command": "perp_quote", "symbol": short_symbol}, fintool)
+    quote = cli({"command": "perp_quote", "symbol": short_symbol}, hyperliquid)
     funding = float(quote.get("funding") or 0)
     log.info("Current position: %s | Funding rate: %s", short_symbol, funding)
 
@@ -386,7 +389,7 @@ def run(cfg: dict):
     while True:
         log.info("────── Check cycle ──────")
 
-        state = get_current_state(cfg["fintool"])
+        state = get_current_state(cfg["hyperliquid"])
         has_positions = state["has_positions"]
         usdc = float(state["usdc_available"])
         log.info("Account: positions=%d USDC=%.2f", has_positions, usdc)
@@ -451,7 +454,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Log actions without executing trades")
     parser.add_argument("--interval", type=int, default=DEFAULTS["check_interval"],
                         help=f"Seconds between checks (default: {DEFAULTS['check_interval']})")
-    parser.add_argument("--fintool", default=DEFAULTS["fintool"], help="Path to fintool binary")
+    parser.add_argument("--fintool", default=DEFAULTS["fintool"], help="Path to fintool binary (market intelligence)")
+    parser.add_argument("--hyperliquid", default=DEFAULTS["hyperliquid"], help="Path to hyperliquid binary (trading)")
     parser.add_argument("--min-funding", type=float, default=DEFAULTS["min_funding"])
     parser.add_argument("--min-volume", type=float, default=DEFAULTS["min_volume"])
     parser.add_argument("--slippage-bps", type=int, default=DEFAULTS["slippage_bps"])
@@ -460,19 +464,25 @@ def main():
     parser.add_argument("--log-file", default=DEFAULTS["log_file"])
     args = parser.parse_args()
 
-    # Build fintool binary if not found
+    # Build binaries if not found
     fintool = args.fintool
-    if not os.path.isfile(fintool):
-        print("Building fintool...")
+    hyperliquid = args.hyperliquid
+    need_build = not os.path.isfile(fintool) or not os.path.isfile(hyperliquid)
+    if need_build:
+        print("Building binaries...")
         subprocess.run(["cargo", "build", "--release"], cwd=str(REPO_DIR), check=True)
         if not os.path.isfile(fintool):
             print(f"ERROR: Build failed — binary not found at {fintool}")
+            sys.exit(1)
+        if not os.path.isfile(hyperliquid):
+            print(f"ERROR: Build failed — binary not found at {hyperliquid}")
             sys.exit(1)
 
     setup_logging(args.log_file)
 
     cfg = {
         "fintool": fintool,
+        "hyperliquid": hyperliquid,
         "dry_run": args.dry_run,
         "check_interval": args.interval,
         "slippage_bps": args.slippage_bps,

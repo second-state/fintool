@@ -54,15 +54,16 @@ openai_api_key = "sk-..."   # optional — bot falls back to highest funding rat
 ### 2. Fund your account
 
 ```bash
-fintool deposit USDC --amount 100 --from base
-fintool perp set-mode unified
+hyperliquid deposit USDC --amount 100 --from base
+hyperliquid perp set-mode unified
 ```
 
 ### 3. Environment variables (optional overrides)
 
 ```bash
-export FINTOOL=/path/to/fintool          # default: ./target/release/fintool
-export OPENAI_API_KEY=sk-...             # default: from ~/.fintool/config.toml
+export FINTOOL=/path/to/fintool              # default: ./target/release/fintool
+export HYPERLIQUID=/path/to/hyperliquid      # default: ./target/release/hyperliquid
+export OPENAI_API_KEY=sk-...                 # default: from ~/.fintool/config.toml
 ```
 
 ### 4. Run (dry run first!)
@@ -90,14 +91,16 @@ All parameters are configurable via command-line flags:
 | `--min-volume` | 1000000 | Minimum 24h perp volume in USD |
 | `--leverage` | 1 | Perp leverage (1x for delta neutral) |
 | `--position-pct` | 90 | % of available USDC to deploy (10% buffer) |
-| `--fintool` | `target/release/fintool` | Path to fintool binary |
+| `--fintool` | `target/release/fintool` | Path to fintool binary (market intelligence) |
+| `--hyperliquid` | `target/release/hyperliquid` | Path to hyperliquid binary (trading) |
 | `--log-file` | `/tmp/funding_arb.log` | Log file path |
 | `--dry-run` | off | Log actions without executing trades |
 
 ## Dependencies
 
 - **Python 3.10+** (no third-party packages required — uses only stdlib)
-- **fintool** CLI binary
+- **fintool** CLI binary (market intelligence: quotes, news)
+- **hyperliquid** CLI binary (trading: orders, positions, balances)
 
 ## Logs
 

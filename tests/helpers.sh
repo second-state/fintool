@@ -3,9 +3,12 @@
 # Shared helpers for e2e test scripts
 #
 
-FINTOOL="${FINTOOL:-./target/release/fintool}"
+HYPERLIQUID="${HYPERLIQUID:-./target/release/hyperliquid}"
+BINANCE="${BINANCE:-./target/release/binance}"
+COINBASE="${COINBASE:-./target/release/coinbase}"
+POLYMARKET="${POLYMARKET:-./target/release/polymarket}"
 
-# Last command results (set by run_fintool)
+# Last command results (set by run_tool)
 LAST_STDOUT=""
 LAST_STDERR=""
 LAST_EXIT=0
@@ -19,17 +22,20 @@ fail() { echo -e "  \033[1;31m✗ $*\033[0m"; }
 warn() { echo -e "  \033[1;33m⚠ $*\033[0m"; }
 done_step() { echo -e "\n  \033[1;33m── Result ──\033[0m"; }
 
-# ── Run fintool ────────────────────────────────────────────────────────
+# ── Run tool ──────────────────────────────────────────────────────────
 
-# Run fintool and capture stdout, stderr, and exit code separately.
+# Run a binary tool and capture stdout, stderr, and exit code separately.
 # After calling, check LAST_EXIT. LAST_STDOUT has the JSON output,
 # LAST_STDERR has error/progress messages.
-run_fintool() {
+# Usage: run_tool <binary> [args...]
+run_tool() {
+    local binary="$1"
+    shift
     local tmp_stdout tmp_stderr
     tmp_stdout=$(mktemp)
     tmp_stderr=$(mktemp)
     LAST_EXIT=0
-    $FINTOOL "$@" >"$tmp_stdout" 2>"$tmp_stderr" || LAST_EXIT=$?
+    $binary "$@" >"$tmp_stdout" 2>"$tmp_stderr" || LAST_EXIT=$?
     LAST_STDOUT=$(cat "$tmp_stdout")
     LAST_STDERR=$(cat "$tmp_stderr")
     rm -f "$tmp_stdout" "$tmp_stderr"
@@ -62,12 +68,22 @@ check_fail() {
 # ── Build helper ───────────────────────────────────────────────────────
 
 ensure_built() {
-    if [[ ! -x "$FINTOOL" ]]; then
-        info "Building fintool..."
-        cargo build --release 2>&1
-        if [[ ! -x "$FINTOOL" ]]; then
-            fail "Build failed — binary not found at $FINTOOL"
-            exit 1
+    local need_build=false
+    for bin in "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
+        if [[ ! -x "$bin" ]]; then
+            need_build=true
+            break
         fi
+    done
+
+    if $need_build; then
+        info "Building all binaries..."
+        cargo build --release 2>&1
+        for bin in "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET"; do
+            if [[ ! -x "$bin" ]]; then
+                fail "Build failed — binary not found at $bin"
+                exit 1
+            fi
+        done
     fi
 }

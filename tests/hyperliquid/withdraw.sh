@@ -2,7 +2,7 @@
 #
 # Withdraw USDC and ETH from Hyperliquid to Base
 #
-# Uses fintool --json API for all commands. Output is always JSON.
+# Uses hyperliquid --json API for all commands. Output is always JSON.
 #
 # Workflow:
 #   1. Withdraw USDC to Base (default $1)
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $FINTOOL --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
 
 USDC_AMOUNT="${1:-1}"
 ETH_AMOUNT="${2:-0}"

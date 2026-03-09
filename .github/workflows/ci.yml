@@ -33,8 +33,13 @@ jobs:
       - name: Run tests
         run: cargo test --release
 
-      - name: Smoke test - help
-        run: ./target/release/fintool --help
+      - name: Smoke test - all binaries show help
+        run: |
+          ./target/release/fintool --help
+          ./target/release/hyperliquid --help
+          ./target/release/binance --help
+          ./target/release/coinbase --help
+          ./target/release/polymarket --help
 
       - name: Smoke test - init
         run: |
@@ -63,18 +68,18 @@ jobs:
 
       - name: Perp quote - crypto
         run: |
-          ./target/release/fintool perp quote BTC
-          ./target/release/fintool perp quote ETH
+          ./target/release/hyperliquid perp quote BTC
+          ./target/release/hyperliquid perp quote ETH
 
       - name: Perp quote - commodity
         run: |
-          ./target/release/fintool perp quote GOLD
-          ./target/release/fintool perp quote SILVER
+          ./target/release/hyperliquid perp quote GOLD
+          ./target/release/hyperliquid perp quote SILVER
 
       - name: Perp quote - stock
         run: |
-          ./target/release/fintool perp quote TSLA
-          ./target/release/fintool perp quote NVDA
+          ./target/release/hyperliquid perp quote TSLA
+          ./target/release/hyperliquid perp quote NVDA
 
       - name: News - crypto
         run: ./target/release/fintool news BTC
