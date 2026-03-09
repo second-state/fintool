@@ -102,10 +102,17 @@ vim ~/.fintool/config.toml      # add your wallet key and API keys
 
 ### Deposit funds
 
-Bridge USDC from Base (or Ethereum) to Hyperliquid. You must bridge more than $5 USDC.
+Bridge ETH or USDC to Hyperliquid:
 
 ```bash
-hyperliquid deposit USDC --amount 15 --from base
+hyperliquid deposit ETH --amount 0.01          # auto-bridges ETH via Unit
+hyperliquid deposit USDC --amount 15 --from base  # bridges USDC via Across (min 5 USDC)
+```
+
+For assets that can't be bridged automatically (BTC, SOL), the command shows a deposit address:
+
+```bash
+hyperliquid deposit BTC --amount 0.001         # shows Unit deposit address
 ```
 
 The deposited USDC goes into the Hyperliquid perp margin account. To use it for spot trading as well, set the account to unified mode:
@@ -452,7 +459,7 @@ Spot and perpetual futures trading, HIP-3 dex (commodities, stocks), deposits, w
 | `hyperliquid balance` | Account balances |
 | `hyperliquid positions` | Open positions + PnL |
 | `hyperliquid options buy/sell ...` | Options trading |
-| `hyperliquid deposit <ASSET> [--amount N] [--from CHAIN]` | Deposit (Unit bridge / USDC bridge) |
+| `hyperliquid deposit <ASSET> --amount N [--from CHAIN]` | Deposit (auto-bridge ETH/USDC, address for BTC/SOL) |
 | `hyperliquid withdraw <ASSET> --amount N [--to DST]` | Withdraw (Bridge2 / Unit) |
 | `hyperliquid transfer <ASSET> --amount N --from SRC --to DST` | Transfer: perp ↔ spot ↔ dex |
 | `hyperliquid bridge-status` | Unit bridge operation status |
@@ -464,6 +471,8 @@ Spot and perpetual futures trading, HIP-3 dex (commodities, stocks), deposits, w
 **Perp Quote:** `hyperliquid perp quote` returns perpetual futures data including funding rate, open interest, premium, and max leverage.
 
 **Transfer:** Move funds between `spot`, `perp`, `cash` (HIP-3), and other dex accounts. One side must always be `spot`.
+
+**Deposit:** `--amount` is always required. ETH is auto-bridged via Unit (sends from your wallet on Ethereum L1). USDC is bridged via Across (requires `--from`). BTC/SOL cannot be bridged automatically — the command shows a Unit deposit address for manual transfer.
 
 **Bridge Status:** Track HyperUnit bridge operations for ETH/BTC/SOL deposits and withdrawals.
 
@@ -630,14 +639,15 @@ binance positions
 polymarket positions     # prediction market positions
 ```
 
-### `deposit <ASSET>`
+### `deposit <ASSET> --amount <AMT>`
 
 Deposit assets to the exchange. Behavior varies by CLI:
 
 **Hyperliquid:**
 ```bash
-hyperliquid deposit ETH              # get ETH deposit address (HyperUnit bridge)
-hyperliquid deposit USDC --amount 100 --from base    # bridge USDC from Base
+hyperliquid deposit ETH --amount 0.01                # auto-bridge ETH via Unit
+hyperliquid deposit USDC --amount 100 --from base    # bridge USDC from Base via Across
+hyperliquid deposit BTC --amount 0.001               # shows deposit address (manual)
 ```
 
 **Binance / Coinbase:**
@@ -743,6 +753,7 @@ hyperliquid --json '{"command":"perp_buy","symbol":"ETH","amount":0.1,"price":30
 hyperliquid --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
 hyperliquid --json '{"command":"balance"}'
 hyperliquid --json '{"command":"transfer","asset":"USDT0","amount":30,"from":"spot","to":"cash"}'
+hyperliquid --json '{"command":"deposit","asset":"ETH","amount":0.01}'
 hyperliquid --json '{"command":"deposit","asset":"USDC","amount":15,"from":"base"}'
 
 # Binance trading
@@ -785,7 +796,6 @@ Errors are returned as JSON too:
 | `command` | Required fields | Optional fields |
 |-----------|----------------|-----------------|
 | `address` | — | — |
-| `quote` | `symbol` | — |
 | `buy` | `symbol`, `amount`, `price` | — |
 | `sell` | `symbol`, `amount`, `price` | — |
 | `orderbook` | `symbol` | `levels` |
@@ -801,7 +811,7 @@ Errors are returned as JSON too:
 | `perp_set_mode` | `mode` | — |
 | `options_buy` | `symbol`, `option_type`, `strike`, `expiry`, `size` | — |
 | `options_sell` | `symbol`, `option_type`, `strike`, `expiry`, `size` | — |
-| `deposit` | `asset` | `amount`, `from`, `dry_run` |
+| `deposit` | `asset`, `amount` | `from`, `dry_run` |
 | `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
 | `transfer` | `asset`, `amount`, `from`, `to` | — |
 | `bridge_status` | — | — |

@@ -91,7 +91,6 @@ cat ~/.fintool/config.toml 2>/dev/null
 ```json
 // hyperliquid --json '<JSON>'
 {"command": "address"}
-{"command": "quote", "symbol": "ETH"}
 {"command": "buy", "symbol": "ETH", "amount": 0.1, "price": 3800}
 {"command": "sell", "symbol": "ETH", "amount": 0.1, "price": 4000}
 {"command": "orderbook", "symbol": "HYPE"}
@@ -109,7 +108,9 @@ cat ~/.fintool/config.toml 2>/dev/null
 {"command": "orders"}
 {"command": "orders", "symbol": "BTC"}
 {"command": "cancel", "order_id": "BTC:91490942"}
-{"command": "deposit", "asset": "ETH"}
+{"command": "deposit", "asset": "ETH", "amount": 0.01}
+{"command": "deposit", "asset": "ETH", "amount": 0.05, "dry_run": true}
+{"command": "deposit", "asset": "BTC", "amount": 0.001}
 {"command": "deposit", "asset": "USDC", "amount": 100, "from": "base"}
 {"command": "deposit", "asset": "USDC", "amount": 100, "from": "ethereum", "dry_run": true}
 {"command": "withdraw", "asset": "USDC", "amount": 100}
@@ -291,17 +292,24 @@ Use `"close": true` to ensure the order only reduces an existing position.
 
 **Goal**: Fund an exchange account.
 
-**Hyperliquid — ETH/BTC/SOL (permanent deposit address via HyperUnit):**
+**Hyperliquid — ETH (auto-bridge via Unit):**
 ```bash
-{baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"ETH"}'
-{baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"BTC"}'
+{baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"ETH","amount":0.01}'
+{baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"ETH","amount":0.05,"dry_run":true}'
 ```
+Sends ETH from your wallet on Ethereum L1 to a Unit bridge deposit address. Minimum: 0.007 ETH.
 
-**Hyperliquid — USDC from Ethereum or Base (automated bridge):**
+**Hyperliquid — USDC from Ethereum or Base (auto-bridge via Across):**
 ```bash
 {baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"USDC","amount":100,"from":"base"}'
 {baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"USDC","amount":100,"from":"ethereum","dry_run":true}'
 ```
+
+**Hyperliquid — BTC/SOL (manual — shows deposit address):**
+```bash
+{baseDir}/scripts/hyperliquid --json '{"command":"deposit","asset":"BTC","amount":0.001}'
+```
+BTC and SOL cannot be bridged automatically. The command returns a Unit deposit address for manual transfer.
 
 **Binance / Coinbase — get deposit address:**
 ```bash
