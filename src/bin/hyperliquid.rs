@@ -515,9 +515,7 @@ async fn main() -> Result<()> {
         Commands::Balance => commands::balance::run(EXCHANGE, json_output).await,
         Commands::Positions => commands::positions::run(EXCHANGE, json_output).await,
         Commands::Perp(cmd) => match cmd {
-            PerpCmd::Quote { symbol } => {
-                commands::quote::run_perp(&symbol, json_output).await
-            }
+            PerpCmd::Quote { symbol } => commands::quote::run_perp(&symbol, json_output).await,
             PerpCmd::Orderbook { symbol, levels } => {
                 commands::orderbook::run_perp(&symbol, levels, EXCHANGE, json_output).await
             }
