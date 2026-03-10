@@ -40,6 +40,7 @@ jobs:
           ./target/release/binance --help
           ./target/release/coinbase --help
           ./target/release/polymarket --help
+          ./target/release/okx --help
 
       - name: Smoke test - init
         run: |

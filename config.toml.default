@@ -41,6 +41,15 @@ testnet = false
 # coinbase_api_key = "..."
 # coinbase_api_secret = "..."
 
+# OKX API credentials — enables spot/perp trading on OKX
+# Sign up at https://www.okx.com/
+# okx_api_key = "..."
+# okx_secret_key = "..."
+# okx_passphrase = "..."
+# Custom base URL (default: https://www.okx.com)
+# For OKX US: https://app.okx.com
+# okx_base_url = "https://www.okx.com"
+
 # Polymarket — prediction market trading on Polygon
 # Uses the [wallet] private_key for signing. Only signature_type is configurable.
 # [polymarket]

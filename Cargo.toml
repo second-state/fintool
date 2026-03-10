@@ -31,6 +31,10 @@ path = "src/bin/coinbase.rs"
 name = "polymarket"
 path = "src/bin/polymarket.rs"
 
+[[bin]]
+name = "okx"
+path = "src/bin/okx.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -60,3 +64,4 @@ hmac = "0.12"
 rmp-serde = "1"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"

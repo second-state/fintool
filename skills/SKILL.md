@@ -1,6 +1,6 @@
 ---
 name: fintool
-description: "Financial trading CLIs — spot and perp trading on Hyperliquid, Binance, Coinbase. Prediction markets on Polymarket. Deposit and withdraw across chains. LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
+description: "Financial trading CLIs — spot and perp trading on Hyperliquid, Binance, Coinbase, OKX. Prediction markets on Polymarket. Deposit and withdraw across chains. LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
 homepage: https://github.com/second-state/fintool
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
@@ -17,6 +17,7 @@ A suite of CLI tools for market intelligence and trading across multiple exchang
 | `hyperliquid` | Hyperliquid trading (spot, perp, HIP-3, deposits) | `{baseDir}/scripts/hyperliquid` |
 | `binance` | Binance trading (spot, perp, deposits) | `{baseDir}/scripts/binance` |
 | `coinbase` | Coinbase trading (spot, deposits) | `{baseDir}/scripts/coinbase` |
+| `okx` | OKX trading (spot, perp, deposits, withdrawals) | `{baseDir}/scripts/okx` |
 | `polymarket` | Polymarket prediction markets | `{baseDir}/scripts/polymarket` |
 
 - **Config**: `~/.fintool/config.toml`
@@ -46,6 +47,7 @@ cat ~/.fintool/config.toml 2>/dev/null
    - **Hyperliquid**: `private_key` or `wallet_json` + `wallet_passcode` in `[wallet]` (spot + perps)
    - **Binance**: `binance_api_key` + `binance_api_secret` in `[api_keys]` (spot + perps)
    - **Coinbase**: `coinbase_api_key` + `coinbase_api_secret` in `[api_keys]` (spot only)
+   - **OKX**: `okx_api_key` + `okx_secret_key` + `okx_passphrase` in `[api_keys]` (spot + perps)
    - **Polymarket**: Uses `wallet.private_key` (same as Hyperliquid) for prediction market trading
    - If none configured: Ask the user which exchange they want to use and request the credentials.
 
@@ -53,18 +55,20 @@ cat ~/.fintool/config.toml 2>/dev/null
 
 ## Exchange Capabilities
 
-| Feature | `hyperliquid` | `binance` | `coinbase` | `polymarket` |
-|---------|---------------|-----------|------------|--------------|
-| Spot orders | buy, sell | buy, sell | buy, sell | — |
-| Perp orders | perp buy/sell | perp buy/sell | — | — |
-| Prediction markets | — | — | — | buy, sell, list, quote |
-| Orderbook | spot + perp | spot + perp | spot | — |
-| Deposit | Unit + Across | API | API | bridge |
-| Withdraw | Bridge2 + Unit + Across | API | API | bridge |
-| Balance | balance | balance | balance | balance |
-| Open orders | orders | orders | orders | — |
-| Cancel | cancel | cancel | cancel | — |
-| Positions | positions | positions | — | positions |
+| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` |
+|---------|---------------|-----------|------------|-------|--------------|
+| Spot orders | buy, sell | buy, sell | buy, sell | buy, sell | — |
+| Perp orders | perp buy/sell | perp buy/sell | — | perp buy/sell | — |
+| Prediction markets | — | — | — | — | buy, sell, list, quote |
+| Orderbook | spot + perp | spot + perp | spot | spot + perp | — |
+| Deposit | Unit + Across | API | API | API | bridge |
+| Withdraw | Bridge2 + Unit + Across | API | API | API | bridge |
+| Transfer | spot ↔ perp ↔ dex | spot ↔ futures | — | funding ↔ trading | — |
+| Balance | balance | balance | balance | balance | balance |
+| Open orders | orders | orders | orders | orders | — |
+| Cancel | cancel | cancel | cancel | cancel | — |
+| Positions | positions | positions | — | positions | positions |
+| Funding rate | — | — | — | perp funding_rate | — |
 
 ## Error Handling
 
@@ -139,6 +143,38 @@ cat ~/.fintool/config.toml 2>/dev/null
 {"command": "withdraw", "asset": "USDC", "amount": 100, "to": "0x...", "network": "ethereum"}
 ```
 
+### OKX Trading (`okx`)
+
+```json
+// okx --json '<JSON>'
+{"command": "quote", "symbol": "BTC"}
+{"command": "buy", "symbol": "ETH", "amount": 0.01, "price": 2000}
+{"command": "sell", "symbol": "ETH", "amount": 0.01, "price": 2100}
+{"command": "orderbook", "symbol": "BTC"}
+{"command": "perp_orderbook", "symbol": "ETH"}
+{"command": "perp_buy", "symbol": "ETH", "amount": 0.1, "price": 2000}
+{"command": "perp_sell", "symbol": "ETH", "amount": 0.1, "price": 2100, "close": true}
+{"command": "perp_leverage", "symbol": "ETH", "leverage": 5, "cross": true}
+{"command": "perp_funding_rate", "symbol": "BTC"}
+{"command": "balance"}
+{"command": "positions"}
+{"command": "orders"}
+{"command": "cancel", "inst_id": "BTC-USDT", "order_id": "12345"}
+{"command": "deposit", "asset": "USDC", "network": "base"}
+{"command": "deposit", "asset": "ETH", "network": "ethereum"}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "network": "base"}
+{"command": "withdraw", "asset": "USDC", "amount": 100, "to": "0x...", "network": "ethereum"}
+{"command": "transfer", "asset": "USDT", "amount": 100, "from": "funding", "to": "trading"}
+{"command": "transfer", "asset": "USDT", "amount": 100, "from": "trading", "to": "funding"}
+```
+
+**OKX Notes:**
+- `quote` and `orderbook` are public endpoints — no API keys needed.
+- OKX uses instrument IDs: spot = `BTC-USDT`, perp = `BTC-USDT-SWAP`. The CLI auto-formats from symbol.
+- OKX has `funding` (for deposits/withdrawals) and `trading` (unified) accounts. Use `transfer` to move between them.
+- Withdrawal fee is auto-fetched if `--fee` is not specified.
+- Cancel requires both `inst_id` (e.g. `BTC-USDT`) and `order_id`.
+
 ### Coinbase Trading (`coinbase`)
 
 ```json
@@ -209,6 +245,9 @@ Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity before
 
 # Or on Coinbase
 {baseDir}/scripts/coinbase --json '{"command":"buy","symbol":"BTC","amount":0.01,"price":95000}'
+
+# Or on OKX
+{baseDir}/scripts/okx --json '{"command":"buy","symbol":"BTC","amount":0.01,"price":95000}'
 ```
 
 **Step 4 — Verify:**
@@ -260,7 +299,7 @@ Returns: bids, asks, spread, spreadPct, midPrice. Use to assess liquidity before
 ```
 Use `"close": true` to ensure the order only reduces an existing position.
 
-**Note**: Perps are available on `hyperliquid` and `binance`. Coinbase does not support perps.
+**Note**: Perps are available on `hyperliquid`, `binance`, and `okx`. Coinbase does not support perps.
 
 ### Workflow 3: Portfolio Overview
 
@@ -278,6 +317,11 @@ Use `"close": true` to ensure the order only reduces an existing position.
 
 # Coinbase
 {baseDir}/scripts/coinbase --json '{"command":"balance"}'
+
+# OKX
+{baseDir}/scripts/okx --json '{"command":"balance"}'
+{baseDir}/scripts/okx --json '{"command":"positions"}'
+{baseDir}/scripts/okx --json '{"command":"orders"}'
 
 # Polymarket
 {baseDir}/scripts/polymarket --json '{"command":"balance"}'
@@ -311,10 +355,11 @@ Sends ETH from your wallet on Ethereum L1 to a Unit bridge deposit address. Mini
 ```
 BTC and SOL cannot be bridged automatically. The command returns a Unit deposit address for manual transfer.
 
-**Binance / Coinbase — get deposit address:**
+**Binance / Coinbase / OKX — get deposit address:**
 ```bash
 {baseDir}/scripts/binance --json '{"command":"deposit","asset":"USDC","from":"ethereum"}'
 {baseDir}/scripts/coinbase --json '{"command":"deposit","asset":"ETH"}'
+{baseDir}/scripts/okx --json '{"command":"deposit","asset":"USDC","network":"base"}'
 ```
 
 **Polymarket — deposit USDC:**
@@ -333,10 +378,11 @@ BTC and SOL cannot be bridged automatically. The command returns a Unit deposit 
 {baseDir}/scripts/hyperliquid --json '{"command":"withdraw","asset":"ETH","amount":0.5}'
 ```
 
-**Binance / Coinbase:**
+**Binance / Coinbase / OKX:**
 ```bash
 {baseDir}/scripts/binance --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"0x...","network":"ethereum"}'
 {baseDir}/scripts/coinbase --json '{"command":"withdraw","asset":"USDC","amount":100,"to":"0x..."}'
+{baseDir}/scripts/okx --json '{"command":"withdraw","asset":"USDC","amount":100,"network":"base"}'
 ```
 
 **Polymarket:**

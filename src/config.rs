@@ -59,6 +59,15 @@ pub struct ApiKeysConfig {
     pub coinbase_api_key: Option<String>,
     /// Coinbase Advanced Trade API secret
     pub coinbase_api_secret: Option<String>,
+    /// OKX API key
+    pub okx_api_key: Option<String>,
+    /// OKX API secret key (for HMAC-SHA256 signing)
+    pub okx_secret_key: Option<String>,
+    /// OKX API passphrase
+    pub okx_passphrase: Option<String>,
+    /// Custom OKX base URL (default: https://www.okx.com)
+    /// Set to https://app.okx.com for OKX US
+    pub okx_base_url: Option<String>,
 }
 
 /// Resolved runtime config
@@ -270,4 +279,22 @@ pub fn coinbase_credentials() -> Option<(String, String)> {
         cfg.api_keys.coinbase_api_key?,
         cfg.api_keys.coinbase_api_secret?,
     ))
+}
+
+/// Get OKX API credentials (key, secret, passphrase)
+pub fn okx_credentials() -> Option<(String, String, String)> {
+    let cfg = load_config_file().ok()?;
+    Some((
+        cfg.api_keys.okx_api_key?,
+        cfg.api_keys.okx_secret_key?,
+        cfg.api_keys.okx_passphrase?,
+    ))
+}
+
+/// Get the OKX base URL (customizable for OKX US)
+pub fn okx_base_url() -> String {
+    load_config_file()
+        .ok()
+        .and_then(|c| c.api_keys.okx_base_url)
+        .unwrap_or_else(|| "https://www.okx.com".to_string())
 }

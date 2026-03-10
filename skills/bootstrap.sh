@@ -42,7 +42,7 @@ esac
 echo "Downloading ${ARTIFACT}..."
 curl -L -o /tmp/fintool.zip "${RELEASE_BASE}/${ARTIFACT}.zip"
 unzip -o /tmp/fintool.zip -d /tmp/fintool-extract
-BINARIES="fintool hyperliquid binance coinbase polymarket"
+BINARIES="fintool hyperliquid binance coinbase polymarket okx"
 for bin in $BINARIES; do
   src="/tmp/fintool-extract/${ARTIFACT}/${bin}"
   if [ -f "$src" ]; then
@@ -86,9 +86,13 @@ fi
 if grep -q '^coinbase_api_key\s*=' "$CONFIG" 2>/dev/null; then
   HAS_COINBASE=true
 fi
+HAS_OKX=false
+if grep -q '^okx_api_key\s*=' "$CONFIG" 2>/dev/null; then
+  HAS_OKX=true
+fi
 
-if [ "$HAS_HL" = false ] && [ "$HAS_BINANCE" = false ] && [ "$HAS_COINBASE" = false ]; then
-  MISSING+=("At least one exchange (Hyperliquid wallet, Binance API keys, or Coinbase API keys)")
+if [ "$HAS_HL" = false ] && [ "$HAS_BINANCE" = false ] && [ "$HAS_COINBASE" = false ] && [ "$HAS_OKX" = false ]; then
+  MISSING+=("At least one exchange (Hyperliquid wallet, Binance API keys, Coinbase API keys, or OKX API keys)")
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
@@ -104,6 +108,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
   echo "  • Hyperliquid (wallet): spot + perps"
   echo "  • Binance (API key):    spot + perps + options"
   echo "  • Coinbase (API key):   spot only"
+  echo "  • OKX (API key):       spot + perps"
 else
   echo "✅ Configuration looks good!"
 fi

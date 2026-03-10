@@ -1,6 +1,6 @@
 # fintool
 
-A suite of Rust CLI tools for agentic trading and market intelligence. Each exchange has its own dedicated binary — **`hyperliquid`**, **`binance`**, **`coinbase`**, **`polymarket`** — plus a shared **`fintool`** for exchange-agnostic market intelligence (quotes, news, SEC filings). Supports crypto, stocks, commodities, and prediction markets. All CLIs support `--json` mode for scripting and agent integration.
+A suite of Rust CLI tools for agentic trading and market intelligence. Each exchange has its own dedicated binary — **`hyperliquid`**, **`binance`**, **`coinbase`**, **`okx`**, **`polymarket`** — plus a shared **`fintool`** for exchange-agnostic market intelligence (quotes, news, SEC filings). Supports crypto, stocks, commodities, and prediction markets. All CLIs support `--json` mode for scripting and agent integration.
 
 ## Table of Contents
 
@@ -24,6 +24,7 @@ A suite of Rust CLI tools for agentic trading and market intelligence. Each exch
   - [`hyperliquid` — Hyperliquid Exchange](#hyperliquid--hyperliquid-exchange)
   - [`binance` — Binance Exchange](#binance--binance-exchange)
   - [`coinbase` — Coinbase Exchange](#coinbase--coinbase-exchange)
+  - [`okx` — OKX Exchange](#okx--okx-exchange)
   - [`polymarket` — Polymarket Prediction Markets](#polymarket--polymarket-prediction-markets)
 - [Common Commands Reference](#common-commands-reference)
   - [`quote`](#quote-symbol)
@@ -57,7 +58,7 @@ The agent will download the correct binaries for your platform, set up the skill
 ```bash
 cd fintool
 cargo build --release
-# Binaries at ./target/release/{fintool,hyperliquid,binance,coinbase,polymarket}
+# Binaries at ./target/release/{fintool,hyperliquid,binance,coinbase,okx,polymarket}
 ```
 
 Or download pre-built binaries from [Releases](https://github.com/second-state/fintool/releases).
@@ -70,26 +71,28 @@ Or download pre-built binaries from [Releases](https://github.com/second-state/f
 | `hyperliquid` | Spot + perp + HIP-3 trading, deposits, withdrawals, transfers | Hyperliquid |
 | `binance` | Spot + perp trading, deposits, withdrawals | Binance |
 | `coinbase` | Spot trading, deposits, withdrawals | Coinbase |
+| `okx` | Spot + perp trading, deposits, withdrawals, transfers | OKX |
 | `polymarket` | Prediction market trading, deposits, withdrawals | Polymarket (Polygon) |
 
 All CLIs support `--json` mode for programmatic use. See [JSON Mode](#json-mode).
 
 ### Exchange Capability Matrix
 
-| Feature | `hyperliquid` | `binance` | `coinbase` | `polymarket` |
-|---------|---------------|-----------|------------|--------------|
-| Spot Trading | buy, sell | buy, sell | buy, sell | — |
-| Perpetual Futures | perp buy/sell | perp buy/sell | — | — |
-| Prediction Markets | — | — | — | buy, sell, list, quote |
-| Orderbook | spot + perp | spot + perp | spot | — |
-| Options | options buy/sell | — | — | — |
-| Balance | balance | balance | balance | balance |
-| Positions | positions | positions | — | positions |
-| Orders/Cancel | orders, cancel | orders, cancel | orders, cancel | — |
-| Deposit | deposit | deposit | deposit | deposit |
-| Withdraw | withdraw | withdraw | withdraw | withdraw |
-| Transfer | transfer | — | — | — |
-| Bridge Status | bridge-status | — | — | — |
+| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` |
+|---------|---------------|-----------|------------|-------|--------------|
+| Spot Trading | buy, sell | buy, sell | buy, sell | buy, sell | — |
+| Perpetual Futures | perp buy/sell | perp buy/sell | — | perp buy/sell | — |
+| Prediction Markets | — | — | — | — | buy, sell, list, quote |
+| Orderbook | spot + perp | spot + perp | spot | spot + perp | — |
+| Options | options buy/sell | — | — | — | — |
+| Balance | balance | balance | balance | balance | balance |
+| Positions | positions | positions | — | positions | positions |
+| Orders/Cancel | orders, cancel | orders, cancel | orders, cancel | orders, cancel | — |
+| Deposit | deposit | deposit | deposit | deposit | deposit |
+| Withdraw | withdraw | withdraw | withdraw | withdraw | withdraw |
+| Transfer | transfer | transfer | — | transfer | — |
+| Funding Rate | — | — | — | perp funding-rate | — |
+| Bridge Status | bridge-status | — | — | — | — |
 
 ## Quick Guides
 
@@ -197,6 +200,7 @@ Use different exchange CLIs for different exchanges:
 ```bash
 coinbase buy BTC --amount 0.002 --price 65000
 binance buy BTC --amount 0.002 --price 65000
+okx buy BTC --amount 0.002 --price 65000
 ```
 
 ### Open and close perp positions
@@ -323,6 +327,11 @@ binance_api_secret = "..."
 coinbase_api_key = "..."
 coinbase_api_secret = "..."
 
+# OKX — enables spot/perp trading
+okx_api_key = "..."
+okx_secret_key = "..."
+okx_passphrase = "..."
+
 # Polymarket — prediction market trading on Polygon
 # private_key defaults to [wallet] private_key if omitted
 [polymarket]
@@ -344,21 +353,27 @@ coinbase_api_secret = "..."
 | `api_keys` | `binance_api_secret` | string | — | Binance API secret (HMAC-SHA256 signing). |
 | `api_keys` | `coinbase_api_key` | string | — | Coinbase Advanced Trade API key. |
 | `api_keys` | `coinbase_api_secret` | string | — | Coinbase Advanced Trade API secret (HMAC-SHA256 signing). |
+| `api_keys` | `okx_api_key` | string | — | OKX API key for spot/perp trading. |
+| `api_keys` | `okx_secret_key` | string | — | OKX API secret (HMAC-SHA256 signing). |
+| `api_keys` | `okx_passphrase` | string | — | OKX API passphrase. |
+| `api_keys` | `okx_base_url` | string | `https://www.okx.com` | Custom OKX base URL. Set to `https://app.okx.com` for OKX US. |
 | `polymarket` | `signature_type` | string | `proxy` | Polymarket signing mode: `proxy`, `eoa`, or `gnosis-safe`. Uses `wallet.private_key`. |
 
 ### What Needs Configuration
 
-| CLI / Command | Wallet Key | Binance Keys | Coinbase Keys | OpenAI Key |
-|---------------|-----------|--------------|---------------|------------|
-| `fintool quote` | No | No | No | Optional (enriches) |
-| `fintool news`, `fintool init` | No | No | No | No |
-| `fintool report` | No | No | No | No |
-| `hyperliquid` (all commands) | Yes | — | — | — |
-| `hyperliquid quote` | No | — | — | — |
-| `binance` (all commands) | — | Yes | — | — |
-| `coinbase` (all commands) | — | — | Yes | — |
-| `polymarket list`, `polymarket quote` | No | — | — | — |
-| `polymarket` (buy/sell/positions/deposit) | Yes | — | — | — |
+| CLI / Command | Wallet Key | Binance Keys | Coinbase Keys | OKX Keys | OpenAI Key |
+|---------------|-----------|--------------|---------------|----------|------------|
+| `fintool quote` | No | No | No | — | Optional (enriches) |
+| `fintool news`, `fintool init` | No | No | No | — | No |
+| `fintool report` | No | No | No | — | No |
+| `hyperliquid` (all commands) | Yes | — | — | — | — |
+| `hyperliquid quote` | No | — | — | — | — |
+| `binance` (all commands) | — | Yes | — | — | — |
+| `coinbase` (all commands) | — | — | Yes | — | — |
+| `okx quote`, `okx orderbook` | — | — | — | No | — |
+| `okx` (trading/balance/deposit/withdraw) | — | — | — | Yes | — |
+| `polymarket list`, `polymarket quote` | No | — | — | — | — |
+| `polymarket` (buy/sell/positions/deposit) | Yes | — | — | — | — |
 
 ---
 
@@ -517,6 +532,43 @@ Spot trading only (no perps or options).
 
 ---
 
+### `okx` — OKX Exchange
+
+Spot and perpetual futures trading, deposits, withdrawals, and account transfers.
+
+| Command | Description |
+|---------|-------------|
+| `okx buy <SYMBOL> --amount N --price P` | Spot limit buy |
+| `okx sell <SYMBOL> --amount N --price P` | Spot limit sell |
+| `okx perp buy <SYM> --amount N --price P [--close]` | Perp long / close short |
+| `okx perp sell <SYM> --amount N --price P [--close]` | Perp short / close long |
+| `okx perp leverage <SYM> --leverage N [--cross]` | Set perp leverage |
+| `okx perp funding-rate <SYM>` | Get funding rate for a swap |
+| `okx perp orderbook <SYM> [--levels N]` | Perp L2 orderbook |
+| `okx orderbook <SYMBOL> [--levels N]` | Spot L2 orderbook |
+| `okx orders [SYMBOL]` | List open orders |
+| `okx cancel --inst-id <ID> <ORDER_ID>` | Cancel an order |
+| `okx balance` | Account balances (trading + funding) |
+| `okx positions` | Open positions |
+| `okx quote <SYMBOL>` | Price quote (no auth required) |
+| `okx deposit <ASSET> [--network NET]` | Deposit address |
+| `okx withdraw <ASSET> --amount N [--to DST] [--network NET] [--fee F]` | Withdraw |
+| `okx transfer <ASSET> --amount N --from SRC --to DST` | Transfer: funding ↔ trading |
+
+#### OKX-Specific Features
+
+**Instrument IDs:** Spot uses `BTC-USDT`, perps use `BTC-USDT-SWAP`. The CLI auto-formats these from the symbol name.
+
+**Account types:** OKX has a `funding` account (for deposits/withdrawals) and a `trading` (unified) account. Use `okx transfer` to move between them.
+
+**Trade modes:** Spot orders use `cash` mode, perp orders use `cross` margin by default. Use `--cross` with leverage to explicitly select cross margin.
+
+**Withdrawal fees:** If `--fee` is not specified, the CLI auto-fetches the minimum withdrawal fee from the OKX API.
+
+**Base URL:** Default is `https://www.okx.com`. Set `okx_base_url` in config for OKX US (`https://app.okx.com`).
+
+---
+
 ### `polymarket` — Polymarket Prediction Markets
 
 Prediction market trading on Polygon.
@@ -573,6 +625,7 @@ Place a perpetual futures limit order. Use `--close` for reduce-only.
 hyperliquid perp buy ETH --amount 0.1 --price 2000
 hyperliquid perp sell BTC --amount 0.01 --price 70000 --close
 binance perp buy ETH --amount 0.1 --price 2000
+okx perp buy ETH --amount 0.1 --price 2000
 ```
 
 ### `perp leverage`
@@ -583,6 +636,7 @@ Set leverage for a perp asset. Use `--cross` for cross margin (isolated by defau
 hyperliquid perp leverage ETH --leverage 5
 hyperliquid perp leverage BTC --leverage 10 --cross
 binance perp leverage ETH --leverage 5
+okx perp leverage ETH --leverage 5 --cross
 ```
 
 ### `orderbook / perp orderbook`
@@ -594,6 +648,7 @@ hyperliquid orderbook HYPE
 hyperliquid perp orderbook BTC --levels 20
 binance orderbook ETH
 coinbase orderbook BTC
+okx orderbook BTC
 ```
 
 ### `orders`
@@ -604,6 +659,7 @@ List open orders (spot and perp). Optionally filter by symbol.
 hyperliquid orders
 hyperliquid orders BTC
 binance orders
+okx orders
 ```
 
 ### `cancel <ORDER_ID>`
@@ -617,6 +673,7 @@ Cancel an open order.
 | `hyperliquid` | `SYMBOL:OID` | `BTC:91490942` |
 | `binance` | `binance_spot:SYMBOL:ID` or `binance_futures:SYMBOL:ID` | `binance_spot:BTCUSDT:12345678` |
 | `coinbase` | `coinbase:UUID` | `coinbase:abc123-def456-...` |
+| `okx` | `--inst-id INST_ID ORDER_ID` | `okx cancel --inst-id BTC-USDT 12345` |
 
 ### `balance`
 
@@ -626,6 +683,7 @@ Show account balances and margin summary.
 hyperliquid balance
 binance balance
 coinbase balance
+okx balance
 polymarket balance
 ```
 
@@ -636,6 +694,7 @@ Show open positions with PnL.
 ```bash
 hyperliquid positions    # includes HIP-3 dex positions
 binance positions
+okx positions
 polymarket positions     # prediction market positions
 ```
 
@@ -650,10 +709,11 @@ hyperliquid deposit USDC --amount 100 --from base    # bridge USDC from Base via
 hyperliquid deposit BTC --amount 0.001               # shows deposit address (manual)
 ```
 
-**Binance / Coinbase:**
+**Binance / Coinbase / OKX:**
 ```bash
 binance deposit ETH --from ethereum
 coinbase deposit USDC
+okx deposit USDC --network base
 ```
 
 **Polymarket:**
@@ -672,10 +732,11 @@ hyperliquid withdraw USDC --amount 100 --to base     # → Base
 hyperliquid withdraw ETH --amount 0.5                # → Ethereum (HyperUnit)
 ```
 
-**Binance / Coinbase:**
+**Binance / Coinbase / OKX:**
 ```bash
 binance withdraw USDC --amount 100 --to 0x... --network ethereum
 coinbase withdraw ETH --amount 0.5 --to 0x...
+okx withdraw USDC --amount 100 --network base
 ```
 
 **Polymarket:**
@@ -694,22 +755,23 @@ polymarket withdraw --amount 100
 | `quote <SYM>` | Price quote | `fintool` (spot), `hyperliquid` (perp) |
 | `news <SYM>` | Latest news headlines | `fintool` |
 | `report annual/quarterly/list/get` | SEC filings | `fintool` |
-| `buy <SYM> --amount N --price P` | Spot limit buy | `hyperliquid`, `binance`, `coinbase` |
-| `sell <SYM> --amount N --price P` | Spot limit sell | `hyperliquid`, `binance`, `coinbase` |
-| `perp buy <SYM> --amount N --price P` | Perp long / close short | `hyperliquid`, `binance` |
-| `perp sell <SYM> --amount N --price P` | Perp short / close long | `hyperliquid`, `binance` |
-| `perp leverage <SYM> --leverage N` | Set perp leverage | `hyperliquid`, `binance` |
+| `buy <SYM> --amount N --price P` | Spot limit buy | `hyperliquid`, `binance`, `coinbase`, `okx` |
+| `sell <SYM> --amount N --price P` | Spot limit sell | `hyperliquid`, `binance`, `coinbase`, `okx` |
+| `perp buy <SYM> --amount N --price P` | Perp long / close short | `hyperliquid`, `binance`, `okx` |
+| `perp sell <SYM> --amount N --price P` | Perp short / close long | `hyperliquid`, `binance`, `okx` |
+| `perp leverage <SYM> --leverage N` | Set perp leverage | `hyperliquid`, `binance`, `okx` |
+| `perp funding-rate <SYM>` | Funding rate | `okx` |
 | `perp set-mode <MODE>` | Account mode | `hyperliquid` |
-| `orderbook <SYM>` | Spot L2 orderbook | `hyperliquid`, `binance`, `coinbase` |
-| `perp orderbook <SYM>` | Perp L2 orderbook | `hyperliquid`, `binance` |
-| `orders [SYM]` | List open orders | `hyperliquid`, `binance`, `coinbase` |
-| `cancel <ORDER_ID>` | Cancel an order | `hyperliquid`, `binance`, `coinbase` |
-| `balance` | Account balances | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
-| `positions` | Open positions + PnL | `hyperliquid`, `binance`, `polymarket` |
+| `orderbook <SYM>` | Spot L2 orderbook | `hyperliquid`, `binance`, `coinbase`, `okx` |
+| `perp orderbook <SYM>` | Perp L2 orderbook | `hyperliquid`, `binance`, `okx` |
+| `orders [SYM]` | List open orders | `hyperliquid`, `binance`, `coinbase`, `okx` |
+| `cancel <ORDER_ID>` | Cancel an order | `hyperliquid`, `binance`, `coinbase`, `okx` |
+| `balance` | Account balances | `hyperliquid`, `binance`, `coinbase`, `okx`, `polymarket` |
+| `positions` | Open positions + PnL | `hyperliquid`, `binance`, `okx`, `polymarket` |
 | `options buy/sell ...` | Options trading | `hyperliquid` |
-| `deposit <ASSET>` | Deposit to exchange | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
-| `withdraw <ASSET> --amount N` | Withdraw from exchange | `hyperliquid`, `binance`, `coinbase`, `polymarket` |
-| `transfer <ASSET> --amount N` | Transfer: perp ↔ spot ↔ dex | `hyperliquid` |
+| `deposit <ASSET>` | Deposit to exchange | `hyperliquid`, `binance`, `coinbase`, `okx`, `polymarket` |
+| `withdraw <ASSET> --amount N` | Withdraw from exchange | `hyperliquid`, `binance`, `coinbase`, `okx`, `polymarket` |
+| `transfer <ASSET> --amount N` | Transfer between accounts | `hyperliquid`, `okx` |
 | `bridge-status` | Unit bridge status | `hyperliquid` |
 | `list [--query Q]` | Search prediction markets | `polymarket` |
 | `quote <MARKET>` | Market details/prices | `polymarket` |
@@ -733,6 +795,8 @@ polymarket withdraw --amount 100
 | Trading — Binance futures | Binance Futures API `/fapi/v1/order` | API key + secret | HMAC-SHA256 signing |
 | Prediction markets — Polymarket | Polymarket Gamma + CLOB APIs | Wallet key (for trading) | EIP-712 signing |
 | Trading — Coinbase spot | Coinbase Advanced Trade API | API key + secret | HMAC-SHA256 signing |
+| Trading — OKX spot + perps | OKX API `/api/v5/trade/order` | API key + secret + passphrase | HMAC-SHA256 + base64 signing |
+| Quotes — OKX | OKX Public API `/api/v5/market/ticker` | No | No auth for public endpoints |
 | Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
 | Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
 
@@ -764,6 +828,13 @@ binance --json '{"command":"balance"}'
 # Coinbase trading
 coinbase --json '{"command":"buy","symbol":"ETH","amount":0.5,"price":2000}'
 coinbase --json '{"command":"balance"}'
+
+# OKX trading
+okx --json '{"command":"quote","symbol":"BTC"}'
+okx --json '{"command":"buy","symbol":"ETH","amount":0.01,"price":2000}'
+okx --json '{"command":"perp_buy","symbol":"BTC","amount":0.001,"price":60000}'
+okx --json '{"command":"balance"}'
+okx --json '{"command":"transfer","asset":"USDT","amount":100,"from":"funding","to":"trading"}'
 
 # Polymarket prediction markets
 polymarket --json '{"command":"list","query":"bitcoin"}'
@@ -847,6 +918,27 @@ Errors are returned as JSON too:
 | `deposit` | `asset` | `amount`, `from`, `dry_run` |
 | `withdraw` | `asset`, `amount` | `to`, `network`, `dry_run` |
 
+#### `okx`
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `buy` | `symbol`, `amount`, `price` | — |
+| `sell` | `symbol`, `amount`, `price` | — |
+| `orderbook` | `symbol` | `levels` |
+| `orders` | — | `symbol` |
+| `cancel` | `inst_id`, `order_id` | — |
+| `balance` | — | — |
+| `positions` | — | — |
+| `quote` | `symbol` | — |
+| `perp_orderbook` | `symbol` | `levels` |
+| `perp_buy` | `symbol`, `amount`, `price` | `close` |
+| `perp_sell` | `symbol`, `amount`, `price` | `close` |
+| `perp_leverage` | `symbol`, `leverage` | `cross` |
+| `perp_funding_rate` | `symbol` | — |
+| `deposit` | `asset` | `network` |
+| `withdraw` | `asset`, `amount` | `to`, `network`, `fee` |
+| `transfer` | `asset`, `amount`, `from`, `to` | — |
+
 #### `polymarket`
 
 | `command` | Required fields | Optional fields |
@@ -880,12 +972,14 @@ fintool/
 │   │   ├── hyperliquid.rs  # CLI: Hyperliquid exchange
 │   │   ├── binance.rs      # CLI: Binance exchange
 │   │   ├── coinbase.rs     # CLI: Coinbase exchange
+│   │   ├── okx.rs          # CLI: OKX exchange
 │   │   └── polymarket.rs   # CLI: Polymarket prediction markets
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
 │   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
 │   ├── hip3.rs          # HIP-3 builder-deployed perps: EIP-712 signing
 │   ├── binance.rs       # Binance API client (spot/futures/options, HMAC-SHA256)
 │   ├── coinbase.rs      # Coinbase Advanced Trade API client (HMAC-SHA256)
+│   ├── okx.rs           # OKX API client (HMAC-SHA256 + base64)
 │   ├── bridge.rs        # Across Protocol cross-chain USDC bridge
 │   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw)
 │   ├── polymarket.rs    # Polymarket SDK client helpers
@@ -910,6 +1004,8 @@ fintool/
 ├── tests/
 │   ├── helpers.sh       # Shell test utilities
 │   ├── hyperliquid/     # E2E tests for Hyperliquid
+│   ├── binance/         # E2E tests for Binance
+│   ├── okx/             # E2E tests for OKX
 │   └── polymarket/      # E2E tests for Polymarket
 ├── examples/
 │   ├── funding_arb/     # Funding rate arbitrage bot
@@ -928,7 +1024,7 @@ fintool/
 | `hyperliquid_rust_sdk` | Hyperliquid exchange client with EIP-712 signing |
 | `ethers` | Ethereum wallet and signing primitives |
 | `reqwest` | HTTP client (rustls TLS — no OpenSSL) |
-| `hmac`, `sha2`, `hex` | HMAC-SHA256 signing for Binance and Coinbase APIs |
+| `hmac`, `sha2`, `hex`, `base64` | HMAC-SHA256 signing for Binance, Coinbase, and OKX APIs |
 | `clap` | CLI argument parsing |
 | `serde` / `serde_json` | JSON serialization |
 | `colored` | Terminal colors (human-readable output) |
