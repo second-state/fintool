@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../helpers.sh"
 ensure_built
 
-ft() { $HYPERLIQUID --json "$1" 2>/dev/null; }
+ft() { $HYPERLIQUID --json "$1"; }
 
 USDC_AMOUNT="${1:-1}"
 ETH_AMOUNT="${2:-0}"

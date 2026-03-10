@@ -312,6 +312,16 @@ async fn withdraw_usdc_hl_bridged(
         dest_chain.name()
     );
 
+    // Re-fetch Across quote now that USDC is on Arbitrum.
+    // The original quote (fetched before HL withdrawal) has stale calldata
+    // because the HL Bridge2 step takes ~4 minutes.
+    eprintln!("  Refreshing Across bridge quote...");
+    let quote = bridge::get_across_quote_reverse(dest_chain, amount, &cfg.address).await?;
+    let output_amount = quote
+        .expected_output_amount
+        .as_deref()
+        .unwrap_or(&quote.input_amount);
+
     // Get gas price with 50% buffer to avoid "max fee less than base fee" errors
     let arb_gas_price = arb_client
         .get_gas_price()
