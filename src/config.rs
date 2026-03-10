@@ -52,6 +52,9 @@ pub struct ApiKeysConfig {
     pub binance_api_key: Option<String>,
     /// Binance API secret for signing requests
     pub binance_api_secret: Option<String>,
+    /// Custom Binance base URL (default: https://api.binance.com)
+    /// Set to https://api.binance.us for Binance US (spot only)
+    pub binance_base_url: Option<String>,
     /// Coinbase Advanced Trade API key
     pub coinbase_api_key: Option<String>,
     /// Coinbase Advanced Trade API secret
@@ -208,6 +211,37 @@ pub fn binance_credentials() -> Option<(String, String)> {
         cfg.api_keys.binance_api_key?,
         cfg.api_keys.binance_api_secret?,
     ))
+}
+
+/// Get the Binance spot/wallet base URL (customizable for Binance US)
+pub fn binance_base_url() -> String {
+    load_config_file()
+        .ok()
+        .and_then(|c| c.api_keys.binance_base_url)
+        .unwrap_or_else(|| "https://api.binance.com".to_string())
+}
+
+/// Get the Binance futures base URL.
+/// If a custom base URL is set (e.g. Binance US), futures are not available.
+pub fn binance_futures_url() -> Option<String> {
+    let cfg = load_config_file().ok()?;
+    if cfg.api_keys.binance_base_url.is_some() {
+        // Custom URL (e.g. Binance US) — no futures support
+        None
+    } else {
+        Some("https://fapi.binance.com".to_string())
+    }
+}
+
+/// Get the Binance options base URL.
+/// If a custom base URL is set (e.g. Binance US), options are not available.
+pub fn binance_options_url() -> Option<String> {
+    let cfg = load_config_file().ok()?;
+    if cfg.api_keys.binance_base_url.is_some() {
+        None
+    } else {
+        Some("https://eapi.binance.com".to_string())
+    }
 }
 
 /// Get Polymarket credentials (private_key, signature_type)

@@ -5,11 +5,33 @@ use serde_json::json;
 use sha2::Sha256;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::config;
+
 type HmacSha256 = Hmac<Sha256>;
 
-pub(crate) const SPOT_BASE_URL: &str = "https://api.binance.com";
-pub(crate) const FUTURES_BASE_URL: &str = "https://fapi.binance.com";
-const OPTIONS_BASE_URL: &str = "https://eapi.binance.com";
+/// Get the spot/wallet base URL from config (falls back to default)
+fn spot_base_url() -> String {
+    config::binance_base_url()
+}
+
+/// Get the futures base URL. Returns an error if a custom base URL is set
+/// (e.g. Binance US does not support futures).
+fn futures_base_url() -> Result<String> {
+    config::binance_futures_url().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Futures are not available with a custom Binance base URL (e.g. Binance US)"
+        )
+    })
+}
+
+/// Get the options base URL. Returns an error if a custom base URL is set.
+fn options_base_url() -> Result<String> {
+    config::binance_options_url().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Options are not available with a custom Binance base URL (e.g. Binance US)"
+        )
+    })
+}
 
 /// Sign a request with HMAC-SHA256
 pub fn sign_request(secret: &str, query_string: &str) -> String {
@@ -48,7 +70,9 @@ pub async fn spot_order(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/api/v3/order?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -113,7 +137,9 @@ pub async fn set_leverage(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v1/leverage?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -182,7 +208,9 @@ pub async fn futures_order(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v1/order?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -267,7 +295,9 @@ pub async fn options_order(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/eapi/v1/order?{}&signature={}",
-        OPTIONS_BASE_URL, query_string, signature
+        options_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -331,7 +361,9 @@ pub async fn get_spot_balances(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/api/v3/account?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -367,7 +399,9 @@ pub async fn get_futures_balances(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v2/balance?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -403,7 +437,9 @@ pub async fn get_futures_positions(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v2/positionRisk?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -444,7 +480,9 @@ pub async fn get_spot_open_orders(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/api/v3/openOrders?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -485,7 +523,9 @@ pub async fn get_futures_open_orders(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v1/openOrders?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -526,7 +566,9 @@ pub async fn cancel_spot_order(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/api/v3/order?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -567,7 +609,9 @@ pub async fn get_deposit_address(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/sapi/v1/capital/deposit/address?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -616,7 +660,9 @@ pub async fn withdraw(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/sapi/v1/capital/withdraw/apply?{}&signature={}",
-        SPOT_BASE_URL, query_string, signature
+        spot_base_url(),
+        query_string,
+        signature
     );
 
     let response = client
@@ -657,7 +703,9 @@ pub async fn cancel_futures_order(
     let signature = sign_request(api_secret, &query_string);
     let url = format!(
         "{}/fapi/v1/order?{}&signature={}",
-        FUTURES_BASE_URL, query_string, signature
+        futures_base_url()?,
+        query_string,
+        signature
     );
 
     let response = client
@@ -666,6 +714,137 @@ pub async fn cancel_futures_order(
         .send()
         .await
         .context("Failed to cancel Binance futures order")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
+/// Get the 24hr ticker for a spot symbol (no auth needed)
+pub async fn get_ticker_price(client: &Client, symbol: &str) -> Result<serde_json::Value> {
+    let url = format!("{}/api/v3/ticker/24hr?symbol={}", spot_base_url(), symbol);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to fetch Binance ticker")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
+/// Get the 24hr futures ticker for a symbol (no auth needed)
+pub async fn get_futures_ticker_price(client: &Client, symbol: &str) -> Result<serde_json::Value> {
+    let url = format!(
+        "{}/fapi/v1/ticker/24hr?symbol={}",
+        futures_base_url()?,
+        symbol
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to fetch Binance futures ticker")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
+/// Universal transfer between spot and futures wallets
+/// transfer_type: "MAIN_UMFUTURE" (spot->futures) or "UMFUTURE_MAIN" (futures->spot)
+pub async fn universal_transfer(
+    client: &Client,
+    api_key: &str,
+    api_secret: &str,
+    asset: &str,
+    amount: &str,
+    transfer_type: &str,
+) -> Result<serde_json::Value> {
+    let timestamp = timestamp_ms();
+    let query_string = format!(
+        "type={}&asset={}&amount={}&timestamp={}",
+        transfer_type,
+        asset.to_uppercase(),
+        amount,
+        timestamp
+    );
+    let signature = sign_request(api_secret, &query_string);
+    let url = format!(
+        "{}/sapi/v1/asset/transfer?{}&signature={}",
+        spot_base_url(),
+        query_string,
+        signature
+    );
+
+    let response = client
+        .post(&url)
+        .header("X-MBX-APIKEY", api_key)
+        .send()
+        .await
+        .context("Failed to submit Binance transfer")?;
+
+    let status = response.status();
+    let body: serde_json::Value = response.json().await.context("Failed to parse response")?;
+
+    if !status.is_success() {
+        let error_msg = if let Some(msg) = body.get("msg") {
+            format!("Binance API error: {}", msg)
+        } else {
+            format!("Binance API error: {:?}", body)
+        };
+        bail!(error_msg);
+    }
+
+    Ok(body)
+}
+
+/// Get futures funding rate for a symbol (no auth needed)
+pub async fn get_funding_rate(client: &Client, symbol: &str) -> Result<serde_json::Value> {
+    let url = format!(
+        "{}/fapi/v1/premiumIndex?symbol={}",
+        futures_base_url()?,
+        symbol
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to fetch Binance funding rate")?;
 
     let status = response.status();
     let body: serde_json::Value = response.json().await.context("Failed to parse response")?;

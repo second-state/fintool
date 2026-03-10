@@ -42,15 +42,25 @@ esac
 echo "Downloading ${ARTIFACT}..."
 curl -L -o /tmp/fintool.zip "${RELEASE_BASE}/${ARTIFACT}.zip"
 unzip -o /tmp/fintool.zip -d /tmp/fintool-extract
-cp "/tmp/fintool-extract/${ARTIFACT}/fintool" "$SKILL_DIR/scripts/fintool"
-chmod +x "$SKILL_DIR/scripts/fintool"
+BINARIES="fintool hyperliquid binance coinbase polymarket"
+for bin in $BINARIES; do
+  src="/tmp/fintool-extract/${ARTIFACT}/${bin}"
+  if [ -f "$src" ]; then
+    cp "$src" "$SKILL_DIR/scripts/${bin}"
+    chmod +x "$SKILL_DIR/scripts/${bin}"
+  elif [ -f "${src}.exe" ]; then
+    cp "${src}.exe" "$SKILL_DIR/scripts/${bin}.exe"
+  else
+    echo "⚠️  Binary not found in release: ${bin}"
+  fi
+done
 rm -rf /tmp/fintool.zip /tmp/fintool-extract
 
 # 4. Initialize config (never overwrites existing)
 "$SKILL_DIR/scripts/fintool" init
 
 echo ""
-echo "✅ fintool installed to $SKILL_DIR/scripts/fintool"
+echo "✅ fintool binaries installed to $SKILL_DIR/scripts/"
 echo ""
 
 # 5. Check config for required keys

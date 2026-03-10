@@ -32,6 +32,9 @@ testnet = false
 # Sign up at https://www.binance.com/
 # binance_api_key = "..."
 # binance_api_secret = "..."
+# Custom base URL (default: https://api.binance.com)
+# For Binance US (spot only, no futures/options): https://api.binance.us
+# binance_base_url = "https://api.binance.com"
 
 # Coinbase Advanced Trade API credentials — enables spot trading on Coinbase
 # Sign up at https://www.coinbase.com/

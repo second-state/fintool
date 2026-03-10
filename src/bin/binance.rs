@@ -102,6 +102,24 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Get a price quote for a symbol
+    Quote { symbol: String },
+
+    /// Transfer assets between spot and futures wallets
+    Transfer {
+        /// Asset: USDT, USDC, BTC, ETH, etc.
+        asset: String,
+        /// Amount to transfer
+        #[arg(long)]
+        amount: String,
+        /// Source wallet: spot or futures
+        #[arg(long)]
+        from: String,
+        /// Destination wallet: spot or futures
+        #[arg(long)]
+        to: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -223,6 +241,15 @@ enum JsonCommand {
         #[serde(default)]
         dry_run: bool,
     },
+    Quote {
+        symbol: String,
+    },
+    Transfer {
+        asset: String,
+        amount: f64,
+        from: String,
+        to: String,
+    },
 }
 
 async fn run_json(json_str: &str) -> Result<()> {
@@ -329,6 +356,13 @@ async fn run_json(json_str: &str) -> Result<()> {
             )
             .await
         }
+        JsonCommand::Quote { symbol } => commands::quote::run_spot(&symbol, true).await,
+        JsonCommand::Transfer {
+            asset,
+            amount,
+            from,
+            to,
+        } => commands::transfer::run(&asset, &fmt_num(amount), &from, &to, EXCHANGE, true).await,
     }
 }
 
@@ -439,6 +473,13 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        Commands::Quote { symbol } => commands::quote::run_spot(&symbol, json_output).await,
+        Commands::Transfer {
+            asset,
+            amount,
+            from,
+            to,
+        } => commands::transfer::run(&asset, &amount, &from, &to, EXCHANGE, json_output).await,
     };
 
     if let Err(e) = result {

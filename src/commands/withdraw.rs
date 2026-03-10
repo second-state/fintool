@@ -315,7 +315,11 @@ async fn withdraw_usdc_hl_bridged(
     }
 
     let arrived_amount = arb_usdc_balance - initial_arb_balance;
-    let arrived_usdc = format!("{}.{:06}", arrived_amount / 1_000_000, arrived_amount % 1_000_000);
+    let arrived_usdc = format!(
+        "{}.{:06}",
+        arrived_amount / 1_000_000,
+        arrived_amount % 1_000_000
+    );
     eprintln!(
         "  ✅ USDC arrived on Arbitrum! (${} after Bridge2 fee)",
         arrived_amount.as_u128() as f64 / 1e6
@@ -330,8 +334,7 @@ async fn withdraw_usdc_hl_bridged(
     // Re-fetch Across quote using the actual arrived amount (after Bridge2 fee).
     // The original quote used the pre-fee amount and has stale calldata.
     eprintln!("  Refreshing Across bridge quote...");
-    let quote =
-        bridge::get_across_quote_reverse(dest_chain, &arrived_usdc, &cfg.address).await?;
+    let quote = bridge::get_across_quote_reverse(dest_chain, &arrived_usdc, &cfg.address).await?;
     let output_amount = quote
         .expected_output_amount
         .as_deref()

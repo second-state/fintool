@@ -91,16 +91,20 @@ pub async fn run_spot(symbol: &str, json_output: bool) -> Result<()> {
     let client = reqwest::Client::new();
 
     // Fetch all sources in parallel
-    let (hl_result, yf_result, cg_result) = tokio::join!(
+    let (hl_result, yf_result, cg_result, bn_result) = tokio::join!(
         fetch_hl_spot(&client, &symbol_upper),
         fetch_yahoo_quote(&client, &symbol_upper),
-        fetch_coingecko(&client, &symbol_upper)
+        fetch_coingecko(&client, &symbol_upper),
+        fetch_binance_spot(&client, &symbol_upper)
     );
 
     // Collect successful sources
     let mut sources = Vec::new();
     if let Ok(ref data) = hl_result {
         sources.push(("Hyperliquid", data.clone()));
+    }
+    if let Ok(ref data) = bn_result {
+        sources.push(("Binance", data.clone()));
     }
     if let Ok(ref data) = yf_result {
         sources.push(("Yahoo Finance", data.clone()));
@@ -274,6 +278,40 @@ async fn fetch_hl_spot(client: &reqwest::Client, symbol: &str) -> Result<Value> 
         "prevDayPx": prev_day_px,
         "source": "Hyperliquid"
     }))
+}
+
+/// Fetch spot price from Binance 24hr ticker (no auth needed)
+async fn fetch_binance_spot(client: &reqwest::Client, symbol: &str) -> Result<Value> {
+    // Try SYMBOLUSDT first, then SYMBOLUSDC, then SYMBOLBUSD
+    let pairs = [format!("{}USDT", symbol), format!("{}USDC", symbol)];
+
+    for pair in &pairs {
+        if let Ok(ticker) = crate::binance::get_ticker_price(client, pair).await {
+            let price = ticker["lastPrice"].as_str().unwrap_or("0").to_string();
+            let change_pct = ticker["priceChangePercent"]
+                .as_str()
+                .unwrap_or("0")
+                .to_string();
+            let volume = ticker["quoteVolume"].as_str().unwrap_or("0").to_string();
+            let high = ticker["highPrice"].as_str().unwrap_or("").to_string();
+            let low = ticker["lowPrice"].as_str().unwrap_or("").to_string();
+
+            if price != "0" && price != "0.00000000" {
+                return Ok(json!({
+                    "symbol": symbol,
+                    "price": price,
+                    "change24h": change_pct,
+                    "volume24h": volume,
+                    "high24h": high,
+                    "low24h": low,
+                    "pair": pair,
+                    "source": "Binance"
+                }));
+            }
+        }
+    }
+
+    anyhow::bail!("Symbol {} not found on Binance spot", symbol)
 }
 
 async fn fetch_hl_perp(client: &reqwest::Client, symbol: &str) -> Result<Value> {
@@ -935,6 +973,28 @@ fn merge_sources(symbol: &str, sources: &[(&str, Value)]) -> Value {
             }
             if let Some(vol) = data.get("volume24h") {
                 merged["volume24h"] = vol.clone();
+            }
+        }
+    }
+
+    // Add Binance data if available
+    for (name, data) in sources {
+        if *name == "Binance" {
+            if merged.get("price").is_none() {
+                if let Some(price) = data.get("price") {
+                    merged["price"] = price.clone();
+                    merged["source"] = json!("Binance");
+                }
+            }
+            if merged.get("change24h").is_none() {
+                if let Some(change) = data.get("change24h") {
+                    merged["change24h"] = change.clone();
+                }
+            }
+            if let Some(vol) = data.get("volume24h") {
+                if merged.get("volume24h").is_none() {
+                    merged["volume24h"] = vol.clone();
+                }
             }
         }
     }

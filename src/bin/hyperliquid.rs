@@ -465,7 +465,7 @@ async fn run_json(json_str: &str) -> Result<()> {
             amount,
             from,
             to,
-        } => commands::transfer::run(&asset, &fmt_num(amount), &from, &to, true).await,
+        } => commands::transfer::run(&asset, &fmt_num(amount), &from, &to, EXCHANGE, true).await,
         JsonCommand::BridgeStatus => commands::bridge_status::run(true).await,
     }
 }
@@ -628,7 +628,7 @@ async fn main() -> Result<()> {
             amount,
             from,
             to,
-        } => commands::transfer::run(&asset, &amount, &from, &to, json_output).await,
+        } => commands::transfer::run(&asset, &amount, &from, &to, EXCHANGE, json_output).await,
         Commands::BridgeStatus => commands::bridge_status::run(json_output).await,
     };
 
