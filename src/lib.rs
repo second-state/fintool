@@ -5,6 +5,7 @@ pub mod commands;
 pub mod config;
 pub mod format;
 pub mod hip3;
+pub mod okx;
 pub mod polymarket;
 pub mod signing;
 pub mod unit;

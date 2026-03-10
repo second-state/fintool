@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  BINARIES: fintool hyperliquid binance coinbase polymarket
+  BINARIES: fintool hyperliquid binance coinbase polymarket okx
 
 jobs:
   build:

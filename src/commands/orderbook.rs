@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde_json::{json, Value};
 
-use crate::{binance, coinbase, config};
+use crate::{coinbase, config};
 
 /// Spot orderbook: fintool orderbook BTC [--levels 5] [--exchange auto]
 pub async fn run_spot(
@@ -193,9 +193,10 @@ async fn fetch_binance_orderbook(
 ) -> Result<(Vec<Level>, Vec<Level>)> {
     let limit = snap_binance_limit(levels);
     let base = if futures {
-        binance::FUTURES_BASE_URL
+        config::binance_futures_url()
+            .ok_or_else(|| anyhow::anyhow!("Futures not available with custom Binance URL"))?
     } else {
-        binance::SPOT_BASE_URL
+        config::binance_base_url()
     };
     let endpoint = if futures {
         "/fapi/v1/depth"

@@ -32,11 +32,23 @@ testnet = false
 # Sign up at https://www.binance.com/
 # binance_api_key = "..."
 # binance_api_secret = "..."
+# Custom base URL (default: https://api.binance.com)
+# For Binance US (spot only, no futures/options): https://api.binance.us
+# binance_base_url = "https://api.binance.com"
 
 # Coinbase Advanced Trade API credentials — enables spot trading on Coinbase
 # Sign up at https://www.coinbase.com/
 # coinbase_api_key = "..."
 # coinbase_api_secret = "..."
+
+# OKX API credentials — enables spot/perp trading on OKX
+# Sign up at https://www.okx.com/
+# okx_api_key = "..."
+# okx_secret_key = "..."
+# okx_passphrase = "..."
+# Custom base URL (default: https://www.okx.com)
+# For OKX US: https://app.okx.com
+# okx_base_url = "https://www.okx.com"
 
 # Polymarket — prediction market trading on Polygon
 # Uses the [wallet] private_key for signing. Only signature_type is configurable.
