@@ -1,8 +1,8 @@
 [package]
 name = "fintool"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
-description = "Agentic trading CLIs for crypto, stocks, and prediction markets — Hyperliquid, Binance, Coinbase, and Polymarket"
+description = "Agentic trading CLIs for crypto, stocks, and prediction markets — Hyperliquid, Binance, Coinbase, OKX, and Polymarket"
 license = "MIT"
 repository = "https://github.com/second-state/fintool"
 homepage = "https://github.com/second-state/fintool"
