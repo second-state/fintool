@@ -271,11 +271,22 @@ async fn withdraw_usdc_hl_bridged(
         ethers::types::Bytes::from(data)
     };
 
+    // Record initial Arbitrum USDC balance before HL withdrawal
     let mut arb_usdc_balance = U256::zero();
-    let required = ethers::utils::parse_units(amount, 6)
-        .context("Invalid amount")?
-        .into();
+    {
+        let call_tx = ethers::types::TransactionRequest::new()
+            .to(usdc_addr)
+            .data(balance_calldata.clone());
+        if let Ok(result) = arb_client.call(&call_tx.into(), None).await {
+            if result.len() >= 32 {
+                arb_usdc_balance = U256::from_big_endian(&result[..32]);
+            }
+        }
+    }
+    let initial_arb_balance = arb_usdc_balance;
 
+    // HL Bridge2 charges a ~$1 fee, so we check for any increase over
+    // the initial balance rather than the full requested amount.
     for attempt in 1..=20 {
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
         let call_tx = ethers::types::TransactionRequest::new()
@@ -291,20 +302,24 @@ async fn withdraw_usdc_hl_bridged(
             "  Checking Arbitrum USDC... ${:.2} (attempt {}/20)",
             bal_f, attempt
         );
-        if arb_usdc_balance >= required {
+        if arb_usdc_balance > initial_arb_balance {
             break;
         }
     }
 
-    if arb_usdc_balance < required {
+    if arb_usdc_balance <= initial_arb_balance {
         bail!(
-            "USDC did not arrive on Arbitrum after 10 minutes. Balance: {}, needed: {}",
+            "USDC did not arrive on Arbitrum after 10 minutes. Balance: {}",
             arb_usdc_balance,
-            required
         );
     }
 
-    eprintln!("  ✅ USDC arrived on Arbitrum!");
+    let arrived_amount = arb_usdc_balance - initial_arb_balance;
+    let arrived_usdc = format!("{}.{:06}", arrived_amount / 1_000_000, arrived_amount % 1_000_000);
+    eprintln!(
+        "  ✅ USDC arrived on Arbitrum! (${} after Bridge2 fee)",
+        arrived_amount.as_u128() as f64 / 1e6
+    );
 
     // Step 3: Bridge USDC from Arbitrum → destination via Across
     eprintln!(
@@ -312,11 +327,11 @@ async fn withdraw_usdc_hl_bridged(
         dest_chain.name()
     );
 
-    // Re-fetch Across quote now that USDC is on Arbitrum.
-    // The original quote (fetched before HL withdrawal) has stale calldata
-    // because the HL Bridge2 step takes ~4 minutes.
+    // Re-fetch Across quote using the actual arrived amount (after Bridge2 fee).
+    // The original quote used the pre-fee amount and has stale calldata.
     eprintln!("  Refreshing Across bridge quote...");
-    let quote = bridge::get_across_quote_reverse(dest_chain, amount, &cfg.address).await?;
+    let quote =
+        bridge::get_across_quote_reverse(dest_chain, &arrived_usdc, &cfg.address).await?;
     let output_amount = quote
         .expected_output_amount
         .as_deref()
