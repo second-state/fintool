@@ -1,0 +1,42 @@
+{
+  "perp": {
+    "exchange": "hyperliquid",
+    "asset": "BTC",
+    "side": "long",
+    "size": 0.5,
+    "entry_price": 95000,
+    "leverage": 2.0
+  },
+  "catalysts": [
+    {
+      "name": "Fed rate hike March 2026",
+      "polymarket_slug": "will-the-fed-cut-rates-in-march",
+      "news_query": "Federal Reserve rate decision March 2026 FOMC",
+      "expected_drawdown": 0.15,
+      "coverage": 1.0,
+      "max_premium_pct": 0.05,
+      "current_shares": 0
+    },
+    {
+      "name": "US Bitcoin ban or major regulatory action",
+      "polymarket_slug": "bitcoin-regulation-2026",
+      "news_query": "US Bitcoin regulation ban executive order 2026",
+      "expected_drawdown": 0.30,
+      "coverage": 0.5,
+      "max_premium_pct": 0.03,
+      "current_shares": 0
+    },
+    {
+      "name": "Major exchange hack or insolvency",
+      "polymarket_slug": "crypto-exchange-collapse-2026",
+      "news_query": "crypto exchange hack insolvency bankruptcy 2026",
+      "expected_drawdown": 0.20,
+      "coverage": 0.5,
+      "max_premium_pct": 0.02,
+      "current_shares": 0
+    }
+  ],
+  "rebalance_threshold": 0.1,
+  "dry_run": true,
+  "log_file": "hedger_log.jsonl"
+}
