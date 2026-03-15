@@ -29,14 +29,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Get historical price at the backtest date
-    Quote {
-        symbol: String,
-    },
+    Quote { symbol: String },
 
     /// Show news (stub — historical news not available)
-    News {
-        symbol: String,
-    },
+    News { symbol: String },
 
     /// SEC filings on or before the backtest date
     #[command(subcommand)]
@@ -180,15 +176,11 @@ enum JsonCommand {
         symbol: String,
         amount: f64,
         price: Option<f64>,
-        #[serde(default)]
-        close: bool,
     },
     PerpSell {
         symbol: String,
         amount: f64,
         price: Option<f64>,
-        #[serde(default)]
-        close: bool,
     },
     PerpLeverage {
         symbol: String,
@@ -262,8 +254,8 @@ async fn cmd_report_list(
             date,
         );
         println!(
-            "  {:<8} {:<12} {:<12} {}",
-            "Form", "Filed", "Period", "Accession Number"
+            "  {:<8} {:<12} {:<12} Accession Number",
+            "Form", "Filed", "Period"
         );
         println!("  {}", "-".repeat(66));
         for f in &filings {
@@ -307,6 +299,7 @@ async fn cmd_report_quarterly(
     commands::report::get(symbol, &filing.accession_number, output, json_output).await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_trade(
     symbol: &str,
     amount: f64,
@@ -346,11 +339,7 @@ async fn cmd_trade(
 
 // ── JSON dispatch ───────────────────────────────────────────────────────
 
-async fn run_json(
-    json_str: &str,
-    date: NaiveDate,
-    portfolio: &mut Portfolio,
-) -> Result<()> {
+async fn run_json(json_str: &str, date: NaiveDate, portfolio: &mut Portfolio) -> Result<()> {
     let cmd: JsonCommand = serde_json::from_str(json_str)
         .map_err(|e| anyhow::anyhow!("Invalid JSON command: {}", e))?;
 
@@ -524,13 +513,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Parse the --at date
-    let date = NaiveDate::parse_from_str(&cli.at, "%Y-%m-%d").map_err(|e| {
-        anyhow::anyhow!(
-            "Invalid date '{}': {}. Use YYYY-MM-DD format.",
-            cli.at,
-            e
-        )
-    })?;
+    let date = NaiveDate::parse_from_str(&cli.at, "%Y-%m-%d")
+        .map_err(|e| anyhow::anyhow!("Invalid date '{}': {}. Use YYYY-MM-DD format.", cli.at, e))?;
 
     // Validate date is not in the future
     let today = chrono::Utc::now().date_naive();
@@ -539,7 +523,10 @@ async fn main() -> Result<()> {
     }
 
     let mut portfolio = Portfolio::load().unwrap_or_else(|e| {
-        eprintln!("Warning: could not load portfolio state: {:#}. Starting fresh.", e);
+        eprintln!(
+            "Warning: could not load portfolio state: {:#}. Starting fresh.",
+            e
+        );
         Portfolio::new()
     });
 
@@ -589,7 +576,13 @@ async fn main() -> Result<()> {
             price,
         } => {
             cmd_trade(
-                &symbol, amount, price, TradeSide::Buy, TradeType::Spot, date, &mut portfolio,
+                &symbol,
+                amount,
+                price,
+                TradeSide::Buy,
+                TradeType::Spot,
+                date,
+                &mut portfolio,
                 json_output,
             )
             .await
@@ -600,7 +593,13 @@ async fn main() -> Result<()> {
             price,
         } => {
             cmd_trade(
-                &symbol, amount, price, TradeSide::Sell, TradeType::Spot, date, &mut portfolio,
+                &symbol,
+                amount,
+                price,
+                TradeSide::Sell,
+                TradeType::Spot,
+                date,
+                &mut portfolio,
                 json_output,
             )
             .await
@@ -613,8 +612,14 @@ async fn main() -> Result<()> {
                 ..
             } => {
                 cmd_trade(
-                    &symbol, amount, price, TradeSide::Buy, TradeType::Perp, date,
-                    &mut portfolio, json_output,
+                    &symbol,
+                    amount,
+                    price,
+                    TradeSide::Buy,
+                    TradeType::Perp,
+                    date,
+                    &mut portfolio,
+                    json_output,
                 )
                 .await
             }
@@ -625,8 +630,14 @@ async fn main() -> Result<()> {
                 ..
             } => {
                 cmd_trade(
-                    &symbol, amount, price, TradeSide::Sell, TradeType::Perp, date,
-                    &mut portfolio, json_output,
+                    &symbol,
+                    amount,
+                    price,
+                    TradeSide::Sell,
+                    TradeType::Perp,
+                    date,
+                    &mut portfolio,
+                    json_output,
                 )
                 .await
             }
@@ -644,10 +655,7 @@ async fn main() -> Result<()> {
         Commands::Balance => {
             let cash = portfolio.cash_balance();
             let positions = portfolio.positions();
-            println!(
-                "\n  {} Simulated portfolio",
-                "[BACKTEST]".dimmed()
-            );
+            println!("\n  {} Simulated portfolio", "[BACKTEST]".dimmed());
             let cash_str = format!("${:.2}", cash);
             let colored_cash = if cash >= 0.0 {
                 cash_str.green().to_string()
@@ -665,15 +673,9 @@ async fn main() -> Result<()> {
         Commands::Positions => {
             let positions = portfolio.positions();
             if positions.is_empty() {
-                println!(
-                    "\n  {} No open positions.\n",
-                    "[BACKTEST]".dimmed()
-                );
+                println!("\n  {} No open positions.\n", "[BACKTEST]".dimmed());
             } else {
-                println!(
-                    "\n  {} Open positions:\n",
-                    "[BACKTEST]".dimmed()
-                );
+                println!("\n  {} Open positions:\n", "[BACKTEST]".dimmed());
                 println!(
                     "  {:<10} {:<6} {:<8} {:>12} {:>14}",
                     "Symbol", "Type", "Side", "Quantity", "Avg Entry"
@@ -686,7 +688,11 @@ async fn main() -> Result<()> {
                     };
                     println!(
                         "  {:<10} {:<6} {:<8} {:>12.4} {:>14.2}",
-                        p.symbol, type_str, p.side, p.net_quantity.abs(), p.avg_entry_price
+                        p.symbol,
+                        type_str,
+                        p.side,
+                        p.net_quantity.abs(),
+                        p.avg_entry_price
                     );
                 }
                 println!();
