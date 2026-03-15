@@ -31,7 +31,7 @@ fi
 # Verify trade details
 SIDE=$(echo "$RESULT" | jq -r '.trade.side // empty')
 SYMBOL=$(echo "$RESULT" | jq -r '.trade.symbol // empty')
-TRADE_TYPE=$(echo "$RESULT" | jq -r '.trade.tradeType // empty')
+TRADE_TYPE=$(echo "$RESULT" | jq -r '.trade.type // empty')
 ENTRY_PRICE=$(echo "$RESULT" | jq -r '.trade.price // empty')
 
 if [[ "$SIDE" != "sell" ]]; then

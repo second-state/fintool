@@ -43,7 +43,7 @@ fi
 
 # Verify trade details
 SIDE=$(echo "$RESULT" | jq -r '.trade.side // empty')
-TRADE_TYPE=$(echo "$RESULT" | jq -r '.trade.tradeType // empty')
+TRADE_TYPE=$(echo "$RESULT" | jq -r '.trade.type // empty')
 
 if [[ "$SIDE" != "buy" ]]; then
     fail "Expected side buy, got: $SIDE"
