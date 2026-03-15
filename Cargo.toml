@@ -35,6 +35,10 @@ path = "src/bin/polymarket.rs"
 name = "okx"
 path = "src/bin/okx.rs"
 
+[[bin]]
+name = "backtest"
+path = "src/bin/backtest.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

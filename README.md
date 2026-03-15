@@ -1,6 +1,6 @@
 # fintool
 
-A suite of Rust CLI tools for agentic trading and market intelligence. Each exchange has its own dedicated binary — **`hyperliquid`**, **`binance`**, **`coinbase`**, **`okx`**, **`polymarket`** — plus a shared **`fintool`** for exchange-agnostic market intelligence (quotes, news, SEC filings). Supports crypto, stocks, commodities, and prediction markets. All CLIs support `--json` mode for scripting and agent integration.
+A suite of Rust CLI tools for agentic trading and market intelligence. Each exchange has its own dedicated binary — **`hyperliquid`**, **`binance`**, **`coinbase`**, **`okx`**, **`polymarket`** — plus a shared **`fintool`** for exchange-agnostic market intelligence (quotes, news, SEC filings) and **`backtest`** for historical price simulation with forward PnL analysis. Supports crypto, stocks, commodities, and prediction markets. All CLIs support `--json` mode for scripting and agent integration.
 
 **Support us!** 
 * If you are a human: https://payme.secondstate.io/?pid=9692fe22-62ed-413c-9e93-b57e20bab24b
@@ -20,6 +20,7 @@ A suite of Rust CLI tools for agentic trading and market intelligence. Each exch
   - [Open and close perp positions](#open-and-close-perp-positions)
   - [Commodity perp on Hyperliquid (USDT0 conversion)](#commodity-perp-on-hyperliquid-usdt0-conversion)
   - [Prediction market trading (Polymarket)](#prediction-market-trading-polymarket)
+  - [Backtesting trading strategies](#backtesting-trading-strategies)
 - [Configuration](#configuration)
   - [Config Options](#config-options)
   - [What Needs Configuration](#what-needs-configuration)
@@ -30,6 +31,7 @@ A suite of Rust CLI tools for agentic trading and market intelligence. Each exch
   - [`coinbase` — Coinbase Exchange](#coinbase--coinbase-exchange)
   - [`okx` — OKX Exchange](#okx--okx-exchange)
   - [`polymarket` — Polymarket Prediction Markets](#polymarket--polymarket-prediction-markets)
+  - [`backtest` — Historical Simulation](#backtest--historical-simulation)
 - [Common Commands Reference](#common-commands-reference)
   - [`quote`](#quote-symbol)
   - [`buy / sell` (spot)](#buy--sell-spot)
@@ -77,26 +79,30 @@ Or download pre-built binaries from [Releases](https://github.com/second-state/f
 | `coinbase` | Spot trading, deposits, withdrawals | Coinbase |
 | `okx` | Spot + perp trading, deposits, withdrawals, transfers | OKX |
 | `polymarket` | Prediction market trading, deposits, withdrawals | Polymarket (Polygon) |
+| `backtest` | Historical price simulation with forward PnL analysis | None (read-only history) |
 
 All CLIs support `--json` mode for programmatic use. See [JSON Mode](#json-mode).
 
 ### Exchange Capability Matrix
 
-| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` |
-|---------|---------------|-----------|------------|-------|--------------|
-| Spot Trading | buy, sell | buy, sell | buy, sell | buy, sell | — |
-| Perpetual Futures | perp buy/sell | perp buy/sell | — | perp buy/sell | — |
-| Prediction Markets | — | — | — | — | buy, sell, list, quote |
-| Orderbook | spot + perp | spot + perp | spot | spot + perp | — |
-| Options | options buy/sell | — | — | — | — |
-| Balance | balance | balance | balance | balance | balance |
-| Positions | positions | positions | — | positions | positions |
-| Orders/Cancel | orders, cancel | orders, cancel | orders, cancel | orders, cancel | — |
-| Deposit | deposit | deposit | deposit | deposit | deposit |
-| Withdraw | withdraw | withdraw | withdraw | withdraw | withdraw |
-| Transfer | transfer | transfer | — | transfer | — |
-| Funding Rate | — | — | — | perp funding-rate | — |
-| Bridge Status | bridge-status | — | — | — | — |
+| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` | `backtest` |
+|---------|---------------|-----------|------------|-------|--------------|------------|
+| Spot Trading | buy, sell | buy, sell | buy, sell | buy, sell | — | simulated buy/sell |
+| Perpetual Futures | perp buy/sell | perp buy/sell | — | perp buy/sell | — | simulated perp buy/sell |
+| Prediction Markets | — | — | — | — | buy, sell, list, quote | — |
+| Orderbook | spot + perp | spot + perp | spot | spot + perp | — | — |
+| Options | options buy/sell | — | — | — | — | — |
+| Balance | balance | balance | balance | balance | balance | simulated |
+| Positions | positions | positions | — | positions | positions | simulated |
+| Orders/Cancel | orders, cancel | orders, cancel | orders, cancel | orders, cancel | — | — |
+| Deposit | deposit | deposit | deposit | deposit | deposit | — |
+| Withdraw | withdraw | withdraw | withdraw | withdraw | withdraw | — |
+| Transfer | transfer | transfer | — | transfer | — | — |
+| Funding Rate | — | — | — | perp funding-rate | — | — |
+| Bridge Status | bridge-status | — | — | — | — | — |
+| Historical Quote | — | — | — | — | — | quote |
+| Forward PnL | — | — | — | — | — | +1d/+2d/+4d/+7d |
+| SEC Filings (dated) | — | — | — | — | — | report list/annual/quarterly |
 
 ## Quick Guides
 
@@ -294,6 +300,44 @@ polymarket positions
 polymarket deposit --amount 100 --from base
 ```
 
+### Backtesting trading strategies
+
+Simulate trades at historical dates and see what the PnL would have been. Portfolio state (cash balance, positions) persists across invocations:
+
+```bash
+# Reset portfolio to start fresh
+backtest --at 2025-01-15 reset
+
+# Get the historical price of BTC on a specific date
+backtest --at 2025-01-15 quote BTC
+backtest --at 2025-01-15 quote AAPL
+backtest --at 2025-01-15 quote GOLD
+
+# Simulate a spot buy — shows PnL at +1, +2, +4, +7 days + portfolio update
+backtest --at 2025-01-15 buy BTC --amount 0.01
+backtest --at 2025-01-15 buy AAPL --amount 10 --price 237
+
+# Check balance (cash goes negative after buys)
+backtest --at 2025-01-15 balance
+
+# Simulate a sell at profit — cash balance becomes positive
+backtest --at 2025-02-15 sell BTC --amount 0.01 --price 105000
+
+# Check positions and balance
+backtest --at 2025-02-15 positions
+backtest --at 2025-02-15 balance
+
+# Simulate perp trades with leverage
+backtest --at 2025-01-15 perp leverage ETH --leverage 5
+backtest --at 2025-01-15 perp buy ETH --amount 0.5 --price 3300
+
+# SEC filings available before a date
+backtest --at 2024-06-01 report list AAPL
+backtest --at 2024-06-01 report annual TSLA
+```
+
+If `--price` is omitted on buy/sell, the historical close price at the `--at` date is used automatically. No API keys or wallet needed — backtest uses public Yahoo Finance and CoinGecko data. Portfolio state is saved to `~/.fintool/backtest_portfolio.json`.
+
 > **Note:** All CLIs support a `--json` mode for scripting and agent integration — pass a full command as a JSON string and get JSON output. See [JSON Mode](#json-mode) for details.
 
 ---
@@ -378,6 +422,7 @@ okx_passphrase = "..."
 | `okx` (trading/balance/deposit/withdraw) | — | — | — | Yes | — |
 | `polymarket list`, `polymarket quote` | No | — | — | — | — |
 | `polymarket` (buy/sell/positions/deposit) | Yes | — | — | — | — |
+| `backtest` (all commands) | No | No | No | No | No |
 
 ---
 
@@ -600,6 +645,46 @@ Prediction market trading on Polygon.
 
 ---
 
+### `backtest` — Historical Simulation
+
+Simulate trades at historical dates with forward PnL analysis. No API keys or wallet needed.
+
+| Command | Description |
+|---------|-------------|
+| `backtest --at <DATE> quote <SYMBOL>` | Historical close price on given date |
+| `backtest --at <DATE> buy <SYM> --amount N [--price P]` | Simulated spot buy with PnL at +1/+2/+4/+7 days |
+| `backtest --at <DATE> sell <SYM> --amount N [--price P]` | Simulated spot sell with PnL |
+| `backtest --at <DATE> perp buy <SYM> --amount N --price P` | Simulated perp long with leveraged PnL |
+| `backtest --at <DATE> perp sell <SYM> --amount N --price P` | Simulated perp short with leveraged PnL |
+| `backtest --at <DATE> perp leverage <SYM> --leverage N` | Set leverage for PnL calculation |
+| `backtest --at <DATE> news <SYMBOL>` | Stub (historical news not available) |
+| `backtest --at <DATE> report annual <SYM>` | Latest 10-K filed on or before date |
+| `backtest --at <DATE> report quarterly <SYM>` | Latest 10-Q filed on or before date |
+| `backtest --at <DATE> report list <SYM>` | SEC filings on or before date |
+| `backtest --at <DATE> balance` | Cash balance, open positions, trade count |
+| `backtest --at <DATE> positions` | Net positions with avg entry price |
+| `backtest --at <DATE> reset` | Clear all trades and positions |
+
+#### Backtest-Specific Features
+
+**`--at` date (required):** All commands require `--at YYYY-MM-DD` to anchor the simulation at a historical date. The date must be in the past.
+
+**Auto-price:** If `--price` is omitted on buy/sell commands, the historical close price at the `--at` date is used automatically.
+
+**Forward PnL:** After each simulated trade, the CLI fetches actual prices at +1, +2, +4, and +7 calendar days and displays a PnL table showing dollar and percentage gains/losses. Weekends and holidays are handled by using the next available trading day.
+
+**Persistent portfolio:** Portfolio state (trades, positions, leverage settings) is saved to `~/.fintool/backtest_portfolio.json` and persists across CLI invocations. Cash balance starts at $0, goes negative when buying, and becomes positive when selling for profit. Use `reset` to clear all state.
+
+**Cash balance:** Computed from spot trades only. Buying subtracts `amount × price`, selling adds `amount × price`. Perp trades do not affect cash balance (margin model).
+
+**Positions:** Grouped by symbol and trade type (spot/perp). Shows net quantity and weighted average entry price. A position becomes flat when the full quantity is sold.
+
+**Leverage:** Use `perp leverage` to set leverage before a perp trade. The PnL calculation applies the leverage multiplier. Default is 1x. Leverage settings persist across invocations.
+
+**Data sources:** Historical prices come from Yahoo Finance (stocks, crypto, commodities, indices) with CoinGecko as fallback for crypto. SEC filings come from EDGAR with date filtering.
+
+---
+
 ## Common Commands Reference
 
 These commands work the same across exchange CLIs. The only difference is which binary you use.
@@ -781,6 +866,15 @@ polymarket withdraw --amount 100
 | `quote <MARKET>` | Market details/prices | `polymarket` |
 | `buy <MARKET> --outcome O ...` | Buy prediction shares | `polymarket` |
 | `sell <MARKET> --outcome O ...` | Sell prediction shares | `polymarket` |
+| `--at <DATE> quote <SYM>` | Historical close price | `backtest` |
+| `--at <DATE> buy/sell <SYM>` | Simulated spot trade + forward PnL | `backtest` |
+| `--at <DATE> perp buy/sell <SYM>` | Simulated perp trade + leveraged PnL | `backtest` |
+| `--at <DATE> perp leverage <SYM>` | Set leverage for PnL calc | `backtest` |
+| `--at <DATE> report list/annual/quarterly` | SEC filings before date | `backtest` |
+| `--at <DATE> news <SYM>` | News stub (unavailable) | `backtest` |
+| `--at <DATE> balance` | Cash balance + positions + trade count | `backtest` |
+| `--at <DATE> positions` | Net positions with avg entry price | `backtest` |
+| `--at <DATE> reset` | Clear all trades and positions | `backtest` |
 
 ## Data Sources
 
@@ -803,6 +897,8 @@ polymarket withdraw --amount 100
 | Quotes — OKX | OKX Public API `/api/v5/market/ticker` | No | No auth for public endpoints |
 | Deposit/Withdraw — HyperUnit bridge | HyperUnit API | Wallet private key | ETH, BTC, SOL ↔ Hyperliquid |
 | Deposit — USDC cross-chain bridge | Across Protocol API | Wallet private key | Ethereum/Base → Arbitrum → HL |
+| Historical prices (backtest) | Yahoo Finance Chart API | No | Daily OHLCV bars for stocks, crypto, commodities, indices |
+| Historical crypto prices (backtest fallback) | CoinGecko History API | No | Fallback for crypto when Yahoo unavailable |
 
 ## JSON Mode
 
@@ -844,6 +940,16 @@ okx --json '{"command":"transfer","asset":"USDT","amount":100,"from":"funding","
 polymarket --json '{"command":"list","query":"bitcoin"}'
 polymarket --json '{"command":"buy","market":"will-btc-hit-100k","outcome":"yes","amount":20,"price":0.50}'
 polymarket --json '{"command":"positions"}'
+
+# Backtest historical simulation
+backtest --at 2025-01-15 --json '{"command":"reset"}'
+backtest --at 2025-01-15 --json '{"command":"quote","symbol":"BTC"}'
+backtest --at 2025-01-15 --json '{"command":"buy","symbol":"ETH","amount":0.5}'
+backtest --at 2025-01-15 --json '{"command":"balance"}'
+backtest --at 2025-01-15 --json '{"command":"positions"}'
+backtest --at 2025-01-15 --json '{"command":"perp_buy","symbol":"ETH","amount":0.1,"price":3300}'
+backtest --at 2025-01-15 --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
+backtest --at 2024-06-01 --json '{"command":"report_list","symbol":"AAPL","limit":3}'
 ```
 
 Errors are returned as JSON too:
@@ -956,12 +1062,38 @@ Errors are returned as JSON too:
 | `deposit` | — | `amount`, `from`, `dry_run` |
 | `withdraw` | `amount` | `dry_run` |
 
+#### `backtest`
+
+All commands require `--at YYYY-MM-DD` as a CLI flag (not in the JSON body).
+
+| `command` | Required fields | Optional fields |
+|-----------|----------------|-----------------|
+| `quote` | `symbol` | — |
+| `news` | `symbol` | — |
+| `buy` | `symbol`, `amount` | `price` |
+| `sell` | `symbol`, `amount` | `price` |
+| `perp_buy` | `symbol`, `amount` | `price`, `close` |
+| `perp_sell` | `symbol`, `amount` | `price`, `close` |
+| `perp_leverage` | `symbol`, `leverage` | — |
+| `report_annual` | `symbol` | `output` |
+| `report_quarterly` | `symbol` | `output` |
+| `report_list` | `symbol` | `limit` |
+| `report_get` | `symbol`, `accession` | `output` |
+| `balance` | — | — |
+| `positions` | — | — |
+| `reset` | — | — |
+
 **Notes:**
 - `amount` and `price` are numbers (e.g. `0.1`, `2500.00`)
 - `leverage` is a number (e.g. `10`)
 - `close` and `dry_run` are booleans (default `false`)
 - `limit` is a number (default `10`)
 - `min_end_days` is a number (default `3`)
+- If `price` is omitted on `buy`/`sell`/`perp_buy`/`perp_sell`, the historical close price at the `--at` date is used
+- Portfolio state persists to `~/.fintool/backtest_portfolio.json`. Use `reset` to clear.
+- `balance` returns `cashBalance` (spot only), `positions`, `totalTrades`, `leverageSettings`
+- `positions` returns net positions grouped by symbol and type with `avgEntryPrice` and `totalCost`
+- Trade output includes a `portfolio` field with updated balance and positions
 
 ---
 
@@ -977,7 +1109,8 @@ fintool/
 │   │   ├── binance.rs      # CLI: Binance exchange
 │   │   ├── coinbase.rs     # CLI: Coinbase exchange
 │   │   ├── okx.rs          # CLI: OKX exchange
-│   │   └── polymarket.rs   # CLI: Polymarket prediction markets
+│   │   ├── polymarket.rs   # CLI: Polymarket prediction markets
+│   │   └── backtest.rs     # CLI: Historical simulation + PnL
 │   ├── config.rs        # Config loading (~/.fintool/config.toml)
 │   ├── signing.rs       # Hyperliquid wallet signing, asset resolution, order execution
 │   ├── hip3.rs          # HIP-3 builder-deployed perps: EIP-712 signing
@@ -988,6 +1121,7 @@ fintool/
 │   ├── unit.rs          # HyperUnit bridge (ETH/BTC/SOL deposit/withdraw)
 │   ├── polymarket.rs    # Polymarket SDK client helpers
 │   ├── format.rs        # Color formatting + number formatting helpers
+│   ├── backtest.rs      # Historical data providers + simulated portfolio + PnL
 │   └── commands/
 │       ├── quote.rs     # Multi-source quotes + LLM enrichment
 │       ├── news.rs      # News via Google News RSS
@@ -1010,7 +1144,8 @@ fintool/
 │   ├── hyperliquid/     # E2E tests for Hyperliquid
 │   ├── binance/         # E2E tests for Binance
 │   ├── okx/             # E2E tests for OKX
-│   └── polymarket/      # E2E tests for Polymarket
+│   ├── polymarket/      # E2E tests for Polymarket
+│   └── backtest/        # E2E tests for backtesting
 ├── examples/
 │   ├── funding_arb/     # Funding rate arbitrage bot
 │   └── metal_pair/      # Metal pairs trading bot

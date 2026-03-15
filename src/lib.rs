@@ -1,3 +1,4 @@
+pub mod backtest;
 pub mod binance;
 pub mod bridge;
 pub mod coinbase;

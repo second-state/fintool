@@ -8,20 +8,20 @@ const USER_AGENT: &str = "fintool contact@fintool.dev";
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct Filing {
-    form: String,
-    filing_date: String,
-    report_date: String,
-    accession_number: String,
-    primary_document: String,
-    url: String,
+pub struct Filing {
+    pub form: String,
+    pub filing_date: String,
+    pub report_date: String,
+    pub accession_number: String,
+    pub primary_document: String,
+    pub url: String,
 }
 
 fn client() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder().user_agent(USER_AGENT).build()?)
 }
 
-async fn resolve_cik(symbol: &str) -> Result<(u64, String)> {
+pub async fn resolve_cik(symbol: &str) -> Result<(u64, String)> {
     let c = client()?;
     let body: HashMap<String, Value> = c
         .get("https://www.sec.gov/files/company_tickers.json")
@@ -41,7 +41,12 @@ async fn resolve_cik(symbol: &str) -> Result<(u64, String)> {
     Err(anyhow!("Ticker '{}' not found in SEC EDGAR", symbol))
 }
 
-async fn get_filings(cik: u64, form_type: Option<&str>, limit: usize) -> Result<Vec<Filing>> {
+pub async fn get_filings(
+    cik: u64,
+    form_type: Option<&str>,
+    limit: usize,
+    before_date: Option<&str>,
+) -> Result<Vec<Filing>> {
     let c = client()?;
     let url = format!("https://data.sec.gov/submissions/CIK{:010}.json", cik);
     let body: Value = c.get(&url).send().await?.json().await?;
@@ -60,6 +65,12 @@ async fn get_filings(cik: u64, form_type: Option<&str>, limit: usize) -> Result<
         let form = forms[i].as_str().unwrap_or("");
         if let Some(ft) = form_type {
             if form != ft {
+                continue;
+            }
+        }
+        if let Some(cutoff) = before_date {
+            let filing_date = filing_dates[i].as_str().unwrap_or("");
+            if filing_date > cutoff {
                 continue;
             }
         }
@@ -142,7 +153,7 @@ async fn fetch_and_output(
     json: bool,
 ) -> Result<()> {
     let (cik, company) = resolve_cik(symbol).await?;
-    let filings = get_filings(cik, Some(form_type), 1).await?;
+    let filings = get_filings(cik, Some(form_type), 1, None).await?;
     let filing = filings
         .first()
         .ok_or_else(|| anyhow!("No {} filing found for {}", form_type, symbol))?;
@@ -205,7 +216,7 @@ pub async fn quarterly(symbol: &str, output: Option<&str>, json: bool) -> Result
 
 pub async fn list(symbol: &str, limit: usize, json: bool) -> Result<()> {
     let (cik, company) = resolve_cik(symbol).await?;
-    let filings = get_filings(cik, None, limit).await?;
+    let filings = get_filings(cik, None, limit, None).await?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&filings)?);
@@ -231,7 +242,7 @@ pub async fn list(symbol: &str, limit: usize, json: bool) -> Result<()> {
 
 pub async fn get(symbol: &str, accession: &str, output: Option<&str>, json: bool) -> Result<()> {
     let (cik, company) = resolve_cik(symbol).await?;
-    let filings = get_filings(cik, None, 100).await?;
+    let filings = get_filings(cik, None, 100, None).await?;
     let filing = filings
         .iter()
         .find(|f| f.accession_number == accession)
