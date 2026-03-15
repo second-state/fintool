@@ -10,6 +10,7 @@ Historical trading simulations with forward PnL analysis. Each script simulates 
 | `ftx_crypto_contagion.py` | 2022-11-08 | Crypto contagion hedge | Short BTC + Short ETH + Long GOLD | BTC -15%, ETH -18%; crypto shorts drove profit |
 | `nvda_earnings_alpha.py` | 2023-05-25 | Sector alpha pair | Long NVDA + Short SP500 | NVDA +5% while SP500 flat; pure alpha |
 | `ukraine_oil_shock.py` | 2022-02-24 | Commodity supply shock | Long OIL + Long GOLD + Short SP500 | Oil surged 16% in 7 days on sanctions |
+| `svb_crypto_haven.py` | 2023-03-13 | Crypto as digital gold | Long BTC + Long ETH + Long GOLD + Short SP500 | BTC +15%, portfolio +4.8% in 7 days on banking crisis |
 
 ## Setup
 
@@ -27,6 +28,7 @@ python3 examples/backtest/covid_crash_hedge.py
 python3 examples/backtest/ftx_crypto_contagion.py
 python3 examples/backtest/nvda_earnings_alpha.py
 python3 examples/backtest/ukraine_oil_shock.py
+python3 examples/backtest/svb_crypto_haven.py
 
 # Override binary path
 python3 examples/backtest/covid_crash_hedge.py --backtest /path/to/backtest
