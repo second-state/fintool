@@ -158,7 +158,11 @@ impl Portfolio {
                 TradeSide::Sell => t.amount * t.price,
             })
             .sum();
-        if balance == 0.0 { 0.0 } else { balance }
+        if balance == 0.0 {
+            0.0
+        } else {
+            balance
+        }
     }
 
     /// Compute net positions grouped by (symbol, trade_type).
@@ -286,16 +290,8 @@ pub async fn fetch_yahoo_bars(
         .build()?;
 
     let tickers = resolve_yahoo_tickers(symbol);
-    let period1 = from
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_utc()
-        .timestamp();
-    let period2 = to
-        .and_hms_opt(23, 59, 59)
-        .unwrap()
-        .and_utc()
-        .timestamp();
+    let period1 = from.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
+    let period2 = to.and_hms_opt(23, 59, 59).unwrap().and_utc().timestamp();
 
     for ticker in &tickers {
         let url = format!(
@@ -438,9 +434,7 @@ pub async fn fetch_pnl_prices(
         let price = match &bars {
             Ok(bars) => {
                 // Find closest bar on or after target date (handles weekends)
-                bars.iter()
-                    .find(|b| b.date >= target)
-                    .map(|b| b.close)
+                bars.iter().find(|b| b.date >= target).map(|b| b.close)
             }
             Err(_) => None,
         };
