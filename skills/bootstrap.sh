@@ -42,7 +42,7 @@ esac
 echo "Downloading ${ARTIFACT}..."
 curl -L -o /tmp/fintool.zip "${RELEASE_BASE}/${ARTIFACT}.zip"
 unzip -o /tmp/fintool.zip -d /tmp/fintool-extract
-BINARIES="fintool hyperliquid binance coinbase polymarket okx"
+BINARIES="fintool hyperliquid binance coinbase polymarket okx backtest"
 for bin in $BINARIES; do
   src="/tmp/fintool-extract/${ARTIFACT}/${bin}"
   if [ -f "$src" ]; then
