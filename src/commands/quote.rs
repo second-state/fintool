@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::config;
 
 /// Aliases for common index/ETF symbols → Yahoo Finance tickers
-fn symbol_aliases() -> HashMap<&'static str, &'static str> {
+pub fn symbol_aliases() -> HashMap<&'static str, &'static str> {
     let mut map = HashMap::new();
     // Indices
     map.insert("SP500", "^GSPC");
@@ -41,7 +41,7 @@ fn symbol_aliases() -> HashMap<&'static str, &'static str> {
 }
 
 /// CoinGecko symbol to ID mapping for top cryptos
-fn coingecko_symbol_map() -> HashMap<&'static str, &'static str> {
+pub fn coingecko_symbol_map() -> HashMap<&'static str, &'static str> {
     let mut map = HashMap::new();
     map.insert("BTC", "bitcoin");
     map.insert("ETH", "ethereum");
