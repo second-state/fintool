@@ -165,6 +165,7 @@ The `examples/` directory contains **complete, runnable examples and use cases**
 - **Do not push directly to `main`**. Create a feature branch and submit a PR.
 - All PRs must pass CI: `cargo fmt -- --check` and `cargo clippy --release -- -D warnings`
 - Sign commits with DCO: `Signed-off-by: Michael Yuan <michael@secondstate.io>`
+- Add co-author: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 
 ## Key Architecture Notes
 
