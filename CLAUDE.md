@@ -167,6 +167,14 @@ The `examples/` directory contains **complete, runnable examples and use cases**
 - Sign commits with DCO: `Signed-off-by: Michael Yuan <michael@secondstate.io>`
 - Add co-author: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 
+### Creating a release
+
+1. Bump the `version` in `Cargo.toml` (e.g., `"0.1.5"` → `"0.1.6"`)
+2. Commit: `chore: bump version to 0.1.6`
+3. Tag: `git tag v0.1.6 && git push origin v0.1.6`
+4. Create the GitHub release: `gh release create v0.1.6 --title "v0.1.6" --notes "..."`
+5. The CI release workflow automatically builds and attaches platform binaries
+
 ## Key Architecture Notes
 
 - **One binary per exchange** — no `--exchange` flag. Use the right binary (`hyperliquid`, `binance`, etc.).
