@@ -23,7 +23,7 @@ rm -rf /tmp/fintool-repo
 The bootstrap script will:
 1. Clone skill files to `~/.openclaw/skills/fintool/`
 2. Detect your platform (Linux x86_64/aarch64, macOS Apple Silicon)
-3. Download all binaries (fintool, hyperliquid, binance, coinbase, polymarket, okx) from the latest GitHub release
+3. Download all binaries (fintool, hyperliquid, binance, coinbase, polymarket, okx, backtest) from the latest GitHub release
 4. Run `fintool init` to create `~/.fintool/config.toml` (never overwrites existing)
 5. Check config for required keys and tell you what's missing
 
@@ -58,7 +58,7 @@ If the bootstrap script fails:
    ```bash
    mkdir -p ~/.openclaw/skills/fintool/scripts
    unzip fintool-<platform>.zip
-   cp fintool-<platform>/{fintool,hyperliquid,binance,coinbase,polymarket,okx} ~/.openclaw/skills/fintool/scripts/
+   cp fintool-<platform>/{fintool,hyperliquid,binance,coinbase,polymarket,okx,backtest} ~/.openclaw/skills/fintool/scripts/
    chmod +x ~/.openclaw/skills/fintool/scripts/*
    ```
 4. Copy the skill definition:

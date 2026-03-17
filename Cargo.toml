@@ -1,6 +1,6 @@
 [package]
 name = "fintool"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Agentic trading CLIs for crypto, stocks, and prediction markets — Hyperliquid, Binance, Coinbase, OKX, and Polymarket"
 license = "MIT"
@@ -34,6 +34,10 @@ path = "src/bin/polymarket.rs"
 [[bin]]
 name = "okx"
 path = "src/bin/okx.rs"
+
+[[bin]]
+name = "backtest"
+path = "src/bin/backtest.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

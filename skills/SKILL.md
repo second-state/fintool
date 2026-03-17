@@ -1,6 +1,6 @@
 ---
 name: fintool
-description: "Financial trading CLIs — spot and perp trading on Hyperliquid, Binance, Coinbase, OKX. Prediction markets on Polymarket. Deposit and withdraw across chains. LLM-enriched price quotes with trend analysis. News and SEC filings. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, or check portfolio."
+description: "Financial trading CLIs — spot and perp trading on Hyperliquid, Binance, Coinbase, OKX. Prediction markets on Polymarket. Deposit and withdraw across chains. LLM-enriched price quotes with trend analysis. News and SEC filings. Historical backtesting with forward PnL analysis. Use when: user asks about stock/crypto prices, wants to trade, deposit, withdraw, check portfolio, or backtest a strategy."
 homepage: https://github.com/second-state/fintool
 metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl"] } } }
 ---
@@ -19,6 +19,7 @@ A suite of CLI tools for market intelligence and trading across multiple exchang
 | `coinbase` | Coinbase trading (spot, deposits) | `{baseDir}/scripts/coinbase` |
 | `okx` | OKX trading (spot, perp, deposits, withdrawals) | `{baseDir}/scripts/okx` |
 | `polymarket` | Polymarket prediction markets | `{baseDir}/scripts/polymarket` |
+| `backtest` | Historical simulation + forward PnL (no keys needed) | `{baseDir}/scripts/backtest` |
 
 - **Config**: `~/.fintool/config.toml`
 - **Mode**: Always use JSON mode — `<binary> --json '<JSON>'`. All input and output is structured JSON.
@@ -51,24 +52,29 @@ cat ~/.fintool/config.toml 2>/dev/null
    - **Polymarket**: Uses `wallet.private_key` (same as Hyperliquid) for prediction market trading
    - If none configured: Ask the user which exchange they want to use and request the credentials.
 
+**Exception — `backtest`**: The backtest binary requires **no configuration** — no API keys, no wallet. It uses public Yahoo Finance and CoinGecko data. You can use it immediately.
+
 **If the user provides credentials**, edit `~/.fintool/config.toml` directly to add them.
 
 ## Exchange Capabilities
 
-| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` |
-|---------|---------------|-----------|------------|-------|--------------|
-| Spot orders | buy, sell | buy, sell | buy, sell | buy, sell | — |
-| Perp orders | perp buy/sell | perp buy/sell | — | perp buy/sell | — |
-| Prediction markets | — | — | — | — | buy, sell, list, quote |
-| Orderbook | spot + perp | spot + perp | spot | spot + perp | — |
-| Deposit | Unit + Across | API | API | API | bridge |
-| Withdraw | Bridge2 + Unit + Across | API | API | API | bridge |
-| Transfer | spot ↔ perp ↔ dex | spot ↔ futures | — | funding ↔ trading | — |
-| Balance | balance | balance | balance | balance | balance |
-| Open orders | orders | orders | orders | orders | — |
-| Cancel | cancel | cancel | cancel | cancel | — |
-| Positions | positions | positions | — | positions | positions |
-| Funding rate | — | — | — | perp funding_rate | — |
+| Feature | `hyperliquid` | `binance` | `coinbase` | `okx` | `polymarket` | `backtest` |
+|---------|---------------|-----------|------------|-------|--------------|------------|
+| Spot orders | buy, sell | buy, sell | buy, sell | buy, sell | — | simulated buy/sell |
+| Perp orders | perp buy/sell | perp buy/sell | — | perp buy/sell | — | simulated perp buy/sell |
+| Prediction markets | — | — | — | — | buy, sell, list, quote | — |
+| Orderbook | spot + perp | spot + perp | spot | spot + perp | — | — |
+| Deposit | Unit + Across | API | API | API | bridge | — |
+| Withdraw | Bridge2 + Unit + Across | API | API | API | bridge | — |
+| Transfer | spot ↔ perp ↔ dex | spot ↔ futures | — | funding ↔ trading | — | — |
+| Balance | balance | balance | balance | balance | balance | simulated |
+| Open orders | orders | orders | orders | orders | — | — |
+| Cancel | cancel | cancel | cancel | cancel | — | — |
+| Positions | positions | positions | — | positions | positions | simulated |
+| Funding rate | — | — | — | perp funding_rate | — | — |
+| Historical quote | — | — | — | — | — | quote |
+| Forward PnL | — | — | — | — | — | +1d/+2d/+4d/+7d |
+| SEC filings (dated) | — | — | — | — | — | report list/annual/quarterly |
 
 ## Error Handling
 
@@ -211,6 +217,51 @@ cat ~/.fintool/config.toml 2>/dev/null
 - `list` and `quote` are read-only and don't require Polymarket credentials.
 - Trading commands (`buy`, `sell`, `deposit`, `withdraw`) require `wallet.private_key` in config.
 - Use the market slug (from `list`) or condition ID as the `market` value.
+
+### Backtesting (`backtest`)
+
+**Important**: The `backtest` binary requires `--at YYYY-MM-DD` as a CLI flag (not in the JSON body). No API keys or wallet needed.
+
+```bash
+# backtest --at <DATE> --json '<JSON>'
+```
+
+```json
+// Historical price
+{"command": "quote", "symbol": "BTC"}
+{"command": "quote", "symbol": "AAPL"}
+{"command": "quote", "symbol": "GOLD"}
+
+// Simulated spot trades — returns forward PnL at +1/+2/+4/+7 days
+{"command": "buy", "symbol": "ETH", "amount": 0.5}
+{"command": "buy", "symbol": "AAPL", "amount": 10, "price": 237}
+{"command": "sell", "symbol": "BTC", "amount": 0.01, "price": 105000}
+
+// Simulated perp trades — returns leveraged forward PnL
+{"command": "perp_leverage", "symbol": "ETH", "leverage": 5}
+{"command": "perp_buy", "symbol": "ETH", "amount": 0.5, "price": 3300}
+{"command": "perp_sell", "symbol": "BTC", "amount": 0.01, "price": 100000}
+
+// SEC filings filtered by date
+{"command": "report_list", "symbol": "AAPL", "limit": 5}
+{"command": "report_annual", "symbol": "TSLA"}
+{"command": "report_quarterly", "symbol": "AAPL"}
+
+// Portfolio management
+{"command": "balance"}
+{"command": "positions"}
+{"command": "reset"}
+
+// News stub (historical news not available)
+{"command": "news", "symbol": "BTC"}
+```
+
+**Notes:**
+- If `price` is omitted on buy/sell, the historical close price at the `--at` date is used automatically.
+- Portfolio state persists to `~/.fintool/backtest_portfolio.json`. Use `reset` to clear.
+- `balance` returns `cashBalance` (spot trades only), `positions`, `totalTrades`, `leverageSettings`.
+- Trade output includes a `pnl` array with forward price, dollar PnL, and percentage PnL at each offset.
+- Data sources: Yahoo Finance (stocks, crypto, commodities, indices) with CoinGecko fallback for crypto.
 
 ## Workflows
 
@@ -422,9 +473,64 @@ Returns: matching markets with question, outcomes, prices, volume, liquidity. By
 {baseDir}/scripts/polymarket --json '{"command":"balance"}'
 ```
 
+### Workflow 7: Backtesting a Trading Strategy
+
+**Goal**: Develop a thesis, simulate trades at historical dates, and evaluate forward PnL before live trading.
+
+**Use backtest when** the agent is developing a strategy, validating a thesis with historical data, or the user asks "what if I had bought X on date Y?"
+
+**Step 1 — Develop a thesis using current data:**
+```bash
+{baseDir}/scripts/fintool --json '{"command":"news","symbol":"BTC"}'
+{baseDir}/scripts/fintool --json '{"command":"report_list","symbol":"AAPL","limit":5}'
+```
+Use news and SEC filings to identify a catalyst or thesis (e.g., "NVDA earnings blowout", "oil supply shock").
+
+**Step 2 — Reset the backtest portfolio:**
+```bash
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"reset"}'
+```
+
+**Step 3 — Scout historical prices:**
+```bash
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"quote","symbol":"BTC"}'
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"quote","symbol":"GOLD"}'
+```
+
+**Step 4 — Execute simulated trades:**
+```bash
+# Spot buy (auto-price from historical close)
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"buy","symbol":"BTC","amount":0.01}'
+
+# Spot short
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"sell","symbol":"SP500","amount":1.5,"price":5900}'
+
+# Leveraged perp
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"perp_leverage","symbol":"ETH","leverage":5}'
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"perp_buy","symbol":"ETH","amount":0.5,"price":3300}'
+```
+Each trade returns forward PnL at +1, +2, +4, +7 days — review these to evaluate the thesis.
+
+**Step 5 — Review portfolio state:**
+```bash
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"balance"}'
+{baseDir}/scripts/backtest --at 2025-01-15 --json '{"command":"positions"}'
+```
+
+**Step 6 — Iterate:**
+- Try different entry dates to test timing sensitivity
+- Adjust position sizes for risk management
+- Test multi-leg strategies (e.g., long one asset + short another)
+- Check SEC filings before the trade date for fundamental context:
+  ```bash
+  {baseDir}/scripts/backtest --at 2024-06-01 --json '{"command":"report_list","symbol":"AAPL","limit":3}'
+  ```
+
+**Step 7 — If the backtest validates the thesis, proceed to live trading** using the appropriate exchange binary (hyperliquid, binance, etc.).
+
 ## Symbol Aliases
 
-Common indices and commodities have convenient aliases (used with `fintool quote`):
+Common indices and commodities have convenient aliases (used with `fintool quote` and `backtest quote`):
 
 | Alias | Description |
 |-------|-------------|
@@ -446,3 +552,5 @@ Common indices and commodities have convenient aliases (used with `fintool quote
 - **All output is JSON** — Parse the response and present relevant fields to the user in a readable format.
 - **Amount is in symbol units** — `"amount": 0.1` on ETH means 0.1 ETH, not $0.10. Calculate the size from the price quote.
 - **Check for errors** — Every response may contain `{"error": "..."}`. Always check before presenting results.
+- **Backtest before trading** — When developing a thesis or strategy, use `backtest` to simulate at historical dates and validate with forward PnL before committing real capital.
+- **No config for backtest** — The `backtest` binary needs no API keys or wallet. Use it freely for research and strategy development.

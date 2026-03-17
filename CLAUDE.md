@@ -1,91 +1,184 @@
-# CLAUDE.md
+# CLAUDE.md — Fintool Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Project Overview
 
-## Build and Development Commands
+Fintool is a suite of Rust CLI tools for agentic trading and market intelligence across multiple exchanges. Each exchange has its own dedicated binary. All CLIs support `--json` mode for scripting and AI agent integration.
+
+**Supported exchanges**: Hyperliquid, Binance, Coinbase, OKX, Polymarket (prediction markets)
+**Asset classes**: Crypto, stocks, commodities, indices, prediction markets
+**License**: MIT
+
+## Repository Structure
+
+```
+fintool/
+├── src/
+│   ├── lib.rs              # Library root — exports all modules
+│   ├── bin/                 # Binary entry points (one per exchange + fintool + backtest)
+│   │   ├── fintool.rs       # Market intelligence CLI (quotes, news, SEC filings)
+│   │   ├── hyperliquid.rs   # Hyperliquid (spot, perp, HIP-3, deposits, withdrawals)
+│   │   ├── binance.rs       # Binance (spot, perp, deposits, withdrawals)
+│   │   ├── coinbase.rs      # Coinbase (spot, deposits, withdrawals)
+│   │   ├── okx.rs           # OKX (spot, perp, deposits, withdrawals, transfers)
+│   │   ├── polymarket.rs    # Polymarket (prediction market trading)
+│   │   └── backtest.rs      # Historical simulation with forward PnL analysis
+│   ├── commands/            # Shared command implementations used by binaries
+│   │   ├── quote.rs         # Multi-source price quotes + LLM enrichment
+│   │   ├── news.rs          # News via Google News RSS
+│   │   ├── report.rs        # SEC EDGAR filings
+│   │   ├── order.rs         # Spot order placement
+│   │   ├── perp.rs          # Perpetual futures trading
+│   │   ├── deposit.rs       # Deposit flows (bridging, address generation)
+│   │   ├── withdraw.rs      # Withdrawal flows
+│   │   ├── balance.rs       # Account balances
+│   │   ├── positions.rs     # Open positions
+│   │   ├── orders.rs        # Order listing
+│   │   ├── cancel.rs        # Order cancellation
+│   │   ├── orderbook.rs     # Orderbook depth
+│   │   ├── transfer.rs      # Internal account transfers
+│   │   ├── options.rs       # Options trading
+│   │   ├── predict.rs       # Polymarket prediction operations
+│   │   └── bridge_status.rs # Cross-chain bridge status
+│   ├── config.rs            # Config loading (~/.fintool/config.toml)
+│   ├── signing.rs           # Hyperliquid EIP-712 wallet signing
+│   ├── hip3.rs              # HIP-3 builder-deployed perps (collateral tokens)
+│   ├── backtest.rs          # Historical data providers + simulated portfolio
+│   ├── binance.rs           # Binance REST API client
+│   ├── coinbase.rs          # Coinbase API client
+│   ├── okx.rs               # OKX API client
+│   ├── polymarket.rs        # Polymarket SDK helpers
+│   ├── bridge.rs            # Across Protocol cross-chain bridging
+│   ├── unit.rs              # HyperUnit bridge (ETH/BTC/SOL)
+│   └── format.rs            # Color formatting + number formatting helpers
+├── tests/                   # E2E shell script tests organized by exchange
+│   ├── helpers.sh           # Shared test utilities (build checks, assertions)
+│   ├── backtest/            # Backtest CLI tests
+│   ├── hyperliquid/         # Hyperliquid E2E tests
+│   ├── binance/             # Binance E2E tests
+│   ├── okx/                 # OKX E2E tests
+│   └── polymarket/          # Polymarket E2E tests
+├── examples/                # Complete example scripts (see Examples section below)
+│   ├── funding_arb/         # Funding rate arbitrage bot
+│   ├── metal_pair/          # Metal pairs trading bot
+│   ├── catalyst_hedger/     # Prediction market hedging bot
+│   └── backtest/            # Historical backtest strategy examples
+├── skills/                  # AI agent skill definitions (for OpenClaw / Claude)
+│   ├── SKILL.md             # Main skill definition (commands, workflows, capabilities)
+│   ├── install.md           # Installation guide for agents
+│   └── bootstrap.sh         # Automated installer script
+├── docs/                    # Additional documentation and screenshots
+├── .github/workflows/       # CI/CD (ci.yml for lint+test, release.yml for builds)
+├── Cargo.toml               # Rust dependencies and binary targets
+├── config.toml.default      # Default config template
+└── README.md                # User-facing documentation
+```
+
+## Building
 
 ```bash
-# Build all binaries (release)
+# Debug build
+cargo build
+
+# Release build (used for testing and deployment)
 cargo build --release
-# Binaries output to: ./target/release/{fintool,hyperliquid,binance,coinbase,okx,polymarket}
-
-# Run Rust unit tests
-cargo test --release
-
-# Check formatting
-cargo fmt -- --check
-
-# Apply formatting
-cargo fmt
-
-# Clippy linting
-cargo clippy --release -- -D warnings
 ```
+
+Binaries are output to `target/release/` (or `target/debug/`):
+`fintool`, `hyperliquid`, `binance`, `coinbase`, `okx`, `polymarket`, `backtest`
 
 ## Testing
 
-The Rust test suite (`cargo test`) covers unit tests only. Exchange-specific end-to-end tests are shell scripts under `tests/` that require live credentials and real exchange access — they are not run in CI automatically.
+### Lint (must pass before submitting PRs)
 
 ```bash
-# Run a specific Rust test
-cargo test <test_name>
+# Format check — CI runs this exact command
+cargo fmt -- --check
 
-# E2E shell tests (require configured credentials)
-bash tests/hyperliquid/e2e_trading.sh
-bash tests/binance/e2e_trading.sh
-bash tests/okx/e2e_trading.sh
+# Auto-fix formatting
+cargo fmt
+
+# Clippy — CI runs with warnings as errors
+cargo clippy --release -- -D warnings
 ```
 
-## Architecture
+### Unit tests
 
-This is a multi-binary Rust workspace with one library crate and six CLI binaries.
+```bash
+cargo test --release
+```
 
-### Binary Structure
+### E2E tests
 
-Each binary (`src/bin/*.rs`) handles CLI argument parsing via `clap` and dispatches to shared command handlers:
+Shell script tests in `tests/` organized by exchange. Each exchange directory has an `e2e_*.sh` script that runs the full workflow:
 
-- `fintool` — exchange-agnostic market intelligence (quotes, news, SEC filings); no authentication required for most commands
-- `hyperliquid` — spot + perp + HIP-3 commodity/stock perps; uses EIP-712 signing with a wallet private key
-- `binance` — spot + futures; HMAC-SHA256 signed requests with API key/secret
-- `coinbase` — spot only; HMAC-SHA256 signed requests
-- `okx` — spot + perp; HMAC-SHA256 + base64 signed requests, plus a passphrase
-- `polymarket` — prediction markets on Polygon; EIP-712 signing via `alloy`
+```bash
+# Run backtest E2E tests (no API keys needed)
+bash tests/backtest/e2e_backtest.sh
 
-Each binary also accepts a `--json` flag where the entire command is passed as a JSON string and all output (including errors) is returned as JSON — this is the primary interface for agent/script integration.
+# Run individual tests
+bash tests/backtest/quote_btc.sh
+bash tests/backtest/buy_spot.sh
+```
 
-There is no `--exchange` flag. Exchange selection is done by invoking the appropriate binary. Internally, each binary has a `const EXCHANGE: &str = "..."` constant that is passed to shared command functions for exchange-specific routing.
+Exchange tests (hyperliquid, binance, okx, polymarket) require API keys configured in `~/.fintool/config.toml`.
 
-### Library Modules (`src/`)
+### Examples
 
-- `config.rs` — Config file loading from `~/.fintool/config.toml`; credential accessors for each exchange
-- `signing.rs` — Hyperliquid wallet signing, asset resolution, and order execution via `hyperliquid_rust_sdk`
-- `hip3.rs` — HIP-3 builder-deployed perps EIP-712 signing (SILVER, GOLD, TSLA, etc. using USDT0 collateral on the `cash` dex)
-- `binance.rs` / `coinbase.rs` / `okx.rs` — Exchange API clients with auth signing
-- `bridge.rs` — Across Protocol cross-chain USDC bridge (Ethereum/Base → Arbitrum → Hyperliquid)
-- `unit.rs` — HyperUnit bridge for ETH/BTC/SOL deposit/withdraw to/from Hyperliquid
-- `polymarket.rs` — Polymarket CLOB/Gamma/Bridge SDK helpers
-- `format.rs` — Terminal color formatting and number formatting utilities
+```bash
+# Backtest examples (no API keys needed)
+python3 examples/backtest/covid_crash_hedge.py
+python3 examples/backtest/nvda_earnings_alpha.py
 
-### Commands Layer (`src/commands/`)
+# Trading bot examples (require API keys)
+python3 examples/funding_arb/bot.py --dry-run
+python3 examples/metal_pair/bot.py --dry-run
+```
 
-Command implementations are shared across exchange binaries. Each file handles one logical command (e.g., `order.rs` for spot buy/sell, `perp.rs` for futures, `deposit.rs` for deposits). Each command function receives an exchange name string and executes the operation against the appropriate API.
+## Examples Directory Conventions
 
-### Key Design Patterns
+The `examples/` directory contains **complete, runnable examples and use cases**. Each example must follow these rules:
 
-- All HTTP is done via `reqwest` with rustls (no OpenSSL dependency, except vendored OpenSSL pulled in transitively)
-- Dual output mode: human-readable colored/tabular output by default; JSON via `--json` flag
-- Config is loaded fresh from disk on each invocation (no daemon)
-- HIP-3 perps are auto-detected by symbol (SILVER, GOLD, TSLA, NVDA, etc.) and routed to the `cash` dex instead of the standard Hyperliquid perp market
-- Withdrawal `--to` can be either a chain name or a destination address; `lib.rs::resolve_withdraw_destination` disambiguates using the `KNOWN_CHAINS` constant
+1. **Every example directory MUST have a `README.md`** explaining the strategy, setup, usage, configuration, and dependencies.
 
-## Configuration
+2. **Scripts must be in Python** (3.10+, stdlib only — no third-party packages). Use `subprocess` to call CLI binaries in `--json` mode. Do NOT call web APIs directly from Python.
 
-Config file at `~/.fintool/config.toml`. Run `fintool init` to generate a template.
+3. **Use CLI binaries, not raw APIs.** If an example needs to call a web API that isn't wrapped in a CLI binary, that's a sign the CLI is missing a feature. Add the feature to the CLI first, then call it from Python.
 
-Key sections:
-- `[wallet]` — `private_key` (hex) or `wallet_json` + `wallet_passcode` (keystore). Used by Hyperliquid and Polymarket.
-- `[network]` — `testnet = true` for Hyperliquid testnet
-- `[api_keys]` — Per-exchange API credentials; optional `openai_api_key` for LLM-enriched quotes
-- `[polymarket]` — `signature_type`: `proxy` (default), `eoa`, or `gnosis-safe`
+4. **Follow existing patterns** — see `examples/funding_arb/bot.py` for the canonical pattern:
+   - `SCRIPT_DIR` / `REPO_DIR` path resolution
+   - `cli(cmd, binary)` helper using `subprocess.run([binary, "--json", json.dumps(cmd)])`
+   - `argparse` for CLI flags (binary path overrides, `--dry-run`, etc.)
+   - `DEFAULTS` dict with environment variable overrides
 
-Additional config keys not in the README: `cryptopanic_token`, `newsapi_key`, `binance_base_url` (set to `https://api.binance.us` for Binance US — disables futures/options support).
+## PR and Documentation Requirements
+
+### Every new feature or breaking change MUST update:
+
+1. **`README.md`** — Add/update command reference, capability matrix, JSON mode examples, and any affected quick guides.
+
+2. **`skills/SKILL.md`** — Update the tools table, exchange capabilities matrix, JSON command reference, and workflows so AI agents can discover and use the new feature.
+
+3. **`skills/bootstrap.sh`** and **`skills/install.md`** — If adding a new binary, add it to the binary download lists.
+
+### Submitting changes
+
+- **Do not push directly to `main`**. Create a feature branch and submit a PR.
+- All PRs must pass CI: `cargo fmt -- --check` and `cargo clippy --release -- -D warnings`
+- Sign commits with DCO: `Signed-off-by: Michael Yuan <michael@secondstate.io>`
+- Add co-author: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+
+### Creating a release
+
+1. Bump the `version` in `Cargo.toml` (e.g., `"0.1.5"` → `"0.1.6"`)
+2. Commit: `chore: bump version to 0.1.6`
+3. Tag: `git tag v0.1.6 && git push origin v0.1.6`
+4. Create the GitHub release: `gh release create v0.1.6 --title "v0.1.6" --notes "..."`
+5. The CI release workflow automatically builds and attaches platform binaries
+
+## Key Architecture Notes
+
+- **One binary per exchange** — no `--exchange` flag. Use the right binary (`hyperliquid`, `binance`, etc.).
+- **All I/O is JSON** in `--json` mode. Every binary supports `<binary> --json '<JSON>'` for programmatic use.
+- **Config file**: `~/.fintool/config.toml` — API keys, wallet credentials, exchange settings.
+- **`backtest` is config-free** — no API keys or wallet needed. Uses public Yahoo Finance / CoinGecko data.
+- **HIP-3 collateral tokens** — each HIP-3 perp dex has its own collateral token (e.g., USDT0 for `cash` dex, USDC for `xyz`/`abcd`). See `src/hip3.rs` and `src/signing.rs`.

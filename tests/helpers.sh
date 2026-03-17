@@ -9,6 +9,7 @@ BINANCE="${BINANCE:-./target/release/binance}"
 COINBASE="${COINBASE:-./target/release/coinbase}"
 POLYMARKET="${POLYMARKET:-./target/release/polymarket}"
 OKX="${OKX:-./target/release/okx}"
+BACKTEST="${BACKTEST:-./target/release/backtest}"
 
 # Last command results (set by run_tool)
 LAST_STDOUT=""
@@ -71,7 +72,7 @@ check_fail() {
 
 ensure_built() {
     local need_build=false
-    for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET" "$OKX"; do
+    for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET" "$OKX" "$BACKTEST"; do
         if [[ ! -x "$bin" ]]; then
             need_build=true
             break
@@ -81,7 +82,7 @@ ensure_built() {
     if $need_build; then
         info "Building all binaries..."
         cargo build --release 2>&1
-        for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET" "$OKX"; do
+        for bin in "$FINTOOL" "$HYPERLIQUID" "$BINANCE" "$COINBASE" "$POLYMARKET" "$OKX" "$BACKTEST"; do
             if [[ ! -x "$bin" ]]; then
                 fail "Build failed — binary not found at $bin"
                 exit 1
