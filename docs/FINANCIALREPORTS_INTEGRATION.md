@@ -2,15 +2,15 @@
 
 ## Overview
 
-[FinancialReports.eu](https://financialreports.eu) provides API access to **14M+ regulatory filings** from 35 official sources across 30+ countries. Since fintool already supports SEC filings, adding FinancialReports.eu extends coverage to 34 additional regulators globally.
+[FinancialReports.eu](https://financialreports.eu) provides API access to **14M+ filings** from data sources across 30+ countries. Since fintool already supports SEC filings, adding FinancialReports.eu extends coverage to 30+ countries globally.
 
 ## Why This Fits fintool
 
-fintool already has SEC filing support. FinancialReports.eu adds:
+fintool already has US filing support. FinancialReports.eu adds:
 
-- **34 more regulators** — FCA (UK), Euronext (EU), EDINET (Japan), OPENDART (South Korea), SIX (Switzerland), and more
+- **30+ additional countries** including UK, EU, Japan, South Korea, Switzerland
 - **33,000+ companies** globally with ISIN identifiers
-- **Standardized categories** — 11 filing categories across all regulators (Financial Reporting, ESG, M&A, Debt/Equity, etc.)
+- **Standardized categories** — 11 filing categories across all countries (Financial Reporting, ESG, M&A, Debt/Equity, etc.)
 - **Markdown endpoint** — `GET /filings/{id}/markdown/` for LLM-ready text
 - **Simple REST API** — easy to integrate from Rust (HTTP + JSON)
 - **MCP server** — for AI agent integration
@@ -66,13 +66,13 @@ filings = filings_list.sync(client=client, company_isin="KR7005930003", categori
 | **Format** | REST JSON (Markdown for filing content) |
 | **Companies** | 33,230+ |
 | **Total Filings** | 14,135,359+ |
-| **Sources** | 35 official regulators |
+| **Coverage** | 30+ countries |
 
 ## Coverage Comparison
 
-| fintool SEC support | + FinancialReports.eu |
+| fintool (current) | + FinancialReports.eu |
 |---|---|
-| US SEC filings | SEC + 34 more regulators |
+| US filings | 30+ countries |
 | US companies | 33,000+ global companies |
 | — | 11 standardized filing categories |
 | — | Markdown text extraction |
