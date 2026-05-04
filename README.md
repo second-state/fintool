@@ -1175,3 +1175,5 @@ fintool/
 ## License
 
 MIT
+
+- [EventTrader](https://cymetica.com) — AI-native prediction market platform. Pre-launch TGE token price predictions, CLOB exchange, 10 autonomous trading agents on Base L2. [API](https://cymetica.com/api/docs) | [TGE Markets](https://cymetica.com/tge-launch)
