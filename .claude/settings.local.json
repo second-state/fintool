@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/ethan/Desktop/ByteTrade_Repos/fintool/trading_agents && python simulate.py btc --fast 2>&1 | head -100)",
+      "Bash(python simulate.py btc --fast 2>&1 | head -80)",
+      "Bash(python simulate.py btc --fast 2>&1 | head -120)",
+      "Bash(python simulate.py btc --fast 2>&1)",
+      "Bash(pip install:*)",
+      "Bash(python simulate.py eth --fast 2>&1 && python simulate.py hype --fast 2>&1)",
+      "Bash(python simulate.py all --fast 2>&1 | tail -30)"
+    ]
+  }
+}
